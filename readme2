@@ -1,0 +1,127 @@
+# 0. wav_re.py 基本wavtokenizer
+
+模擬輸入，並輸出t-sne圖
+
+輸入:wav_in
+輸出:wav_out
+
+# 1. tr_encodec.py
+
+特徵提取與處理
+輸出: 
+模型權重: BYOL訓練用特徵檔
+圖形: 說話者分布圖
+
+# 2. byol_dataset.py (訓練自動帶入)
+
+ byol訓練時的音檔配對設定
+
+# 3. train_byol.py
+
+byol語者分群
+輸出:
+模型權重: byol_model_weights.pth
+圖形: 二維三維分群圖
+
+# 4. recon.py
+
+計算語者相似度、視覺化分析結果、辨識語者身份
+輸出:
+    1. 視覺化圖形:
+       - 訓練語者位置 (藍點o)
+       - 新語者位置 (紅星*)
+       - 距離連線 (虛線)
+       
+    2. 相似度分數:
+       {
+           'speaker1': 0.85,  # 與第1個訓練語者的相似度
+           'speaker2': 0.72,  # 與第2個訓練語者的相似度
+           ...
+           'speaker10': 0.63  # 與第10個訓練語者的相似度
+       }
+       
+    3. 降維結果:
+       - 原始: 256維特徵向量
+       - 降維: 2維座標點
+       - 保留: 語者間相對關係
+       
+    4. 統計指標:
+       - 平均相似度
+       - 標準差
+       - 最相似語者
+    """
+
+    一段連續語音
+    例如: 一句完整的話
+    在特徵空間中表示為一個向量
+
+# 5. try.py
+
+ "wavtokenizer+EFE訓練" 乾淨音檔還原
+ 
+ # 5-1 try2.py: GPU訓練
+ 輸入: 音檔 clean: box2； box: box；plastic: plastic； papercup: papercup
+ 輸出: 音檔、權重、比較用頻譜圖 self_output
+
+ # 5-2 ✅try3.py: 凍結encoder，只訓練特徵增強及decoder
+ 輸入: 音檔 clean: box2； box: box；plastic: plastic； papercup: papercup
+ 輸出: 音檔、權重、比較用頻譜圖 self_output2
+ 
+ 往下接到 train_with_tsne.py
+
+ # 5-3 try4.py: CPU訓練
+ 輸入: 音檔 clean: box2； box: box；plastic: plastic； papercup: papercup
+ 輸出: 音檔、權重、比較用頻譜圖 self_supervised_output
+
+ # 5-4 try.py: 加入byol替換原先特徵增強層
+ 輸入: 音檔 clean: box2； box: box；plastic: plastic； papercup: papercup
+ 輸出: 音檔、權重、比較用頻譜圖 self_output
+ 
+ 往下接到 tr_w_t.py
+
+
+# 6. test.py
+
+   # 6-1 test.py: try2.py的訓練後測試
+   tte輸入: wavtokenizer權重/微調 try2.py權重 self_output
+   enhanced_outputs輸出: 音檔/輸入輸出頻譜圖
+
+   # 6-2 test2.py 比前者多了t-sne圖
+   tte2輸入
+   ttout輸出
+
+   # 6-3 test3.py 二次訓練後的測試
+   已經過t-sne比較
+   tte輸入: wavtokenizer權重/微調 train_with_tsne.py權重 tsne_output
+   enhanced_outputs_tsne輸出: 音檔/輸入輸出頻譜圖
+
+
+# 7. train_with_tsne.py
+
+比較input/target t-SNE圖形(try2.py後的二次訓練)
+
+輸入: 音檔 clean: box2； box: box；plastic: plastic； papercup: papercup
+輸出: 音檔、權重、比較用頻譜圖 tsne_output
+
+
+# 8. 目前嘗試將byol融入訓練，替換特徵增強層
+
+   # 8-1 tr_encodec.py 預處理
+
+   提取音訊encodec特徵，特徵儲存為.pth檔案供下游使用
+
+   # 8-2 tr_byol.py 預訓練
+
+   使用encodec特徵預訓練simpletransformer模型
+
+   # 8-3 try.py 主訓練
+
+   載入預訓練權重，初始化EnhancedFeatureExtractor加入byol權重
+   凍結encoder保留wavtokenizer泛化能力，僅訓練特徵增強層與decoder
+
+   # 8-4 tr_w_t.py
+
+   二次訓練，僅訓練特徵增強層
+
+
+

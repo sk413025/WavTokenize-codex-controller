@@ -1,0 +1,7 @@
+byol_model_path: './only_box/output/byol_model_weights.pth'
+train_features_path: './only_box/output/train/encodec_features_for_byol.pth'
+target_audio_path: './target_voices/'
+output_path: './reconstructed_voices/'
+wavtokenizer_config_path: "./wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
+wavtokenizer_model_path: "./wavtokenizer_large_speech_320_24k.ckpt"
+reconstruction_weights_path: './only_box/output/all_speakers_weights.pth'

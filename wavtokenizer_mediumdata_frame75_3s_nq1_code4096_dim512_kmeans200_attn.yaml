@@ -4,14 +4,14 @@ data:
   class_path: decoder.dataset.VocosDataModule
   init_args:
     train_params:
-      filelist_path: ./WavTokenizer/data/train/libritts_train
+      filelist_path: ./WavTokenizer/data/train/example_train
       sampling_rate: 24000
       num_samples: 72000
       batch_size: 40  # 20
       num_workers: 8
 
     val_params:
-      filelist_path: ./WavTokenizer/data/infer/librttts_val
+      filelist_path: ./WavTokenizer/data/infer/example_val
       sampling_rate: 24000
       num_samples: 72000
       batch_size: 5   # 10
@@ -68,7 +68,7 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.TensorBoardLogger
     init_args:
-      save_dir: ./WavTokenizer/result/train/wavtokenizer_smalldata_frame75_3s_nq1_code4096_dim512_kmeans200_attn/
+      save_dir: ./WavTokenizer/result/train/example/
   callbacks:
     - class_path: pytorch_lightning.callbacks.LearningRateMonitor
     - class_path: pytorch_lightning.callbacks.ModelSummary
@@ -84,7 +84,7 @@ trainer:
 
   # Lightning calculates max_steps across all optimizer steps (rather than number of batches)
   # This equals to 1M steps per generator and 1M per discriminator
-  max_steps: 2000000
+  max_steps: 20000000
   # You might want to limit val batches when evaluating all the metrics, as they are time-consuming
   limit_val_batches: 100
   accelerator: gpu

@@ -72,8 +72,9 @@ class EncodecFeatures(FeatureExtractor):
                                 dimension=512, channels=1, n_filters=32, ratios=dowmsamples, activation='ELU',
                                 kernel_size=7, residual_kernel_size=3, last_kernel_size=7, dilation_base=2,
                                 true_skip=False, compress=2)
+        # 修改解碼器配置，使用與編碼器相同的 ratios 參數
         decoder = SEANetDecoder(causal=False, n_residual_layers=1, norm='weight_norm', pad_mode='reflect', lstm=2,
-                                dimension=512, channels=1, n_filters=32, ratios=[8, 5, 4, 2], activation='ELU',
+                                dimension=512, channels=1, n_filters=32, ratios=dowmsamples, activation='ELU',
                                 kernel_size=7, residual_kernel_size=3, last_kernel_size=7, dilation_base=2,
                                 true_skip=False, compress=2)
         quantizer = ResidualVectorQuantizer(dimension=512, n_q=n_q, bins=vq_bins, kmeans_iters=vq_kmeans,
