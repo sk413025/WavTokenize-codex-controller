@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 from decoder.pretrained import WavTokenizer
+import argparse
 
 def set_seed(seed=42):
     """固定隨機種子以確保每次訓練的結果都是可重現的"""
@@ -27,7 +28,7 @@ def set_seed(seed=42):
 
 def plot_spectrograms(audio, save_path, device, title="Spectrogram"):
     """Plot and save spectrograms."""
-    try :
+    try:
         # 確保在同一個設備上
         transform = torchaudio.transforms.MelSpectrogram(
             sample_rate=24000,
@@ -40,15 +41,11 @@ def plot_spectrograms(audio, save_path, device, title="Spectrogram"):
         amplitude_to_db = torchaudio.transforms.AmplitudeToDB().to(device)
         
         with torch.no_grad():
-            # 計算頻譜圖
-            spec = transform(audio)
-            spec_db = amplitude_to_db(spec)
-            
-            # 移到 CPU 進行繪圖
-            spec_db = spec_db.cpu()
+            mel_spec = transform(audio)
+            spec_db = amplitude_to_db(mel_spec)
         
         plt.figure(figsize=(10, 4))
-        plt.imshow(spec_db.squeeze().numpy(), cmap='viridis', origin='lower', aspect='auto')
+        plt.imshow(spec_db.squeeze().cpu().numpy(), cmap='viridis', origin='lower', aspect='auto')
         plt.title(title)
         plt.colorbar(format='%+2.0f dB')
         plt.tight_layout()
@@ -394,7 +391,7 @@ def train_model(model, train_loader, optimizer, device, save_dir, num_epochs=100
     model.train()
     os.makedirs(save_dir, exist_ok=True)
     best_model_path = os.path.join(save_dir, 'best_model.pth')
-    if os.path.exists(best_model_path):
+    if (os.path.exists(best_model_path)):
         checkpoint = torch.load(best_model_path, map_location=device)
         best_loss = checkpoint['loss']
         print(f"\nLoaded previous best loss: {best_loss}")
@@ -670,10 +667,59 @@ def main():
     # 固定隨機種子，確保每次訓練的批次順序都相同
     set_seed(42)
     
+    # 添加參數解析
+    parser = argparse.ArgumentParser(description="WavTokenizer訓練/特徵提取工具")
+    parser.add_argument("--extract_only", action="store_true", help="僅提取encoder特徵，不訓練模型")
+    parser.add_argument("--input_dir", type=str, default=None, help="輸入目錄，用於提取特徵")
+    parser.add_argument("--save_dir", type=str, default=None, help="特徵保存目錄")
+    parser.add_argument("--format", type=str, choices=["pt", "npy"], default="pt", help="特徵保存格式")
+    args = parser.parse_args()
+    
+    # 如果啟用了特徵提取模式
+    if args.extract_only:
+        if not args.input_dir:
+            print("錯誤: 使用 --extract_only 模式時必須指定 --input_dir")
+            return
+        
+        extract_dir = args.save_dir or os.path.join(os.getcwd(), "results", "features")
+        os.makedirs(extract_dir, exist_ok=True)
+        
+        print(f"特徵提取模式啟動")
+        print(f"輸入目錄: {args.input_dir}")
+        print(f"輸出目錄: {extract_dir}")
+        print(f"輸出格式: {args.format}")
+        
+        # 載入模型
+        config_path = os.path.join(os.getcwd(), "config", "wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml")
+        model_path = os.path.join(os.getcwd(), "models", "wavtokenizer_large_speech_320_24k.ckpt")
+        
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        print(f"使用設備: {device}")
+        
+        # 初始化模型
+        model = EnhancedWavTokenizer(config_path, model_path).to(device)
+        model.eval()  # 設置為評估模式
+        
+        # 進行批次提取
+        from extract_features import batch_extract_features
+        results = batch_extract_features(
+            model,
+            args.input_dir,
+            extract_dir,
+            device,
+            args.format
+        )
+        
+        if results:
+            print(f"\n處理完成，成功提取 {len(results)} 個特徵文件")
+            print(f"特徵已保存到: {extract_dir}")
+        
+        return
+    
     config = {
-        'config_path': "./wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml",
-        'model_path': "./wavtokenizer_large_speech_320_24k.ckpt",        
-        'save_dir': './tout2',       # 所有訓練輸出都會儲存在這裡
+        'config_path': os.path.join(os.getcwd(), "config", "wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml"),
+        'model_path': os.path.join(os.getcwd(), "models", "wavtokenizer_large_speech_320_24k.ckpt"),        
+        'save_dir': os.path.join(os.getcwd(), "results", "tsne_outputs", "tsne_output"),
         'epochs': 2000,
         'batch_size': 4,            # 修改為和 try3.py 一樣
         'learning_rate': 3e-2,      # 修改為和 try3.py 一樣
@@ -770,8 +816,12 @@ def main():
         from try3 import AudioDataset, collate_fn
         
         # 檢查目錄是否存在
-        input_dirs = ["./box", "./plastic", "./papercup"]
-        target_dir = "./box2"
+        input_dirs = [
+            os.path.join(os.getcwd(), "data", "raw", "box"),
+            os.path.join(os.getcwd(), "data", "raw", "plastic"),
+            os.path.join(os.getcwd(), "data", "raw", "papercup")
+        ]
+        target_dir = os.path.join(os.getcwd(), "data", "raw", "box2")
         
         for dir_path in input_dirs + [target_dir]:
             if not os.path.exists(dir_path):
@@ -1017,6 +1067,65 @@ def main():
         scheduler=scheduler,
         val_loader=val_loader  # 添加驗證加載器
     )
+
+def evaluate_model_performance(model, test_loader, device):
+    """評估模型性能，計算多個指標"""
+    model.eval()
+    metrics = {
+        'snr': [],
+        'spectral_distance': [],
+        'env_similarity': []
+    }
+    
+    with torch.no_grad():
+        for input_wav, target_wav in test_loader:
+            input_wav = input_wav.to(device)
+            target_wav = target_wav.to(device)
+            
+            # 生成輸出
+            output = model(input_wav)
+            
+            # 計算各種指標
+            # Placeholder for evaluate_audio_quality function
+            # Define or import the function to compute metrics
+            batch_metrics = {
+                'snr': torch.tensor([0.0]),  # Replace with actual SNR computation
+                'spectral_distance': torch.tensor([0.0]),  # Replace with actual spectral distance computation
+                'env_similarity': torch.tensor([0.0])  # Replace with actual envelope similarity computation
+            }
+            
+            # 收集指標
+            for key in metrics:
+                metrics[key].append(batch_metrics[key].mean().item())
+    
+    # 計算平均值
+    avg_metrics = {k: sum(v)/len(v) for k, v in metrics.items()}
+    
+    return avg_metrics
+
+# 注釋掉可視化相關函數
+"""
+def visualize_enhanced_tsne(features, labels=None, perplexity=30, n_iter=1000, save_path=None):
+    # 原函數內容已注釋
+    pass
+
+def visualize_tsne_enhanced(features, labels=None, save_path=None, title=None, 
+                       perplexity=30, n_components=2, n_iter=2000):
+    # 原函數內容已注釋
+    pass
+
+def visualize_feature_importance(features, labels=None, method='variance', n_components=10, save_path=None):
+    # 原函數內容已注釋
+    pass
+
+def analyze_temporal_features(features, window_size=100, stride=50, save_path=None):
+    # 原函數內容已注釋
+    pass
+
+def analyze_feature_stability(features, n_runs=10, perplexity=30, n_iter=1000):
+    # 原函數內容已注釋
+    pass
+"""
 
 if __name__ == "__main__":
     main()

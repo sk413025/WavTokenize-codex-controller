@@ -103,8 +103,8 @@ def process_folder(input_folder, output_folder, sample_rate=24000, cutoff_freq=4
             print(f"Error processing {wav_file}: {str(e)}")
 
 if __name__ == "__main__":
-    input_folder = "tsne_enhanced_outputs"  # 替換為你的輸入資料夾路徑
-    output_folder = "tsne_enhanced_outputs"  # 替換為你的輸出資料夾路徑
+    input_folder = "results/tsne_outputs/tsne_enhanced_outputs"  # 替換為你的輸入資料夾路徑
+    output_folder = "results/tsne_outputs/tsne_enhanced_outputs"  # 替換為你的輸出資料夾路徑
     
     process_folder(
         input_folder,

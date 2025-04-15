@@ -289,7 +289,7 @@ if __name__ == "__main__":
     # 批次處理整個資料夾
     process_directory(
         input_dir="./tte",  # 測試集輸入資料夾
-        output_dir="./tsne_enhanced_outputs",  # 增強後的輸出資料夾
+        output_dir="./results/tsne_outputs/tsne_enhanced_outputs",  # 增強後的輸出資料夾
         model_config=config,
         reference_dir="./tte_clean"  # 乾淨參考音頻的資料夾（如果有的話）
     )
@@ -298,7 +298,7 @@ if __name__ == "__main__":
     # 單檔處理（已註解）
     test_model(
         input_path="./box/nor_boy1_box_LDV_100.wav",
-        output_path="./enhanced_outputs/test_nor_boy1_box_LDV_100.wav",
+        output_path="./results/outputs/enhanced_outputs/test_nor_boy1_box_LDV_100.wav",
         model_config=config
     )
     """

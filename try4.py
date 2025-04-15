@@ -1091,8 +1091,11 @@ def main():
         verbose=True
     )
     
+    # ...existing code...
+    save_dir = './results/outputs/self_supervised_output'
+    # ...existing code...
+
     # Training
-    save_dir = './self_supervised_output'
     train_model(model, train_loader, optimizer, scheduler, device, save_dir, config)
 
 if __name__ == "__main__":
