@@ -1,8 +1,8 @@
 # Audio files
-*.wav
+# *.wav  # 註解掉，改用 Git LFS 追蹤 WAV 檔案
 
 # Image files
-*.png
+# *.png  # 註解掉，改用 Git LFS 追蹤 PNG 檔案
 
 # Model and checkpoint files
 *.pth
