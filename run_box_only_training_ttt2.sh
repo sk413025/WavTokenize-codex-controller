@@ -46,6 +46,11 @@ echo "- 資料載入線程數: $TTT_NUM_WORKERS"
 echo "- 日誌文件: $LOG_FILE"
 echo "====================================================="
 
+# 激活 conda 環境
+echo "激活 conda test 環境..."
+source /home/sbplab/miniconda3/etc/profile.d/conda.sh
+conda activate test
+
 # 運行前清理CUDA緩存
 echo "清理 CUDA 緩存..."
 python -c "import torch; torch.cuda.empty_cache()" || echo "無法清空CUDA緩存"

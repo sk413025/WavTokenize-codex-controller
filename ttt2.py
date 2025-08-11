@@ -975,6 +975,12 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
         content_decay_factors = []  # 新增：紀錄內容衰減因子
         content_losses_record = []  # 新增：紀錄內容一致性損失
     
+    # 確保所有必要的變數都已初始化
+    if 'content_decay_factors' not in locals():
+        content_decay_factors = []
+    if 'content_losses_record' not in locals():
+        content_losses_record = []
+    
     for epoch in range(num_epochs):
         # 訓練階段
         model.train()
@@ -1934,7 +1940,7 @@ def main():
         'config_path': os.path.join(os.getcwd(), "config", "wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml"),
         'model_path': os.path.join(os.getcwd(), "models", "wavtokenizer_large_speech_320_24k.ckpt"),        
         'save_dir': output_dir,
-        'epochs': 800,              # 設定訓練輪數
+        'epochs': 2,              # 設定訓練輪數
         'batch_size': 8,             # 減小批次大小以節省記憶體
         'learning_rate': 0.005,      # 適當增加學習率以加快收斂
         'weight_decay': 0.001,
