@@ -111,54 +111,6 @@ bandwidth_id = torch.tensor([0])
 audio_out = wavtokenizer.decode(features, bandwidth_id=bandwidth_id)
 ```
 
-## 特徵提取
-
-### 使用 extract_features.py 提取 encoder 特徵
-
-可以使用以下命令從音頻文件中提取 WavTokenizer encoder 的特徵向量：
-
-```bash
-python extract_features.py --input "/path/to/audio/files" --output_dir "./results/features" --format "pt"
-```
-
-參數說明：
-- `--input`: 輸入音頻文件或目錄路徑
-- `--output_dir`: 特徵輸出目錄（可選，默認保存在音頻文件同目錄）
-- `--format`: 輸出格式，可選 "pt" (PyTorch) 或 "npy" (NumPy)，默認為 "pt"
-- `--config_path`: WavTokenizer 配置文件路徑（可選）
-- `--model_path`: WavTokenizer 模型路徑（可選）
-- `--device`: 使用的設備，"cuda" 或 "cpu"，默認為 "cuda"（若可用）
-
-### 使用 tsne.py 中的提取模式
-
-也可以使用 tsne.py 的 `--extract_only` 模式提取特徵：
-
-```bash
-python tsne.py --extract_only --input_dir "/path/to/audio/files" --save_dir "./results/features" --format "pt"
-```
-
-參數說明：
-- `--extract_only`: 啟用僅提取特徵模式，不進行訓練
-- `--input_dir`: 輸入音頻目錄
-- `--save_dir`: 特徵保存目錄（可選）
-- `--format`: 輸出格式，可選 "pt" 或 "npy"，默認為 "pt"
-
-### 使用提取的特徵進行訓練或分析
-
-提取的特徵可用於：
-1. 幫助訓練 enhancement 層，作為參考答案
-2. 分析特徵分佈差異
-3. 比較 decoder 使用原始特徵與增強特徵的輸出差異
-
-```python
-# 載入保存的特徵
-import torch
-features = torch.load("box_boy1_001_encoder.pt")
-
-# 用於訓練或分析
-# ...
-```
-
 ## Available models
 🤗 links to the Huggingface model hub.
 

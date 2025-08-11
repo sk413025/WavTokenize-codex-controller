@@ -95,21 +95,26 @@ class WavTokenizer(nn.Module):
     @classmethod
     def from_pretrained0802(self, config_path, model_path):
         """
-        Class method to create a new Vocos model instance from a pre-trained model stored in the Hugging Face model hub.
+        從預訓練模型檔案建立 Vocos 模型實例，支援 Hugging Face 格式與純 state_dict 格式。
+        會自動將所有 state_dict 權重嘗試載入，strict=False，避免遺漏子模組參數。
+
+        Args:
+            config_path (str): 模型設定檔路徑。
+            model_path (str): 權重檔案路徑，可為含 'state_dict' key 的 checkpoint 或純 state_dict。
+
+        Returns:
+            model: 已載入權重並設為 eval 模式的 Vocos 模型。
         """
+        import torch
         model = self.from_hparams0802(config_path)
-        state_dict_raw = torch.load(model_path, map_location="cpu")['state_dict']
-        state_dict = dict()
-        for k, v in state_dict_raw.items():
-            if k.startswith('backbone.') or k.startswith('head.') or k.startswith('feature_extractor.'):
-                state_dict[k] = v
-        # if isinstance(model.feature_extractor, EncodecFeatures):
-        #     encodec_parameters = {
-        #         "feature_extractor.encodec." + key: value
-        #         for key, value in model.feature_extractor.encodec.state_dict().items()
-        #     }
-        #     state_dict.update(encodec_parameters)
-        model.load_state_dict(state_dict)
+        checkpoint = torch.load(model_path, map_location="cpu")
+        # 自動判斷 checkpoint 格式
+        if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
+            state_dict = checkpoint['state_dict']
+        else:
+            state_dict = checkpoint
+        # 直接嘗試載入所有 key，strict=False 可自動忽略多餘/缺少的 key
+        model.load_state_dict(state_dict, strict=False)
         model.eval()
         return model
 

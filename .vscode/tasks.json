@@ -1,0 +1,16 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "檢查特徵形狀",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"-c",
+				"import torch; data = torch.load('/home/sbplab/ruizi/WavTokenize/results/tsne_outputs/output2/features/epoch_1200/enhanced_features.pt'); print(f'Enhanced features shape: {data.shape}'); data = torch.load('/home/sbplab/ruizi/WavTokenize/results/tsne_outputs/output2/features/epoch_1200/target_features.pt'); print(f'Target features shape: {data.shape}')"
+			],
+			"group": "build",
+			"problemMatcher": []
+		}
+	]
+}

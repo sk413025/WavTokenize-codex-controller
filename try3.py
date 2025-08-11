@@ -187,7 +187,7 @@ class AudioDataset(Dataset):
     """
     自定義音頻資料集類別，可處理多個輸入目錄。
     """
-    def __init__(self, input_dirs, target_dir):
+    def __init__(self, input_dirs, target_dir, max_files_per_dir=None):
         self.input_dirs = input_dirs if isinstance(input_dirs, list) else [input_dirs]
         self.target_dir = target_dir
         self.paired_files = []
@@ -209,14 +209,31 @@ class AudioDataset(Dataset):
         # 收集所有輸入文件
         for input_dir in self.input_dirs:
             print(f"\nProcessing directory: {input_dir}")
-            for input_file in os.listdir(input_dir):
+            
+            # 從目錄路徑獲取材質名稱（例如：box, mac, papercup, plastic）
+            # 取得目錄名稱作為材質
+            material = os.path.basename(input_dir)
+            print(f"Directory material type: {material}")
+            
+            # 獲取目錄中的所有WAV文件
+            input_files = [f for f in os.listdir(input_dir) if f.endswith('.wav')]
+            
+            # 如果設定了max_files_per_dir，則限制每個目錄的文件數量
+            if max_files_per_dir is not None:
+                if len(input_files) > max_files_per_dir:
+                    print(f"Limiting files from {input_dir} to {max_files_per_dir} (from {len(input_files)} total files)")
+                    # 隨機選擇指定數量的文件
+                    input_files = random.sample(input_files, max_files_per_dir)
+            
+            for input_file in input_files:
                 if input_file.endswith('.wav'):
                     try:
                         # 解析文件名
                         parts = input_file.split('_')
                         if len(parts) >= 2:
-                            material = parts[0]    # box, plastic, papercup
-                            speaker = parts[1]     # boy1
+                            # 使用目錄名稱作為材質，而不是從文件名解析
+                            # material = parts[0]  # 舊的方法，從文件名取得材質
+                            speaker = parts[1] if len(parts) > 1 else "unknown"  # 如 boy1, girl6 等
                             number = parts[-1]     # 136.wav or 137.wav
                             
                             print(f"\nTrying to match: {input_file}")
@@ -246,7 +263,7 @@ class AudioDataset(Dataset):
                                     'input_dir': input_dir,
                                     'input': input_file,
                                     'target': target_file,
-                                    'material': material,
+                                    'material': material,  # 使用目錄名稱作為材質
                                     'speaker': speaker
                                 })
                             else:

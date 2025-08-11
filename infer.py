@@ -46,7 +46,7 @@ for i in range(len(x)):
     wav, sr = torchaudio.load(x[i])
     # print("***:",x[i])
     # wav = convert_audio(wav, sr, 24000, 1)                             # (1,131040)
-    bandwidth_id = torch.tensor([0])
+    bandwidth_id = torch.tensor([2])
     wav=wav.to(device1)
     print(i)
 

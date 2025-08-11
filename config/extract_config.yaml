@@ -1,0 +1,29 @@
+data:
+  batch_size: 16
+  extensions:
+  - .wav
+  input_dirs:
+  - ./data/raw
+  target_dir: ./data/clean
+features:
+  extract_all: true
+  separate_storage: true
+  types:
+  - input
+  - enhanced
+  - target
+model:
+  config_path: ./config/wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml
+  model_path: ./wavtokenizer_large_speech_320_24k.ckpt
+  use_enhanced: true
+output:
+  include_metadata: true
+  save_dir: ./results/features
+  save_format: pt
+  save_subdirs:
+    enhanced: enhanced_features
+    input: input_features
+    target: target_features
+processing:
+  adjust_length: true
+  individual_fallback: true

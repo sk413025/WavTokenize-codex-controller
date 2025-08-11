@@ -111,7 +111,22 @@ class EncodecFeatures(FeatureExtractor):
         # breakpoint()
 
         emb = self.encodec.encoder(audio)
-        q_res = self.encodec.quantizer(emb, self.frame_rate, bandwidth=self.bandwidths[bandwidth_id])
+        
+        # 處理bandwidth_id可能是張量的情況，與infer方法保持一致
+        if isinstance(bandwidth_id, torch.Tensor):
+            # 檢查是否是批次(batch)張量
+            if bandwidth_id.dim() > 0:
+                # 取第一個元素作為索引(假設批次中所有樣本使用相同的bandwidth_id)
+                bandwidth_idx = bandwidth_id[0].item()
+            else:
+                # 已經是單一元素張量
+                bandwidth_idx = bandwidth_id.item()
+        else:
+            # 已經是Python整數
+            bandwidth_idx = bandwidth_id
+            
+        # 使用處理過的索引
+        q_res = self.encodec.quantizer(emb, self.frame_rate, bandwidth=self.bandwidths[bandwidth_idx])
         quantized = q_res.quantized
         codes = q_res.codes
         commit_loss = q_res.penalty                 # codes(8,16,75),features(16,128,75)
@@ -134,7 +149,22 @@ class EncodecFeatures(FeatureExtractor):
 
         audio = audio.unsqueeze(1)                  # audio(16,24000)
         emb = self.encodec.encoder(audio)
-        q_res = self.encodec.quantizer.infer(emb, self.frame_rate, bandwidth=self.bandwidths[bandwidth_id])
+        
+        # 處理bandwidth_id可能是張量的情況
+        if isinstance(bandwidth_id, torch.Tensor):
+            # 檢查是否是批次(batch)張量
+            if bandwidth_id.dim() > 0:
+                # 取第一個元素作為索引(假設批次中所有樣本使用相同的bandwidth_id)
+                bandwidth_idx = bandwidth_id[0].item()
+            else:
+                # 已經是單一元素張量
+                bandwidth_idx = bandwidth_id.item()
+        else:
+            # 已經是Python整數
+            bandwidth_idx = bandwidth_id
+            
+        # 使用處理過的索引
+        q_res = self.encodec.quantizer.infer(emb, self.frame_rate, bandwidth=self.bandwidths[bandwidth_idx])
         quantized = q_res.quantized
         codes = q_res.codes
         commit_loss = q_res.penalty                 # codes(8,16,75),features(16,128,75)

@@ -87,7 +87,8 @@ trainer:
   max_steps: 20000000
   # You might want to limit val batches when evaluating all the metrics, as they are time-consuming
   limit_val_batches: 200
-  accelerator: gpu
-  strategy: single_device
-  devices: 1
+  accelerator: "gpu"  # Changed from "gpu" to "cuda"
+  devices: 1  # Explicitly specify GPU device index
+  strategy: single_device  # Changed from "single_device" to "auto"
+  precision: 32    # Added precision setting
   log_every_n_steps: 1000

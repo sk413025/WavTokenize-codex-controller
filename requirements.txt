@@ -12,7 +12,28 @@ tensorboardX==2.6
 soundfile==0.12.1
 numpy==1.23.5
 jsonargparse[signatures]>=4.15.2
+scikit-learn>=1.2.0
 fairseq
 torchcrepe
 librosa
-pesq
+pesq>=0.0.2  # 用於語音質量評估
+pystoi>=0.3.3  # 用於語音可懂度評估
+seaborn>=0.12.0  # 用於增強視覺化
+pandas>=1.5.0  # 用於數據處理和分析
+tqdm>=4.65.0  # 用於進度顯示
+tqdm>=4.64.0
+markdown>=3.4.0
+imageio>=2.31.1
+pillow>=9.5.0
+matplotlib>=3.7.1
+seaborn>=0.12.2  # 用於增強數據可視化
+pandas>=2.0.0  # 用於數據分析和處理
+umap-learn>=0.5.3  # 用於高維數據降維可視化
+pytorch-metric-learning>=1.7.0  # 用於相似性學習
+tensorboard>=2.12.0  # 用於實驗追蹤
+scikit-learn>=1.3.0  # 用於聚類分析和評估指標
+adjustText>=0.8  # 用於文本標籤優化顯示
+torchvision>=0.15.0  # 用於部分圖像處理功能
+pystoi>=0.3.3  # 語音可理解度評估指標
+pesq>=0.0.3  # 語音質量客觀評估指標
+scipy.stats>=1.10.1  # 用於統計分析功能

@@ -193,6 +193,23 @@ class SConv1d(nn.Module):
         self.pad_mode = pad_mode
 
     def forward(self, x):
+        # 修改：添加對輸入張量形狀的檢查和處理
+        if x.dim() != 3:
+            # 如果輸入不是 3 維張量 [B, C, T]，顯示警告並嘗試處理
+            original_shape = x.shape
+            print(f"Warning: SConv1d 需要 3D 輸入張量 [B, C, T]，但收到了 {x.dim()}D 張量 {original_shape}")
+            
+            if x.dim() == 2:  # [B, T] -> [B, 1, T]
+                x = x.unsqueeze(1)
+                print(f"已將 2D 張量調整為 3D: {x.shape}")
+            elif x.dim() == 4:  # 可能是 [B, C, H, T] (例如圖像) -> [B, C*H, T]
+                B, C, H, T = x.shape
+                x = x.reshape(B, C*H, T)
+                print(f"已將 4D 張量調整為 3D: {x.shape}")
+            else:
+                raise ValueError(f"無法自動處理 {x.dim()}D 張量，請提供 3D 張量 [B, C, T]")
+        
+        # 現在 x 應該是 3D 張量
         B, C, T = x.shape
         kernel_size = self.conv.conv.kernel_size[0]
         stride = self.conv.conv.stride[0]

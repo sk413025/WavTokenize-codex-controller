@@ -76,19 +76,17 @@ def _check_checksum(path: Path, checksum: str):
                            f'expected {checksum} but got {actual_checksum}')
 
 
-def convert_audio(wav: torch.Tensor, sr: int, target_sr: int, target_channels: int):
-    assert wav.dim() >= 2, "Audio tensor must have at least 2 dimensions"
-    assert wav.shape[-2] in [1, 2], "Audio must be mono or stereo."
-    *shape, channels, length = wav.shape
-    if target_channels == 1:
-        wav = wav.mean(-2, keepdim=True)
-    elif target_channels == 2:
-        wav = wav.expand(*shape, target_channels, length)
-    elif channels == 1:
-        wav = wav.expand(target_channels, -1)
-    else:
-        raise RuntimeError(f"Impossible to convert from {channels} to {target_channels}")
-    wav = torchaudio.transforms.Resample(sr, target_sr)(wav)
+def convert_audio(wav, sr, target_sr, target_channels):
+    # Convert audio sample rate and number of channels
+    if sr != target_sr:
+        # 確保重採樣變換和音頻在同一設備上
+        wav_device = wav.device
+        resampler = torchaudio.transforms.Resample(sr, target_sr).to(wav_device)
+        wav = resampler(wav)
+    
+    if wav.shape[0] != target_channels:
+        wav = torch.mean(wav, dim=0, keepdim=True)
+    
     return wav
 
 
