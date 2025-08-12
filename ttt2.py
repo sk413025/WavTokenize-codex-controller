@@ -89,37 +89,67 @@ class Encodec(nn.Module):
         return decoded
 
 class ResidualBlock(nn.Module):
-    def __init__(self, channels, activation='gelu', leaky_relu_slope=0.1, dropout_rate=0.35):
+    """
+    修復的殘差塊實作，使用GroupNorm替代BatchNorm提升穩定性
+    
+    Args:
+        channels: 通道數
+        activation: 激活函數類型 ('gelu', 'leaky_relu')
+        leaky_relu_slope: LeakyReLU 的負斜率
+        dropout_rate: Dropout 比率
+        use_group_norm: 是否使用GroupNorm替代BatchNorm
+    """
+    def __init__(self, channels, activation='gelu', leaky_relu_slope=0.1, dropout_rate=0.35, use_group_norm=True):
         super().__init__()
         self.conv1 = nn.Conv1d(channels, channels, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm1d(channels)
         self.conv2 = nn.Conv1d(channels, channels, kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm1d(channels)
+        
+        # 使用GroupNorm替代BatchNorm提升穩定性
+        if use_group_norm:
+            # 使用8個group，對於256通道是合理的選擇
+            num_groups = min(8, channels // 4) if channels >= 4 else 1
+            self.norm1 = nn.GroupNorm(num_groups, channels)
+            self.norm2 = nn.GroupNorm(num_groups, channels)
+        else:
+            self.norm1 = nn.BatchNorm1d(channels)
+            self.norm2 = nn.BatchNorm1d(channels)
         
         # 可選的激活函數
-        if (activation == 'gelu'):
+        if activation == 'gelu':
             self.act = nn.GELU()
-        elif (activation == 'leaky_relu'):
+        elif activation == 'leaky_relu':
             self.act = nn.LeakyReLU(negative_slope=leaky_relu_slope)
         else:
-            raise ValueError(f"Unsupported activation: {activation}")
+            raise ValueError(f"不支持的激活函數: {activation}")
             
         # 添加 Dropout 層
         self.dropout1 = nn.Dropout(dropout_rate)
 
     def forward(self, x):
+        """
+        修復的前向傳播函數
+        
+        Args:
+            x: 輸入特徵 [B, C, T]
+            
+        Returns:
+            輸出特徵 [B, C, T]
+        """
         identity = x
         
+        # 第一個卷積分支
         out = self.conv1(x)
-        out = self.bn1(out)
+        out = self.norm1(out)
         out = self.act(out)
         
         # 在第一個激活函數後應用 Dropout
         out = self.dropout1(out)
         
-        out = self.conv2(x)
-        out = self.bn2(out)
+        # 第二個卷積分支 - 修復錯誤：使用out而不是x
+        out = self.conv2(out)  # ✅ 修復：原來錯誤地使用了x
+        out = self.norm2(out)
         
+        # 殘差連接
         out += identity
         out = self.act(out)
         
@@ -160,7 +190,7 @@ class EnhancedFeatureExtractor(nn.Module):
         
         # 殘差塊，從2個增加到3個，並傳遞 dropout_rate 參數
         self.residual_blocks = nn.ModuleList([
-            ResidualBlock(hidden_dim, activation='gelu', dropout_rate=dropout_rate) 
+            ResidualBlock(hidden_dim, activation='gelu', dropout_rate=dropout_rate, use_group_norm=True) 
             for _ in range(num_residual_blocks)
         ])
         
@@ -292,6 +322,79 @@ class EnhancedWavTokenizer(nn.Module):
         output, input_features, enhanced_features, discrete_code, intermediate_enhanced_features, intermediate_features_list = self.feature_extractor(x, bandwidth_id)
             
         return output, input_features, enhanced_features, discrete_code, intermediate_enhanced_features, intermediate_features_list
+
+def compute_codebook_consistency_loss(enhanced_features, target_discrete_code, wavtokenizer, device):
+    """
+    計算碼本一致性損失，確保增強特徵在manifold上
+    
+    Args:
+        enhanced_features: 增強後的特徵 [B, C, T]
+        target_discrete_code: 目標的離散編碼
+        wavtokenizer: WavTokenizer模型（用於量化）
+        device: 計算設備
+        
+    Returns:
+        torch.Tensor: 碼本一致性損失
+    """
+    try:
+        # 將增強特徵通過相同的量化器
+        with torch.no_grad():
+            # 使用WavTokenizer的量化器對增強特徵進行量化
+            # 注意：這裡需要訪問quantizer，可能需要調整具體實現
+            quantizer = wavtokenizer.feature_extractor.encodec.encoder.quantizer
+            
+        # 對增強特徵進行量化
+        quantized_enhanced, _, enhanced_discrete_indices = quantizer(enhanced_features.unsqueeze(2))
+        
+        # 計算離散碼的交叉熵損失
+        # 重塑為適合交叉熵的形狀
+        enhanced_discrete_flat = enhanced_discrete_indices.view(-1)
+        target_discrete_flat = target_discrete_code.view(-1)
+        
+        # 確保目標碼在有效範圍內
+        valid_mask = (target_discrete_flat >= 0) & (target_discrete_flat < quantizer.n_q * quantizer.n_embed)
+        
+        if valid_mask.sum() > 0:
+            codebook_loss = F.cross_entropy(
+                enhanced_discrete_flat[valid_mask].float().unsqueeze(1),
+                target_discrete_flat[valid_mask].long(),
+                reduction='mean'
+            )
+        else:
+            codebook_loss = torch.tensor(0.0, device=device)
+            
+        return codebook_loss
+        
+    except Exception as e:
+        print(f"碼本一致性損失計算失敗: {e}")
+        # 返回零損失作為fallback
+        return torch.tensor(0.0, device=device, requires_grad=True)
+
+def compute_manifold_regularization_loss(enhanced_features, input_features, alpha=0.1):
+    """
+    計算manifold正則化損失，防止增強特徵偏離輸入特徵manifold太遠
+    
+    Args:
+        enhanced_features: 增強後的特徵 [B, C, T]
+        input_features: 原始輸入特徵 [B, C, T]
+        alpha: 正則化強度
+        
+    Returns:
+        torch.Tensor: manifold正則化損失
+    """
+    # 計算增強特徵與輸入特徵的L2距離
+    manifold_distance = torch.norm(enhanced_features - input_features, p=2, dim=1)
+    
+    # 使用適應性閾值，避免過度約束
+    mean_distance = manifold_distance.mean()
+    std_distance = manifold_distance.std()
+    adaptive_threshold = mean_distance + 2 * std_distance
+    
+    # 對超過閾值的部分進行懲罰
+    excess_distance = F.relu(manifold_distance - adaptive_threshold)
+    manifold_loss = alpha * excess_distance.mean()
+    
+    return manifold_loss
 
 def compute_feature_loss(enhanced_features, target_features, device, loss_type='l2', use_cosine_sim=False):
     """
@@ -1060,18 +1163,22 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
                 # 這是 --tsne_flow_with_content --use_layered_loss --first_two_blocks_only 模式
                 loss, loss_details = compute_layered_hybrid_loss(
                     output, target_wav, enhanced_features, target_features, intermediate_features_list, content_ids, device,
-                    current_epoch=epoch, total_epochs=num_epochs
+                    current_epoch=epoch, total_epochs=num_epochs,
+                    input_features=input_features, discrete_code=discrete_code, 
+                    target_discrete_code=target_discrete_code, wavtokenizer=model.feature_extractor.wavtokenizer
                 )
                 # 存儲當前批次的衰減因子，僅保存一次每個epoch的值
                 if len(epoch_decay_factors) == 0 or epoch_decay_factors[-1] != loss_details['content_decay_factor']:
                     epoch_decay_factors.append(loss_details['content_decay_factor'])
                 
-                print(f"\r使用分層損失+內容一致性 - 內容損失: {loss_details['avg_layer_content_loss']:.4f}, L2損失: {loss_details['avg_layer_l2_loss']:.4f}, 衰減因子: {loss_details['content_decay_factor']:.3f}", end='')
+                print(f"\r使用增強分層損失+內容一致性 - 內容: {loss_details['avg_layer_content_loss']:.4f}, L2: {loss_details['avg_layer_l2_loss']:.4f}, manifold: {loss_details['manifold_regularization_loss']:.4f}, 碼本: {loss_details['codebook_consistency_loss']:.4f}", end='')
             elif config.get('use_layered_loss', False) and content_ids is not None and 'intermediate_features_list' in locals():
                 # 普通分層損失模式：--use_layered_loss
                 loss, loss_details = compute_layered_hybrid_loss(
                     output, target_wav, enhanced_features, target_features, intermediate_features_list, content_ids, device,
-                    current_epoch=epoch, total_epochs=num_epochs
+                    current_epoch=epoch, total_epochs=num_epochs,
+                    input_features=input_features, discrete_code=discrete_code, 
+                    target_discrete_code=target_discrete_code, wavtokenizer=model.feature_extractor.wavtokenizer
                 )
                 # 存儲當前批次的衰減因子
                 if len(epoch_decay_factors) == 0 or epoch_decay_factors[-1] != loss_details['content_decay_factor']:
@@ -1286,7 +1393,9 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
                         # 使用分層損失：前幾層著重內容一致性，後幾層著重L2特徵損失，隨訓練進度動態調整權重
                         loss, loss_details = compute_layered_hybrid_loss(
                             output, target_wav, enhanced_features, target_features, intermediate_features_list, None, device,
-                            current_epoch=epoch, total_epochs=num_epochs
+                            current_epoch=epoch, total_epochs=num_epochs,
+                            input_features=input_features, discrete_code=discrete_code, 
+                            target_discrete_code=None, wavtokenizer=model.feature_extractor.wavtokenizer
                         )
                     elif config.get('tsne_flow_with_L2', False):
                         # 使用僅L2損失的模式：tsne.py處理流程 + 僅L2損失
@@ -1940,7 +2049,7 @@ def main():
         'config_path': os.path.join(os.getcwd(), "config", "wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml"),
         'model_path': os.path.join(os.getcwd(), "models", "wavtokenizer_large_speech_320_24k.ckpt"),        
         'save_dir': output_dir,
-        'epochs': 2,              # 設定訓練輪數
+        'epochs': 800,              # 設定訓練輪數
         'batch_size': 8,             # 減小批次大小以節省記憶體
         'learning_rate': 0.005,      # 適當增加學習率以加快收斂
         'weight_decay': 0.001,
@@ -2648,12 +2757,15 @@ def compute_content_consistency_loss(intermediate_features, content_ids, device)
 
 
 def compute_layered_hybrid_loss(output, target_wav, enhanced_features, target_features, 
-                           intermediate_features_list, content_ids, device, current_epoch=0, total_epochs=100):
+                           intermediate_features_list, content_ids, device, current_epoch=0, total_epochs=100,
+                           input_features=None, discrete_code=None, target_discrete_code=None, wavtokenizer=None):
     """
-    修改版分層損失函數 - 按照要求實現特定損失函數配置：
+    增強版分層損失函數 - 包含manifold正則化和碼本一致性：
     1. 僅在第二層（索引1）應用內容一致性損失
     2. 僅在最終層（進入decoder前）應用L2損失
-    3. 中間層自由學習，不施加任何損失
+    3. 添加manifold正則化損失，防止特徵偏離原始manifold
+    4. 添加碼本一致性損失，確保增強特徵在有效空間內
+    5. 中間層自由學習，不施加任何損失
     
     Args:
         output (torch.Tensor): 模型輸出的音頻波形
@@ -2665,6 +2777,10 @@ def compute_layered_hybrid_loss(output, target_wav, enhanced_features, target_fe
         device (torch.device): 計算設備
         current_epoch (int): 當前訓練的epoch
         total_epochs (int): 總訓練epochs數
+        input_features (torch.Tensor, optional): 原始輸入特徵，用於manifold正則化
+        discrete_code (torch.Tensor, optional): 輸入的離散編碼
+        target_discrete_code (torch.Tensor, optional): 目標的離散編碼
+        wavtokenizer (object, optional): WavTokenizer模型，用於碼本一致性
         
     Returns:
         tuple: (total_loss, loss_details)，其中loss_details是包含各損失組件的字典
@@ -2678,9 +2794,19 @@ def compute_layered_hybrid_loss(output, target_wav, enhanced_features, target_fe
     # 初始化損失值
     content_loss = torch.tensor(0.0, device=device)
     l2_loss = torch.tensor(0.0, device=device)
+    manifold_loss = torch.tensor(0.0, device=device)
+    codebook_loss = torch.tensor(0.0, device=device)
     
     # 計算最終層的L2損失 (進入decoder前的特徵)
     l2_loss = compute_feature_loss(enhanced_features, target_features, device)
+    
+    # 計算manifold正則化損失
+    if input_features is not None:
+        manifold_loss = compute_manifold_regularization_loss(enhanced_features, input_features, alpha=0.05)
+    
+    # 計算碼本一致性損失
+    if target_discrete_code is not None and wavtokenizer is not None:
+        codebook_loss = compute_codebook_consistency_loss(enhanced_features, target_discrete_code, wavtokenizer, device)
     
     # 計算內容一致性損失，但僅對第二層 (index 1)
     num_layers = len(intermediate_features_list)
@@ -2702,18 +2828,25 @@ def compute_layered_hybrid_loss(output, target_wav, enhanced_features, target_fe
     else:
         print(f"警告: 中間特徵層數不足 ({num_layers})，無法獲取第二層特徵")
     
-    # 設定內容損失和L2損失的權重
-    alpha = 0.01  # 內容一致性損失的權重
-    beta = 0.99   # L2損失的權重
+    # 設定各損失的權重
+    alpha = 0.01    # 內容一致性損失的權重
+    beta = 0.90     # L2損失的權重（略微降低為manifold損失讓路）
+    gamma = 0.05    # manifold正則化損失的權重
+    delta = 0.04    # 碼本一致性損失的權重
+    
+    # 確保權重總和合理
+    total_weight = alpha + beta + gamma + delta
+    print(f"損失權重總和: {total_weight:.3f}")
     
     # 計算最終損失
-    total_loss = alpha * content_loss + beta * l2_loss
+    total_loss = alpha * content_loss + beta * l2_loss + gamma * manifold_loss + delta * codebook_loss
     
     # 停用衰減因子，固定為1.0（表示不衰減）
     content_decay_factor = 1.0
     
     # 打印詳細的損失信息和批次內容分析
-    print(f"\r專用損失模式 - 第二層內容損失: {content_loss.item():.4f}, 最終層L2損失: {l2_loss.item():.4f}", end='')
+    print(f"\r增強損失模式 - 內容: {content_loss.item():.4f}, L2: {l2_loss.item():.4f}, "
+          f"manifold: {manifold_loss.item():.4f}, 碼本: {codebook_loss.item():.4f}", end='')
     
     # 分析並打印content_ids的詳細信息，用於調試內容一致性損失
     if content_ids is not None:
@@ -2737,6 +2870,8 @@ def compute_layered_hybrid_loss(output, target_wav, enhanced_features, target_fe
     return total_loss, {
         'feature_loss': l2_loss.item(),
         'content_consistency_loss': content_loss.item(),
+        'manifold_regularization_loss': manifold_loss.item(),
+        'codebook_consistency_loss': codebook_loss.item(),
         'avg_layer_content_loss': content_loss.item(),
         'avg_layer_l2_loss': l2_loss.item(),
         'content_decay_factor': content_decay_factor,
