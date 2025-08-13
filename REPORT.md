@@ -1,5 +1,32 @@
 # 實驗記錄報告
 
+## 2025-08-13 TTT2外部測試系統重大改進 (EXP_TTT2_OUTSIDE_FIX_20250813)
+- **實驗編號**: EXP_TTT2_OUTSIDE_FIX_20250813
+- **提交ID**: `200fab4`
+- **實驗背景**: TTT2模型在外部音檔測試中出現輸出無聲音問題，需要建立跨分支兼容的測試系統
+- **核心問題**:
+  - TTT2模型輸出格式處理錯誤，導致解碼音檔無聲音內容
+  - 主分支模型(BatchNorm)與修復分支模型(GroupNorm)架構不兼容
+  - 缺乏自動檢測模型類型的機制
+- **技術突破**:
+  1. **模型輸出格式修復**: 正確處理TTT2的元組輸出格式 `(output, input_features, enhanced_features, ...)`
+  2. **自動架構檢測**: 實現BatchNorm/GroupNorm的自動檢測和適配載入
+  3. **碼本一致性改進**: 增強quantizer路徑檢測和錯誤處理機制
+  4. **測試框架完善**: 建立包含12個外部音檔的完整測試報告系統
+- **驗證結果**:
+  - ✅ TTT2輸出音檔RMS達到0.0723 (遠大於0.001靜音閾值)
+  - ✅ 成功支援主分支(256維)和修復分支(1024維)模型
+  - ✅ 建立完整的音檔質量檢測指標(SNR、相關係數、RMS差異等)
+- **實驗價值**: 為後續主分支vs修復分支性能對比奠定了技術基礎
+- **重現步驟**: 
+  ```bash
+  python test_ttt2_outside.py --checkpoint <model_path> --outside_dir ./1n --output_dir <output> --max_files 12
+  ```
+- **核心檔案**:
+  - 測試腳本: `test_ttt2_outside.py` (新增自動架構檢測)
+  - 模型修復: `ttt2.py` (改進碼本一致性損失)
+  - 測試報告: `ttt2_outside_test_main_300epoch/` (12個音檔完整測試)
+
 ## 2025-08-13 音頻品質定量分析實驗 (EXP_AUDIO_QUALITY_20250813)
 - **實驗編號**: EXP_AUDIO_QUALITY_20250813
 - **提交ID**: `3cef9a5`
