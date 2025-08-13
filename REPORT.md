@@ -1,5 +1,37 @@
 # 實驗記錄報告
 
+## 2025-08-13 音頻品質定量分析實驗 (EXP_AUDIO_QUALITY_20250813)
+- **實驗編號**: EXP_AUDIO_QUALITY_20250813
+- **提交ID**: `3cef9a5`
+- **實驗背景**: 在損失函數數值分析基礎上，直接從音頻品質角度驗證TTT2 Fix分支的ResidualBlock修復效果
+- **比較對象**: Fix分支 vs Main分支 (Epoch 300)
+- **評估指標**: SNR、MFCC相似度、頻譜重心、頻譜滾降
+- **樣本數量**: 9個音頻樣本
+- **核心發現**:
+  - **SNR改善**: 平均+0.98dB，8/9樣本改善(88.9%)
+  - **MFCC相似度**: 平均+0.0301，7/9樣本改善(77.8%)
+  - **頻譜重心誤差**: Fix分支38.1Hz vs Main分支49.3Hz (減少22.7%)
+  - **雙重改善**: 7/9樣本在兩項核心指標都有改善
+- **結論**: ✅ Fix分支在音頻品質上明顯優於Main分支，證明ResidualBlock修復有效
+- **技術洞察**: 損失函數數值與音頻感知品質存在差異，修復後的損失函數更嚴格但更有效
+- **實驗檔案**: 
+  - 分析工具: `analyze_audio_quality.py`
+  - 詳細報告: `b-0813/AUDIO_QUALITY_REPORT.md`
+  - 可視化圖表: `b-0813/audio_quality_comparison.png`
+  - 原始數據: `b-0813/audio_quality_analysis.json`
+
+## 2025-08-11 TTT2 模型關鍵架構修復 (FIX_TTT2_20250811)
+- **修復分支**: `fix-ttt2-residual-block-and-manifold`
+- **提交ID**: `ceec740` 
+- **修復背景**: 基於 commit 38f072d1c9756b8a2c5701f3912c0bdf809d23f0 的深度技術分析，發現 TTT2 模型存在多個架構瑕疵
+- **關鍵修復**:
+  1. **ResidualBlock 錯誤修復**: 將 `self.conv2(x)` 改為 `self.conv2(out)`，修復梯度流動問題
+  2. **GroupNorm 支援**: 引入 GroupNorm 選項以改善音頻處理的穩定性
+  3. **流形正則化**: 實作 `compute_manifold_regularization_loss()` 防止特徵偏離訓練分佈
+  4. **碼本一致性**: 實作 `compute_codebook_consistency_loss()` 確保離散編碼穩定性
+  5. **多組件損失**: 更新 `compute_layered_hybrid_loss()` 整合所有損失組件
+- **驗證狀態**: ✅ 語法檢查通過，準備進行訓練測試
+- **下一步**: 運行訓練測試以驗證修復效果並進行性能比較
 
 ## 2025-08-05 參數更新：min_content_samples (EXP_PARAM_UPDATE_20250805)
 - **修改內容**: 將 `min_content_samples` 從 3 更新為 5
@@ -1119,5 +1151,59 @@ Content separation by layer:
 - 實現碼本一致性正則化
 
 詳細分析與理論推導請參見上述技術文檔。
+
+----
+
+## TTT2 修復分支訓練 - FIX_BRANCH_202508120604
+**執行時間:** 2025-08-12 06:04:15
+**分支:** fix-ttt2-residual-block-and-manifold
+**輸出目錄:** results/tsne_outputs/b-output4
+
+### 🔧 關鍵修復內容
+1. **ResidualBlock 修復:** 修正 conv2(x) → conv2(out) 錯誤
+2. **GroupNorm 支援:** 替代 BatchNorm 提供更穩定的音頻處理
+3. **流形正則化:** compute_manifold_regularization_loss() 防止特徵偏離
+4. **碼本一致性:** compute_codebook_consistency_loss() 確保編碼穩定
+5. **多組件損失:** 整合所有損失組件的 compute_layered_hybrid_loss()
+
+### 🎯 訓練設定
+- **模型:** TTT2 (修復版)
+- **損失函數:** 分層混合損失 + 流形正則化 + 碼本一致性
+- **材質:** 僅 box 材質
+- **批次大小:** 8
+- **日誌檔案:** `logs/ttt2_fixed_branch_training_202508120604.log`
+
+### 📊 預期改善
+- 更穩定的梯度流動 (ResidualBlock 修復)
+- 更好的訓練穩定性 (GroupNorm)
+- 防止過擬合和特徵偏移 (流形正則化)
+- 更一致的離散編碼 (碼本一致性損失)
+
+----
+
+## TTT2 修復分支訓練 - FIX_BRANCH_202508120824
+**執行時間:** 2025-08-12 08:24:07
+**分支:** fix-ttt2-residual-block-and-manifold
+**輸出目錄:** results/tsne_outputs/b-output4
+
+### 🔧 關鍵修復內容
+1. **ResidualBlock 修復:** 修正 conv2(x) → conv2(out) 錯誤
+2. **GroupNorm 支援:** 替代 BatchNorm 提供更穩定的音頻處理
+3. **流形正則化:** compute_manifold_regularization_loss() 防止特徵偏離
+4. **碼本一致性:** compute_codebook_consistency_loss() 確保編碼穩定
+5. **多組件損失:** 整合所有損失組件的 compute_layered_hybrid_loss()
+
+### 🎯 訓練設定
+- **模型:** TTT2 (修復版)
+- **損失函數:** 分層混合損失 + 流形正則化 + 碼本一致性
+- **材質:** 僅 box 材質
+- **批次大小:** 8
+- **日誌檔案:** `logs/ttt2_fixed_branch_training_202508120824.log`
+
+### 📊 預期改善
+- 更穩定的梯度流動 (ResidualBlock 修復)
+- 更好的訓練穩定性 (GroupNorm)
+- 防止過擬合和特徵偏移 (流形正則化)
+- 更一致的離散編碼 (碼本一致性損失)
 
 ----
