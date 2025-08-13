@@ -144,7 +144,7 @@ def main():
     print("="*50)
     
     # 設置路徑（可根據實際情況調整）
-    outside_dir = "outside_audio"  # outside音檔目錄
+    outside_dir = "./1n"  # outside音檔目錄
     checkpoint_path = "lightning_logs/version_0/checkpoints/epoch=299-step=300.ckpt"  # 預設checkpoint路徑
     output_dir = "ttt2_outside_test_simple"
     

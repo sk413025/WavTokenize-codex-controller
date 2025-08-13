@@ -13,22 +13,33 @@ conda activate test
 
 ### 2. 準備outside音檔
 ```bash
-# 創建outside音檔目錄
-mkdir -p outside_audio
+# TTT2測試使用./1n目錄作為outside音檔來源
+# 該目錄應該已包含測試音檔
 
-# 將測試音檔複製到目錄中
-cp /path/to/your/audio/files/*.wav outside_audio/
+# 檢查1n目錄中的音檔
+ls -la ./1n/*.wav
+
+# 如需添加其他音檔，可複製到1n目錄
+cp /path/to/your/audio/files/*.wav ./1n/
 ```
 
 ### 3. 運行測試
 ```bash
-# 使用預設參數運行
+# 使用預設參數運行（自動尋找最佳checkpoint）
 ./run_ttt2_outside_test.sh
 
-# 或手動指定參數
+# 或手動指定best_model.pth
 python test_ttt2_outside.py \
-    --checkpoint lightning_logs/version_0/checkpoints/epoch=299-step=300.ckpt \
-    --outside_dir outside_audio \
+    --checkpoint results/tsne_outputs/b-output4/best_model.pth \
+    --outside_dir ./1n \
+    --output_dir ttt2_outside_test_results \
+    --max_files 10 \
+    --audio_length 32000
+
+# 或使用Lightning checkpoint
+python test_ttt2_outside.py \
+    --checkpoint lightning_logs/version_0/checkpoints/epoch=4-step=20.ckpt \
+    --outside_dir ./1n \
     --output_dir ttt2_outside_test_results \
     --max_files 10 \
     --audio_length 32000
@@ -38,11 +49,25 @@ python test_ttt2_outside.py \
 
 | 參數 | 預設值 | 說明 |
 |------|--------|------|
-| `--checkpoint` | `lightning_logs/version_0/checkpoints/epoch=299-step=300.ckpt` | TTT2模型checkpoint路徑 |
-| `--outside_dir` | `outside_audio` | outside音檔目錄 |
+| `--checkpoint` | 自動偵測 | TTT2模型checkpoint路徑（優先best_model.pth） |
+| `--outside_dir` | `./1n` | outside音檔目錄 |
 | `--output_dir` | `ttt2_outside_test_results` | 測試結果輸出目錄 |
 | `--max_files` | `10` | 最大測試檔案數量 |
 | `--audio_length` | `32000` | 音檔長度(樣本數，對應2秒@16kHz) |
+
+## 🎯 Checkpoint選擇優先級
+
+系統會按以下優先級自動選擇checkpoint：
+
+1. **best_model.pth** (TTT2訓練保存的最佳模型)
+   - `results/tsne_outputs/b-output4/best_model.pth`
+   - `results/tsne_outputs/output4/best_model.pth`
+   - `results/tsne_outputs/output3/best_model.pth`
+
+2. **Lightning checkpoints** (訓練過程檢查點)
+   - `lightning_logs/*/checkpoints/*.ckpt`
+
+**推薦使用best_model.pth**，因為它是TTT2訓練過程中保存的最佳性能模型。
 
 ## 📁 輸出結構
 

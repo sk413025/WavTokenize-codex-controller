@@ -1,6 +1,10 @@
 #!/bin/bash
-"""
-TTT2 Outside音檔測試運行腳本
+""# 設置預設參數
+CHECKPOINT_PATH=""  # 將自動偵測
+OUTSIDE_DIR="./1n"
+OUTPUT_DIR="ttt2_outside_test_results"
+MAX_FILES=10
+AUDIO_LENGTH=32000Outside音檔測試運行腳本
 """
 
 echo "🎵 TTT2 Outside音檔測試"
@@ -13,20 +17,46 @@ if [[ "$CONDA_DEFAULT_ENV" != "test" ]]; then
 fi
 
 # 設置預設參數
-CHECKPOINT_PATH="lightning_logs/version_0/checkpoints/epoch=299-step=300.ckpt"
+CHECKPOINT_PATH=""
 OUTSIDE_DIR="outside_audio"
 OUTPUT_DIR="ttt2_outside_test_results"
 MAX_FILES=10
 AUDIO_LENGTH=32000
 
+# 自動尋找最佳checkpoint
+echo "🔍 尋找可用的checkpoint..."
+
+# 優先順序：best_model.pth > Lightning checkpoints
+if [ -f "results/tsne_outputs/b-output4/best_model.pth" ]; then
+    CHECKPOINT_PATH="results/tsne_outputs/b-output4/best_model.pth"
+    echo "✅ 找到TTT2 best_model (b-output4): $CHECKPOINT_PATH"
+elif [ -f "results/tsne_outputs/output4/best_model.pth" ]; then
+    CHECKPOINT_PATH="results/tsne_outputs/output4/best_model.pth"
+    echo "✅ 找到TTT2 best_model (output4): $CHECKPOINT_PATH"
+elif [ -f "results/tsne_outputs/output3/best_model.pth" ]; then
+    CHECKPOINT_PATH="results/tsne_outputs/output3/best_model.pth"
+    echo "✅ 找到TTT2 best_model (output3): $CHECKPOINT_PATH"
+else
+    # 回退到Lightning checkpoint
+    LIGHTNING_CKPT=$(find lightning_logs -name "*.ckpt" -type f | head -1)
+    if [ ! -z "$LIGHTNING_CKPT" ]; then
+        CHECKPOINT_PATH="$LIGHTNING_CKPT"
+        echo "✅ 找到Lightning checkpoint: $CHECKPOINT_PATH"
+    fi
+fi
+
 # 檢查checkpoint是否存在
-if [ ! -f "$CHECKPOINT_PATH" ]; then
-    echo "❌ Checkpoint不存在: $CHECKPOINT_PATH"
-    echo "請檢查路徑或指定正確的checkpoint檔案"
+if [ -z "$CHECKPOINT_PATH" ] || [ ! -f "$CHECKPOINT_PATH" ]; then
+    echo "❌ 沒有找到可用的checkpoint"
+    echo "請檢查以下路徑："
+    echo "  - results/tsne_outputs/*/best_model.pth"
+    echo "  - lightning_logs/*/checkpoints/*.ckpt"
     
-    # 尋找可能的checkpoint檔案
+    # 顯示可能的檔案
+    echo ""
     echo "尋找可能的checkpoint檔案..."
-    find lightning_logs -name "*.ckpt" -type f 2>/dev/null | head -5
+    find results/tsne_outputs -name "best_model.pth" -type f 2>/dev/null
+    find lightning_logs -name "*.ckpt" -type f 2>/dev/null | head -3
     exit 1
 fi
 

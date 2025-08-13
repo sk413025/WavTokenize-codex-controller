@@ -47,20 +47,31 @@ def load_trained_model(checkpoint_path, device):
         # 創建EnhancedWavTokenizer模型實例
         model = EnhancedWavTokenizer(config_path, model_path)
         
-        # 載入state dict
+        # 載入state dict - 支援多種格式
         if 'model_state_dict' in checkpoint:
+            # TTT2 best_model.pth 格式
             model.load_state_dict(checkpoint['model_state_dict'])
+            epoch = checkpoint.get('epoch', 'unknown')
+            print(f"載入best_model.pth格式，epoch: {epoch}")
         elif 'state_dict' in checkpoint:
-            model.load_state_dict(checkpoint['state_dict'])
+            # Lightning checkpoint 格式
+            state_dict = checkpoint['state_dict']
+            # 可能需要移除 'model.' 前綴
+            if any(k.startswith('model.') for k in state_dict.keys()):
+                state_dict = {k.replace('model.', ''): v for k, v in state_dict.items()}
+            model.load_state_dict(state_dict)
+            epoch = checkpoint.get('epoch', 'unknown')
+            print(f"載入Lightning checkpoint格式，epoch: {epoch}")
         else:
             # 如果checkpoint就是state_dict
             model.load_state_dict(checkpoint)
+            epoch = 'unknown'
+            print(f"載入純state_dict格式")
         
         model.to(device)
         model.eval()
         
-        epoch = checkpoint.get('epoch', 'unknown') if isinstance(checkpoint, dict) else 'unknown'
-        print(f"模型載入成功，訓練epoch: {epoch}")
+        print(f"模型載入成功")
         return model, checkpoint
         
     except Exception as e:
@@ -252,7 +263,7 @@ def create_comparison_plot(original, enhanced, metrics, output_path):
 def main():
     parser = argparse.ArgumentParser(description='TTT2 Outside音檔測試')
     parser.add_argument('--checkpoint', type=str, required=True, help='模型checkpoint路徑')
-    parser.add_argument('--outside_dir', type=str, default='outside_audio', help='outside音檔目錄')
+    parser.add_argument('--outside_dir', type=str, default='./1n', help='outside音檔目錄')
     parser.add_argument('--output_dir', type=str, default='ttt2_outside_test_results', help='輸出目錄')
     parser.add_argument('--max_files', type=int, default=10, help='最大測試檔案數')
     parser.add_argument('--audio_length', type=int, default=32000, help='音檔長度(樣本數)')
