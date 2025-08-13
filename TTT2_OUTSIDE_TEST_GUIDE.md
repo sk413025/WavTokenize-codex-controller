@@ -53,7 +53,7 @@ python test_ttt2_outside.py \
 | `--outside_dir` | `./1n` | outside音檔目錄 |
 | `--output_dir` | `ttt2_outside_test_results` | 測試結果輸出目錄 |
 | `--max_files` | `10` | 最大測試檔案數量 |
-| `--audio_length` | `32000` | 音檔長度(樣本數，對應2秒@16kHz) |
+| `--audio_length` | `48000` | 音檔長度(樣本數，對應2秒@24kHz) |
 
 ## 🎯 Checkpoint選擇優先級
 

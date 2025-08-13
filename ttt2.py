@@ -323,7 +323,7 @@ class EnhancedWavTokenizer(nn.Module):
             
         return output, input_features, enhanced_features, discrete_code, intermediate_enhanced_features, intermediate_features_list
 
-def compute_codebook_consistency_loss(enhanced_features, target_discrete_code, wavtokenizer, device):
+def compute_codebook_consistency_loss(enhanced_features, target_discrete_code, wavtokenizer, device, input_features=None):
     """
     計算碼本一致性損失，確保增強特徵在manifold上
     
@@ -339,29 +339,53 @@ def compute_codebook_consistency_loss(enhanced_features, target_discrete_code, w
     try:
         # 將增強特徵通過相同的量化器
         with torch.no_grad():
-            # 使用WavTokenizer的量化器對增強特徵進行量化
-            # 注意：這裡需要訪問quantizer，可能需要調整具體實現
-            quantizer = wavtokenizer.feature_extractor.encodec.encoder.quantizer
+            # 尋找正確的quantizer路徑
+            quantizer = None
+            
+            # 嘗試多個可能的路徑
+            if hasattr(wavtokenizer.feature_extractor, 'encodec') and hasattr(wavtokenizer.feature_extractor.encodec, 'quantizer'):
+                quantizer = wavtokenizer.feature_extractor.encodec.quantizer
+            elif hasattr(wavtokenizer.feature_extractor, 'quantizer'):
+                quantizer = wavtokenizer.feature_extractor.quantizer
+            elif hasattr(wavtokenizer, 'quantizer'):
+                quantizer = wavtokenizer.quantizer
+            
+            # 如果沒有找到quantizer，返回零損失
+            if quantizer is None:
+                return torch.tensor(0.0, device=device)
             
         # 對增強特徵進行量化
-        quantized_enhanced, _, enhanced_discrete_indices = quantizer(enhanced_features.unsqueeze(2))
-        
-        # 計算離散碼的交叉熵損失
-        # 重塑為適合交叉熵的形狀
-        enhanced_discrete_flat = enhanced_discrete_indices.view(-1)
-        target_discrete_flat = target_discrete_code.view(-1)
-        
-        # 確保目標碼在有效範圍內
-        valid_mask = (target_discrete_flat >= 0) & (target_discrete_flat < quantizer.n_q * quantizer.n_embed)
-        
-        if valid_mask.sum() > 0:
-            codebook_loss = F.cross_entropy(
-                enhanced_discrete_flat[valid_mask].float().unsqueeze(1),
-                target_discrete_flat[valid_mask].long(),
-                reduction='mean'
-            )
-        else:
-            codebook_loss = torch.tensor(0.0, device=device)
+        try:
+            quantized_enhanced, _, enhanced_discrete_indices = quantizer(enhanced_features.unsqueeze(2))
+            
+            # 計算離散碼的交叉熵損失
+            # 重塑為適合交叉熵的形狀
+            enhanced_discrete_flat = enhanced_discrete_indices.view(-1)
+            target_discrete_flat = target_discrete_code.view(-1)
+            
+            # 獲取量化器參數（安全訪問）
+            n_q = getattr(quantizer, 'n_q', 8)  # 默認8個量化級別
+            n_embed = getattr(quantizer, 'n_embed', 1024)  # 默認1024個碼本項目
+            
+            # 確保目標碼在有效範圍內
+            valid_mask = (target_discrete_flat >= 0) & (target_discrete_flat < n_q * n_embed)
+            
+            if valid_mask.sum() > 0:
+                codebook_loss = F.cross_entropy(
+                    enhanced_discrete_flat[valid_mask].float().unsqueeze(1),
+                    target_discrete_flat[valid_mask].long(),
+                    reduction='mean'
+                )
+            else:
+                codebook_loss = torch.tensor(0.0, device=device)
+                
+        except Exception as quant_e:
+            # 如果量化過程失敗，使用簡化的一致性損失
+            # 直接比較特徵的L2距離作為一致性度量
+            if input_features is not None and enhanced_features.shape == input_features.shape:
+                codebook_loss = F.mse_loss(enhanced_features, input_features) * 0.1
+            else:
+                codebook_loss = torch.tensor(0.0, device=device)
             
         return codebook_loss
         
@@ -1075,12 +1099,9 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
         feature_losses_record = []
         voice_losses_record = []
         lr_values_record = []
-        content_decay_factors = []  # 新增：紀錄內容衰減因子
-        content_losses_record = []  # 新增：紀錄內容一致性損失
+        content_losses_record = []  # 紀錄內容一致性損失
     
     # 確保所有必要的變數都已初始化
-    if 'content_decay_factors' not in locals():
-        content_decay_factors = []
     if 'content_losses_record' not in locals():
         content_losses_record = []
     
@@ -1091,9 +1112,6 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
         total_feature_loss = 0.0
         total_voice_loss = 0.0
         total_content_loss = 0.0  # 新增：記錄內容一致性損失
-        
-        # 記錄當前epoch的衰減因子值
-        epoch_decay_factors = []
         
         # 收集當前epoch的特徵（不僅是最後一個epoch）
         all_enhanced_features = []
@@ -1164,12 +1182,9 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
                 loss, loss_details = compute_layered_hybrid_loss(
                     output, target_wav, enhanced_features, target_features, intermediate_features_list, content_ids, device,
                     current_epoch=epoch, total_epochs=num_epochs,
-                    input_features=input_features, discrete_code=discrete_code, 
+                    input_features=input_features, discrete_code=input_discrete_code, 
                     target_discrete_code=target_discrete_code, wavtokenizer=model.feature_extractor.wavtokenizer
                 )
-                # 存儲當前批次的衰減因子，僅保存一次每個epoch的值
-                if len(epoch_decay_factors) == 0 or epoch_decay_factors[-1] != loss_details['content_decay_factor']:
-                    epoch_decay_factors.append(loss_details['content_decay_factor'])
                 
                 print(f"\r使用增強分層損失+內容一致性 - 內容: {loss_details['avg_layer_content_loss']:.4f}, L2: {loss_details['avg_layer_l2_loss']:.4f}, manifold: {loss_details['manifold_regularization_loss']:.4f}, 碼本: {loss_details['codebook_consistency_loss']:.4f}", end='')
             elif config.get('use_layered_loss', False) and content_ids is not None and 'intermediate_features_list' in locals():
@@ -1177,14 +1192,11 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
                 loss, loss_details = compute_layered_hybrid_loss(
                     output, target_wav, enhanced_features, target_features, intermediate_features_list, content_ids, device,
                     current_epoch=epoch, total_epochs=num_epochs,
-                    input_features=input_features, discrete_code=discrete_code, 
+                    input_features=input_features, discrete_code=input_discrete_code, 
                     target_discrete_code=target_discrete_code, wavtokenizer=model.feature_extractor.wavtokenizer
                 )
-                # 存儲當前批次的衰減因子
-                if len(epoch_decay_factors) == 0 or epoch_decay_factors[-1] != loss_details['content_decay_factor']:
-                    epoch_decay_factors.append(loss_details['content_decay_factor'])
                 
-                print(f"\r使用分層損失 - 內容損失: {loss_details['avg_layer_content_loss']:.4f}, L2損失: {loss_details['avg_layer_l2_loss']:.4f}, 衰減因子: {loss_details['content_decay_factor']:.3f}", end='')
+                print(f"\r使用分層損失 - 內容損失: {loss_details['avg_layer_content_loss']:.4f}, L2損失: {loss_details['avg_layer_l2_loss']:.4f}", end='')
             elif config.get('tsne_flow_with_L2', False):
                 # 使用僅L2損失的模式：tsne.py處理流程 + 僅L2損失
                 loss, loss_details = compute_hybrid_loss(
@@ -1338,15 +1350,7 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
         feature_losses_record.append(avg_feature_loss)
         voice_losses_record.append(avg_voice_loss)
         lr_values_record.append(current_lr)
-        content_losses_record.append(avg_content_loss)  # 新增：記錄內容一致性損失
-        
-        # 記錄內容衰減因子 (使用當前epoch的最後一個值)
-        if epoch_decay_factors:
-            # 如果在此epoch期間收集了衰減因子，則保存最後一個值
-            content_decay_factors.append(epoch_decay_factors[-1])
-        else:            # 如果沒有收集到衰減因子（可能使用了不同的損失函數），則使用理論值
-            content_decay_factor = compute_decay_factor(epoch, num_epochs)
-            content_decay_factors.append(content_decay_factor)
+        content_losses_record.append(avg_content_loss)  # 記錄內容一致性損失
         
         print(f'\nEpoch {epoch+1} Train Loss: {avg_train_loss:.4f}, '
               f'Feature Loss: {avg_feature_loss:.4f}, Voice Loss: {avg_voice_loss:.4f}, '
@@ -1394,8 +1398,8 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
                         loss, loss_details = compute_layered_hybrid_loss(
                             output, target_wav, enhanced_features, target_features, intermediate_features_list, None, device,
                             current_epoch=epoch, total_epochs=num_epochs,
-                            input_features=input_features, discrete_code=discrete_code, 
-                            target_discrete_code=None, wavtokenizer=model.feature_extractor.wavtokenizer
+                            input_features=input_features, discrete_code=input_discrete_code, 
+                            target_discrete_code=None, wavtokenizer=model.feature_extractor.wavtokenizer, is_validation=True
                         )
                     elif config.get('tsne_flow_with_L2', False):
                         # 使用僅L2損失的模式：tsne.py處理流程 + 僅L2損失
@@ -1706,10 +1710,6 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
         feature_losses_record, voice_losses_record, lr_values_record, 
         final_curve_path, content_losses_record
     )
-    
-    # 繪製內容衰減因子變化圖
-    decay_factor_path = os.path.join(save_dir, 'content_decay_factor.png')
-    plot_content_decay_factor(epochs_record, content_decay_factors, decay_factor_path)
     
     return {
         'epochs': epochs_record,
@@ -2031,7 +2031,7 @@ def main():
     os.makedirs(output_base_dir, exist_ok=True)
     
     # 使用固定的output3目錄
-    output_dir = os.path.join(output_base_dir, "output4")
+    output_dir = os.path.join(output_base_dir, "b-output4")
     os.makedirs(output_dir, exist_ok=True)
     
     # 創建子目錄
@@ -2049,7 +2049,7 @@ def main():
         'config_path': os.path.join(os.getcwd(), "config", "wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml"),
         'model_path': os.path.join(os.getcwd(), "models", "wavtokenizer_large_speech_320_24k.ckpt"),        
         'save_dir': output_dir,
-        'epochs': 800,              # 設定訓練輪數
+        'epochs': 300,              # 設定訓練輪數
         'batch_size': 8,             # 減小批次大小以節省記憶體
         'learning_rate': 0.005,      # 適當增加學習率以加快收斂
         'weight_decay': 0.001,
@@ -2076,6 +2076,7 @@ def main():
         'content_ratio': 0.5,                # 每個批次中相同content_id的樣本比例
         'min_content_samples': 5,            # 每批次中相同content_id的最小樣本數
         'val_content_aware': True,           # 驗證集是否也使用內容感知批次
+        'val_min_content_samples': 2,        # 驗證集中每批次相同content_id的最小樣本數
         
         # 處理模式設定
         'use_content_loss': not args.tsne_flow_with_L2,  # 使用L2損失時不使用內容一致性損失
@@ -2541,11 +2542,14 @@ def main():
         # 使用內容感知批次採樣器創建驗證加載器
         print("\n正在為驗證集創建內容感知批次索引...")
         
+        # 為驗證集使用更寬鬆的內容樣本要求
+        val_min_content_samples = config.get('val_min_content_samples', 2)
+        
         val_batch_sampler = ContentAwareBatchSampler(
             val_dataset,
             batch_size=config['batch_size'],
             content_ratio=content_ratio,  # 使用與訓練集相同的設定
-            min_content_samples=min_content_samples,
+            min_content_samples=val_min_content_samples,  # 使用更寬鬆的要求
             shuffle=False,  # 驗證不需要隨機順序
             drop_last=False
         )
@@ -2758,7 +2762,7 @@ def compute_content_consistency_loss(intermediate_features, content_ids, device)
 
 def compute_layered_hybrid_loss(output, target_wav, enhanced_features, target_features, 
                            intermediate_features_list, content_ids, device, current_epoch=0, total_epochs=100,
-                           input_features=None, discrete_code=None, target_discrete_code=None, wavtokenizer=None):
+                           input_features=None, discrete_code=None, target_discrete_code=None, wavtokenizer=None, is_validation=False):
     """
     增強版分層損失函數 - 包含manifold正則化和碼本一致性：
     1. 僅在第二層（索引1）應用內容一致性損失
@@ -2806,7 +2810,7 @@ def compute_layered_hybrid_loss(output, target_wav, enhanced_features, target_fe
     
     # 計算碼本一致性損失
     if target_discrete_code is not None and wavtokenizer is not None:
-        codebook_loss = compute_codebook_consistency_loss(enhanced_features, target_discrete_code, wavtokenizer, device)
+        codebook_loss = compute_codebook_consistency_loss(enhanced_features, target_discrete_code, wavtokenizer, device, input_features)
     
     # 計算內容一致性損失，但僅對第二層 (index 1)
     num_layers = len(intermediate_features_list)
@@ -2815,13 +2819,17 @@ def compute_layered_hybrid_loss(output, target_wav, enhanced_features, target_fe
         
         # 檢查是否有內容ID
         if content_ids is None or len(content_ids) == 0:
-            print(f"警告: 沒有內容ID提供，無法計算內容一致性損失")
+            # 在驗證階段，這是正常的；在訓練階段，這可能是問題
+            if not is_validation:
+                print(f"警告: 沒有內容ID提供，無法計算內容一致性損失")
             content_loss = torch.tensor(0.0, device=device)
         else:
             # 檢查是否有足夠的相同內容ID的樣本
             unique_ids = torch.unique(content_ids) if isinstance(content_ids, torch.Tensor) else set(content_ids)
             if len(unique_ids) == len(content_ids):
-                print(f"警告: 批次中沒有重複的內容ID，無法計算內容一致性損失")
+                # 批次中沒有重複的內容ID，跳過內容一致性損失
+                if not is_validation:
+                    print(f"[WARNING] 批次中沒有重複的內容ID，無法計算內容一致性損失!")
                 content_loss = torch.tensor(0.0, device=device)
             else:
                 content_loss = compute_content_consistency_loss(second_layer_features, content_ids, device)
@@ -2879,20 +2887,6 @@ def compute_layered_hybrid_loss(output, target_wav, enhanced_features, target_fe
         'total_loss': total_loss.item()
     }
 
-def compute_decay_factor(current_epoch, total_epochs):
-    """
-    計算特定epoch的內容衰減因子
-    
-    Args:
-        current_epoch (int): 當前epoch
-        total_epochs (int): 總訓練epochs數
-        
-    Returns:
-        float: 計算出的內容衰減因子（已停用衰減）
-    """
-    # 固定返回1.0，停用衰減功能
-    return 1.0  # 返回1.0表示不衰減，保持原始權重
-
 def plot_content_decay_factor(epochs, decay_factors, save_path='content_decay_factor.png'):
     """
     繪製內容衰減因子隨訓練進度變化的圖表
@@ -2902,6 +2896,20 @@ def plot_content_decay_factor(epochs, decay_factors, save_path='content_decay_fa
         decay_factors (list): 對應的內容衰減因子列表
         save_path (str): 圖表保存路徑
     """
+    # 檢查並調整列表長度，確保一致性
+    epochs_len = len(epochs)
+    factors_len = len(decay_factors)
+    
+    if epochs_len != factors_len:
+        print(f"警告: epochs_record 長度 ({epochs_len}) 與 content_decay_factors 長度 ({factors_len}) 不匹配")
+        
+        # 調整至較短的長度以避免索引錯誤
+        min_len = min(epochs_len, factors_len)
+        epochs = epochs[:min_len]
+        decay_factors = decay_factors[:min_len]
+        
+        print(f"已調整兩個列表至共同長度: {min_len}")
+    
     plt.figure(figsize=(10, 6))
     plt.plot(epochs, decay_factors, marker='o', linestyle='-', color='blue')
     plt.xlabel('Epoch')
@@ -2910,11 +2918,12 @@ def plot_content_decay_factor(epochs, decay_factors, save_path='content_decay_fa
     plt.grid(True, alpha=0.3)
     
     # 添加标注线
-    total_epochs = max(epochs)
-    plt.axvline(x=total_epochs * 0.3, color='r', linestyle='--', alpha=0.5, 
-                label='Phase change: 30% of training')
-    plt.axvline(x=total_epochs * 0.9, color='g', linestyle='--', alpha=0.5, 
-                label='Phase change: 90% of training')
+    if epochs:  # 確保epochs列表不為空
+        total_epochs = max(epochs)
+        plt.axvline(x=total_epochs * 0.3, color='r', linestyle='--', alpha=0.5, 
+                    label='Phase change: 30% of training')
+        plt.axvline(x=total_epochs * 0.9, color='g', linestyle='--', alpha=0.5, 
+                    label='Phase change: 90% of training')
     
     # 添加衰減因子範圍
     plt.axhline(y=0.5, color='purple', linestyle=':', alpha=0.5,

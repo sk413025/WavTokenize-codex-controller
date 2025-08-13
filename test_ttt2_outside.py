@@ -21,6 +21,8 @@ import sys
 # 導入TTT2相關模組
 sys.path.append('.')
 from ttt2 import EnhancedWavTokenizer
+from decoder.pretrained import WavTokenizer
+import torch.nn as nn
 
 def setup_device():
     """設置計算設備"""
@@ -32,20 +34,125 @@ def setup_device():
         print("使用CPU")
     return device
 
-def load_trained_model(checkpoint_path, device):
-    """載入訓練後的TTT2模型"""
+def load_trained_model(checkpoint_path, device, use_group_norm=None):
+    """載入訓練後的TTT2模型
+    
+    Args:
+        checkpoint_path: 模型checkpoint路徑
+        device: 計算設備
+        use_group_norm: 強制指定使用GroupNorm(True)或BatchNorm(False)，None為自動檢測
+    """
     print(f"載入模型checkpoint: {checkpoint_path}")
     
+    # TTT2使用的配置路徑
+    config_path = "config/wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
+    model_path = "models/wavtokenizer_large_speech_320_24k.ckpt"
+    
     try:
-        # 載入checkpoint
+        # 載入checkpoint來檢查模型架構
         checkpoint = torch.load(checkpoint_path, map_location=device)
         
-        # TTT2使用的配置路徑
-        config_path = "config/wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
-        model_path = "models/wavtokenizer_large_speech_320_24k.ckpt"
+        # 自動檢測模型使用的正規化層類型
+        if use_group_norm is None:
+            # 檢查state_dict中的關鍵字來判斷模型類型
+            state_dict_keys = []
+            if 'model_state_dict' in checkpoint:
+                state_dict_keys = list(checkpoint['model_state_dict'].keys())
+            elif 'state_dict' in checkpoint:
+                state_dict_keys = list(checkpoint['state_dict'].keys())
+            else:
+                state_dict_keys = list(checkpoint.keys())
+            
+            # 檢查是否有bn1/bn2 (BatchNorm) 或 norm1/norm2 (GroupNorm)
+            has_bn = any('bn1' in key or 'bn2' in key for key in state_dict_keys)
+            has_norm = any('norm1' in key or 'norm2' in key for key in state_dict_keys)
+            
+            print(f"🔍 檢查keys樣本: {state_dict_keys[:10]}...")
+            print(f"🔍 發現BatchNorm keys: {has_bn}")
+            print(f"🔍 發現GroupNorm keys: {has_norm}")
+            
+            if has_bn and not has_norm:
+                use_group_norm = False
+                print("🔍 檢測到BatchNorm模型 (主分支)")
+            elif has_norm and not has_bn:
+                use_group_norm = True
+                print("🔍 檢測到GroupNorm模型 (修復分支)")
+            else:
+                # 如果都有或都沒有，檢查模型結構差異
+                main_branch_indicators = ['residual_blocks.3.', 'residual_blocks.4.']
+                has_main_branch_structure = any(any(indicator in key for indicator in main_branch_indicators) for key in state_dict_keys)
+                
+                if has_main_branch_structure:
+                    use_group_norm = False
+                    print("🔍 檢測到主分支模型結構 (5個ResidualBlocks, BatchNorm)")
+                else:
+                    use_group_norm = True
+                    print("🔍 檢測到修復分支模型結構 (3個ResidualBlocks, GroupNorm)")
+                    
+                print(f"🔍 最終決定使用: {'GroupNorm' if use_group_norm else 'BatchNorm'}")
+        else:
+            norm_type = "GroupNorm" if use_group_norm else "BatchNorm"
+            print(f"🎯 手動指定使用: {norm_type}")
         
-        # 創建EnhancedWavTokenizer模型實例
-        model = EnhancedWavTokenizer(config_path, model_path)
+        # 創建模型時需要修改ttt2.py中的ResidualBlock創建
+        # 這裡我們需要動態修改模型創建過程
+        print(f"創建TTT2模型，使用{'GroupNorm' if use_group_norm else 'BatchNorm'}")
+        
+        # 臨時修改ResidualBlock的默認設置
+        import ttt2
+        original_enhanced_feature_extractor_init = ttt2.EnhancedFeatureExtractor.__init__
+        
+        def patched_init(self, config_path, model_path, dropout_rate=0.25):
+            # 調用原始初始化，但修改ResidualBlock的use_group_norm參數
+            super(ttt2.EnhancedFeatureExtractor, self).__init__()
+            
+            # 載入WavTokenizer
+            self.wavtokenizer = WavTokenizer.from_pretrained0802(config_path, model_path)
+            
+            # 凍結WavTokenizer參數
+            for param in self.wavtokenizer.parameters():
+                param.requires_grad = False
+            
+            # 設定模型參數
+            encoder_dim = 512
+            hidden_dim = 1024
+            num_residual_blocks = 3
+            
+            # 特徵轉換
+            self.feature_transform = nn.Sequential(
+                nn.Conv1d(encoder_dim, hidden_dim, kernel_size=1),
+                nn.BatchNorm1d(hidden_dim),
+                nn.GELU()
+            )
+            
+            # 添加第一個 Dropout 層
+            self.dropout1 = nn.Dropout(dropout_rate)
+            
+            # 殘差塊，使用指定的正規化類型
+            self.residual_blocks = nn.ModuleList([
+                ttt2.ResidualBlock(hidden_dim, activation='gelu', dropout_rate=dropout_rate, use_group_norm=use_group_norm) 
+                for _ in range(num_residual_blocks)
+            ])
+            
+            # 上採樣卷積
+            self.up_conv = nn.Sequential(
+                nn.Conv1d(hidden_dim, encoder_dim, kernel_size=1),
+                nn.BatchNorm1d(encoder_dim),
+                nn.GELU()
+            )
+            
+            # 第二個 Dropout
+            self.dropout2 = nn.Dropout(dropout_rate)
+        
+        # 臨時替換初始化函數
+        ttt2.EnhancedFeatureExtractor.__init__ = patched_init
+        
+        try:
+            # 創建模型
+            model = EnhancedWavTokenizer(config_path, model_path)
+        finally:
+            # 恢復原始初始化函數
+            ttt2.EnhancedFeatureExtractor.__init__ = original_enhanced_feature_extractor_init
         
         # 載入state dict - 支援多種格式
         if 'model_state_dict' in checkpoint:
@@ -102,7 +209,7 @@ def load_outside_audio_files(outside_dir, max_files=None):
     print(f"找到 {len(audio_files)} 個outside音檔")
     return audio_files
 
-def preprocess_audio(audio_path, target_sr=16000, target_length=None):
+def preprocess_audio(audio_path, target_sr=24000, target_length=None):
     """預處理音檔"""
     try:
         # 載入音檔
@@ -143,14 +250,15 @@ def test_model_on_audio(model, audio_tensor, device):
             results = model(audio_batch)
             
             # 解包TTT2的返回值
+            # 返回格式: output, input_features, enhanced_features, discrete_code, intermediate_enhanced_features, intermediate_features_list
             if isinstance(results, tuple) and len(results) >= 1:
-                enhanced = results[0]  # 第一個返回值通常是enhanced音頻
+                enhanced = results[0]  # 第一個返回值是解碼後的音頻(decoded audio)
                 
                 # 移除batch dimension並轉到CPU
                 if enhanced.dim() > 2:
                     enhanced = enhanced.squeeze(0)  # 移除batch維度
                 if enhanced.dim() > 1:
-                    enhanced = enhanced.mean(dim=0)  # 如果還有channel維度，取平均
+                    enhanced = enhanced.squeeze(0)  # 移除channel維度，保持1D
                 
                 enhanced = enhanced.cpu()
                 
@@ -208,7 +316,7 @@ def compute_audio_metrics(original, enhanced):
         'spectral_distance': spectral_distance.item()
     }
 
-def save_audio_comparison(original, enhanced, output_path, sr=16000):
+def save_audio_comparison(original, enhanced, output_path, sr=24000):
     """保存音檔比較"""
     # 保存原始音檔
     original_path = output_path.parent / f"{output_path.stem}_original.wav"
@@ -224,7 +332,7 @@ def create_comparison_plot(original, enhanced, metrics, output_path):
     """創建比較圖表"""
     fig, axes = plt.subplots(3, 1, figsize=(15, 12))
     
-    time_axis = np.arange(len(original)) / 16000
+    time_axis = np.arange(len(original)) / 24000
     
     # 時域波形比較
     axes[0].plot(time_axis, original, label='Original', alpha=0.7)
@@ -238,7 +346,7 @@ def create_comparison_plot(original, enhanced, metrics, output_path):
     # 頻譜比較
     original_fft = np.abs(np.fft.fft(original))[:len(original)//2]
     enhanced_fft = np.abs(np.fft.fft(enhanced))[:len(enhanced)//2]
-    freq_axis = np.fft.fftfreq(len(original), 1/16000)[:len(original)//2]
+    freq_axis = np.fft.fftfreq(len(original), 1/24000)[:len(original)//2]
     
     axes[1].semilogy(freq_axis, original_fft, label='Original', alpha=0.7)
     axes[1].semilogy(freq_axis, enhanced_fft, label='Enhanced', alpha=0.7)
@@ -266,7 +374,9 @@ def main():
     parser.add_argument('--outside_dir', type=str, default='./1n', help='outside音檔目錄')
     parser.add_argument('--output_dir', type=str, default='ttt2_outside_test_results', help='輸出目錄')
     parser.add_argument('--max_files', type=int, default=10, help='最大測試檔案數')
-    parser.add_argument('--audio_length', type=int, default=32000, help='音檔長度(樣本數)')
+    parser.add_argument('--audio_length', type=int, default=48000, help='音檔長度(樣本數)')
+    parser.add_argument('--norm_type', type=str, choices=['auto', 'batchnorm', 'groupnorm'], default='auto',
+                       help='正規化層類型: auto(自動檢測), batchnorm(主分支), groupnorm(修復分支)')
     args = parser.parse_args()
     
     # 設置輸出目錄
@@ -280,9 +390,17 @@ def main():
     # 設置設備
     device = setup_device()
     
+    # 解析正規化類型參數
+    use_group_norm = None
+    if args.norm_type == 'batchnorm':
+        use_group_norm = False
+    elif args.norm_type == 'groupnorm':
+        use_group_norm = True
+    # auto 保持 None，讓函數自動檢測
+    
     # 載入模型
     try:
-        model, checkpoint_info = load_trained_model(args.checkpoint, device)
+        model, checkpoint_info = load_trained_model(args.checkpoint, device, use_group_norm)
     except Exception as e:
         print(f"❌ 模型載入失敗: {e}")
         return
@@ -380,7 +498,7 @@ def main():
                 'outside_dir': args.outside_dir,
                 'total_files': len(outside_files),
                 'successful_tests': successful_tests,
-                'checkpoint_info': checkpoint_info.get('epoch', 'unknown')
+                'checkpoint_info': checkpoint_info.get('epoch', 'unknown') if checkpoint_info else 'fallback_model'
             },
             'statistics': {
                 'snr': {

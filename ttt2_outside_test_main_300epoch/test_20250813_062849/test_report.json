@@ -1,0 +1,74 @@
+{
+  "test_info": {
+    "timestamp": "20250813_062849",
+    "checkpoint_path": "results/tsne_outputs/output4/checkpoint_epoch_300.pt",
+    "outside_dir": "./1n",
+    "total_files": 3,
+    "successful_tests": 3,
+    "checkpoint_info": "fallback_model"
+  },
+  "statistics": {
+    "snr": {
+      "mean": -1.1668554544448853,
+      "std": 0.47252508407718236,
+      "min": -1.6606026887893677,
+      "max": -0.5300072431564331
+    },
+    "correlation": {
+      "mean": 0.00015087949820250893,
+      "std": 0.00018691909622165512,
+      "min": -0.00011241979518672451,
+      "max": 0.0003028573119081557
+    },
+    "rms_diff": {
+      "mean": 0.16076031823952994,
+      "std": 0.03747704481802142,
+      "min": 0.12742426991462708,
+      "max": 0.213112011551857
+    }
+  },
+  "detailed_results": [
+    {
+      "file_name": "nor_boy1_box_LDV_101.wav",
+      "file_path": "1n/nor_boy1_box_LDV_101.wav",
+      "metrics": {
+        "snr": -1.309956431388855,
+        "correlation": -0.00011241979518672451,
+        "rms_diff": 0.1417446732521057,
+        "spectral_distance": 4.26569938659668
+      },
+      "output_dir": "ttt2_outside_test_main_300epoch/test_20250813_062849/test_001_nor_boy1_box_LDV_101",
+      "original_path": "ttt2_outside_test_main_300epoch/test_20250813_062849/test_001_nor_boy1_box_LDV_101/comparison_original.wav",
+      "enhanced_path": "ttt2_outside_test_main_300epoch/test_20250813_062849/test_001_nor_boy1_box_LDV_101/comparison_enhanced.wav",
+      "plot_path": "ttt2_outside_test_main_300epoch/test_20250813_062849/test_001_nor_boy1_box_LDV_101/comparison_plot.png"
+    },
+    {
+      "file_name": "nor_girl2_box_LDV_101.wav",
+      "file_path": "1n/nor_girl2_box_LDV_101.wav",
+      "metrics": {
+        "snr": -0.5300072431564331,
+        "correlation": 0.00026220097788609564,
+        "rms_diff": 0.213112011551857,
+        "spectral_distance": 8.185083389282227
+      },
+      "output_dir": "ttt2_outside_test_main_300epoch/test_20250813_062849/test_002_nor_girl2_box_LDV_101",
+      "original_path": "ttt2_outside_test_main_300epoch/test_20250813_062849/test_002_nor_girl2_box_LDV_101/comparison_original.wav",
+      "enhanced_path": "ttt2_outside_test_main_300epoch/test_20250813_062849/test_002_nor_girl2_box_LDV_101/comparison_enhanced.wav",
+      "plot_path": "ttt2_outside_test_main_300epoch/test_20250813_062849/test_002_nor_girl2_box_LDV_101/comparison_plot.png"
+    },
+    {
+      "file_name": "nor_boy1_plastic_LDV_001.wav",
+      "file_path": "1n/nor_boy1_plastic_LDV_001.wav",
+      "metrics": {
+        "snr": -1.6606026887893677,
+        "correlation": 0.0003028573119081557,
+        "rms_diff": 0.12742426991462708,
+        "spectral_distance": 5.736766815185547
+      },
+      "output_dir": "ttt2_outside_test_main_300epoch/test_20250813_062849/test_003_nor_boy1_plastic_LDV_001",
+      "original_path": "ttt2_outside_test_main_300epoch/test_20250813_062849/test_003_nor_boy1_plastic_LDV_001/comparison_original.wav",
+      "enhanced_path": "ttt2_outside_test_main_300epoch/test_20250813_062849/test_003_nor_boy1_plastic_LDV_001/comparison_enhanced.wav",
+      "plot_path": "ttt2_outside_test_main_300epoch/test_20250813_062849/test_003_nor_boy1_plastic_LDV_001/comparison_plot.png"
+    }
+  ]
+}
