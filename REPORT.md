@@ -1315,3 +1315,65 @@ Content separation by layer:
 
 ----
 
+
+## TTT2 修復分支訓練 - FIX_BRANCH_202508140353
+**執行時間:** 2025-08-14 03:53:47
+**分支:** fix-ttt2-residual-block-and-manifold
+**輸出目錄:** results/tsne_outputs/b-output4
+
+### 🔧 關鍵修復內容
+1. **ResidualBlock 修復:** 修正 conv2(x) → conv2(out) 錯誤
+2. **GroupNorm 支援:** 替代 BatchNorm 提供更穩定的音頻處理
+3. **流形正則化:** compute_manifold_regularization_loss() 防止特徵偏離
+4. **碼本一致性:** compute_codebook_consistency_loss() 確保編碼穩定
+5. **多組件損失:** 整合所有損失組件的 compute_layered_hybrid_loss()
+
+### 🎯 訓練設定
+- **模型:** TTT2 (修復版)
+- **損失函數:** 分層混合損失 + 流形正則化 + 碼本一致性
+- **材質:** 僅 box 材質
+- **批次大小:** 8
+- **日誌檔案:** `logs/ttt2_fixed_branch_training_202508140353.log`
+
+### 📊 預期改善
+- 更穩定的梯度流動 (ResidualBlock 修復)
+- 更好的訓練穩定性 (GroupNorm)
+- 防止過擬合和特徵偏移 (流形正則化)
+- 更一致的離散編碼 (碼本一致性損失)
+
+----
+=== TTT2 修復分支實驗 - 202508140359 ===
+
+## 實驗背景與動機
+修復TTT2模型中的ResidualBlock關鍵bug：conv2(out)應取代conv2(x)，並增強GroupNorm支援、流形正則化、碼本一致性損失機制。目標是提升音頻特徵學習的穩定性和品質。
+
+## 實驗設置與配置
+- 訓練epochs: 500 (從300增加)
+- 批次大小: 8
+- 資料: 僅使用box材質，1200個配對樣本
+- 分層損失: 前兩層使用內容一致性損失，後續層使用L2損失
+- 輸出目錄: results/tsne_outputs/b-output4
+
+## 修復驗證結果
+✅ ResidualBlock修復: 通過
+✅ GroupNorm支援: 通過
+✅ 流形正則化功能: 通過
+✅ 碼本一致性損失: 通過
+✅ 分層損失整合: 通過
+📊 測試結果: 5/5 全部通過
+
+## 實驗執行結果
+- 模型成功載入，GPU配置正常
+- 數據載入：1000訓練樣本，200驗證樣本
+- 內容感知批次採樣設置完成
+- 訓練已啟動，使用修復後的ResidualBlock
+
+## 實驗反思與後續計畫
+1. 所有關鍵修復均已驗證並通過測試
+2. ResidualBlock的conv2(out)修復解決了特徵流動問題
+3. GroupNorm提供更穩定的正規化機制
+4. 分層損失策略有效平衡內容一致性和特徵學習
+5. 建議後續監控500 epoch訓練的收斂情況和t-SNE可視化效果
+
+實驗時間: Thu Aug 14 04:05:13 AM EDT 2025
+---

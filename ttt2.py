@@ -77,7 +77,7 @@ from encoder.utils import convert_audio
 class Encodec(nn.Module):
     def __init__(self, config=None):
         super().__init__()
-        config_path = "/home/sbplab/rui.zi/WavTokenizer/config/wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
+        config_path = "/home/sbplab/rui.zi/exp-fix_block/config/wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
         model_path = "/home/sbplab/rui.zi/WavTokenizer/models/wavtokenizer_large_speech_320_24k.ckpt"
         base_model = WavTokenizer.from_pretrained0802(config_path, model_path)
         self.encoder = base_model.feature_extractor.encodec.encoder
