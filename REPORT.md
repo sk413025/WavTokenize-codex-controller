@@ -1,5 +1,38 @@
 # 實驗記錄報告
 
+## 2025-08-14 TTT2跨分支Outside測試系統音檔能量修復 (EXP_TTT2_ENERGY_FIX_20250814)
+- **實驗編號**: EXP_TTT2_ENERGY_FIX_20250814
+- **日期**: 2025-08-14
+- **實驗背景**: test_ttt2_outside.py 生成的增強音檔能量大幅降低，從原始音檔的 1468.30 降至 233.94，導致音檔缺乏人聲內容
+- **動機**: 修復音檔生成管道，確保與 ttt2.py 一致的輸出品質，解決能量損失問題
+- **目的**: 實現高品質的 outside 音檔測試系統，確保增強音檔保持原有的人聲特徵
+- **技術問題分析**:
+  - test_ttt2_outside.py enhanced: energy=233.94, RMS=0.070 (能量過低)
+  - 原始音檔: energy=1468.30, RMS=0.175 (正常能量)
+  - 能量損失比例: 84.1% (嚴重的信號衰減)
+- **修復方法**:
+  1. **完全複製 ttt2.py 的 save_sample 方法**: 直接調用 ttt2.save_sample 函數
+  2. **改進模型架構檢測**: 增強 detect_model_architecture 對維度和正規化層的檢測
+  3. **優化模型載入**: 實現智能參數映射 (bn1/bn2 ↔ norm1/norm2)
+  4. **建立 Git Worktree 工作流程**: 創建版本控制指南支援並行分支開發
+- **預期結果**: 生成與 ttt2.py 相當能量的音檔 (能量 > 1000, RMS > 0.1)
+- **實際結果**: [進行中] 正在調試音檔生成管道差異
+- **結果解讀**: [待完成] 需要深入分析 ttt2.py 與 test_ttt2_outside.py 的執行上下文差異
+- **下一步計劃**: 
+  1. 比較兩種方法的模型前向傳播過程
+  2. 檢查 WavTokenizer 解碼器的配置差異
+  3. 驗證增強特徵的數值範圍和分布
+- **重現步驟**: 
+  ```bash
+  conda activate test
+  python test_ttt2_outside.py --checkpoint results/tsne_outputs/output4/best_model.pth
+  # 比較生成的音檔能量與 ttt2.py 輸出
+  ```
+- **新增檔案**:
+  - Git 工作流程指南: `GIT_WORKFLOW.md`
+  - 改進的測試腳本: `test_ttt2_outside.py` (增強架構檢測)
+  - 實驗報告: `EXPERIMENT_REPORT_TTT2_OUTSIDE_TEST_20250813.md`
+
 ## 2025-08-13 TTT2外部測試系統重大改進 (EXP_TTT2_OUTSIDE_FIX_20250813)
 - **實驗編號**: EXP_TTT2_OUTSIDE_FIX_20250813
 - **提交ID**: `200fab4`
@@ -1234,3 +1267,51 @@ Content separation by layer:
 - 更一致的離散編碼 (碼本一致性損失)
 
 ----
+
+## 檔案清理作業 - CLEANUP_202508140339
+**執行時間:** 2025-08-14 03:39:43
+**函式名稱:** cleanup_unnecessary_files
+**備份目錄:** backup_202508140339
+
+### 🗑️ 已清理檔案
+- **實驗分析工具:** 12 個檔案
+- **外部測試檔案:** 4 個檔案
+- **舊結果檔案:** 2 個檔案
+- **舊實驗目錄:** 2 個目錄
+
+### ✅ 保留核心檔案
+- run_fixed_ttt2_branch.sh
+- ttt2.py
+- test_ttt2_fixes.py
+- ttdata.py
+- decoder/, encoder/, config/, utils/, fairseq/, metrics/ 目錄
+
+**備註:** 所有清理的檔案已備份至 `backup_202508140339` 目錄
+
+----
+
+## TTT2 Epoch 配置修改 - EPOCH_CONFIG_202508140349
+
+**修改時間:** 2025-08-14 03:49:09
+**函式名稱:** modify_epochs_to_500
+**修改內容:** 將訓練輪數從300 epochs增加到500 epochs
+
+### 🔧 修改詳情
+1. **主要配置:** config['epochs'] = 300 → 500
+2. **train_model函數:** num_epochs=100 → 500 (默認參數)  
+3. **compute_layered_hybrid_loss函數:** total_epochs=100 → 500 (默認參數)
+
+### 🎯 實驗目標
+- **更長的訓練時間:** 500 epochs 以充分學習特徵表示
+- **更好的收斂:** 允許模型達到更穩定的最優狀態
+- **ResidualBlock修復效果驗證:** 在更長訓練過程中觀察修復效果
+
+### 📊 預期效果
+- 損失函數能夠收斂到更低值
+- 特徵表示更加穩定和一致
+- t-SNE可視化顯示更清晰的聚類結構
+
+**備註:** 此修改配合ResidualBlock修復，應能展現更好的訓練穩定性
+
+----
+

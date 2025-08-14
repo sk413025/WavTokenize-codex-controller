@@ -1,7 +1,0 @@
-usage: ttt2.py [-h] [--local_rank LOCAL_RANK] [--extract_only]
-               [--input_dir INPUT_DIR] [--save_dir SAVE_DIR]
-               [--format {pt,npy}] [--tsne_flow_with_content]
-               [--tsne_flow_with_L2] [--use_layered_loss]
-               [--first_two_blocks_only]
-ttt2.py: error: unrecognized arguments: --epochs 50
-临时文件目录设置为: /home/sbplab/ruizi/WavTokenize/temp

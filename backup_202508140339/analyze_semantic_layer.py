@@ -88,7 +88,7 @@ def plot_tsne_for_layers(features_list, save_dir, exp_id="exp1"):
 
 if __name__ == "__main__":
     # === 自動載入模型與資料集（參考 ttt2.py） ===
-    from ttdata import AudioDataset
+    from try3 import AudioDataset  # 修正：從 try3 匯入 AudioDataset
     from ttt2 import EnhancedWavTokenizer
     import yaml
 
