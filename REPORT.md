@@ -1377,3 +1377,30 @@ Content separation by layer:
 
 實驗時間: Thu Aug 14 04:05:13 AM EDT 2025
 ---
+
+## TTT2 修復分支訓練 - FIX_BRANCH_202508140647
+**執行時間:** 2025-08-14 06:47:34
+**分支:** fix-ttt2-residual-block-and-manifold
+**輸出目錄:** results/tsne_outputs/b-output4
+
+### 🔧 關鍵修復內容
+1. **ResidualBlock 修復:** 修正 conv2(x) → conv2(out) 錯誤
+2. **GroupNorm 支援:** 替代 BatchNorm 提供更穩定的音頻處理
+3. **流形正則化:** compute_manifold_regularization_loss() 防止特徵偏離
+4. **碼本一致性:** compute_codebook_consistency_loss() 確保編碼穩定
+5. **多組件損失:** 整合所有損失組件的 compute_layered_hybrid_loss()
+
+### 🎯 訓練設定
+- **模型:** TTT2 (修復版)
+- **損失函數:** 分層混合損失 + 流形正則化 + 碼本一致性
+- **材質:** 僅 box 材質
+- **批次大小:** 8
+- **日誌檔案:** `logs/ttt2_fixed_branch_training_202508140647.log`
+
+### 📊 預期改善
+- 更穩定的梯度流動 (ResidualBlock 修復)
+- 更好的訓練穩定性 (GroupNorm)
+- 防止過擬合和特徵偏移 (流形正則化)
+- 更一致的離散編碼 (碼本一致性損失)
+
+----

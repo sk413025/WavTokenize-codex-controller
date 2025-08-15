@@ -77,7 +77,7 @@ from encoder.utils import convert_audio
 class Encodec(nn.Module):
     def __init__(self, config=None):
         super().__init__()
-        config_path = "/home/sbplab/rui.zi/exp-fix_block/config/wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
+        config_path = "/home/sbplab/rui.zi/WavTokenizer/config/wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
         model_path = "/home/sbplab/rui.zi/WavTokenizer/models/wavtokenizer_large_speech_320_24k.ckpt"
         base_model = WavTokenizer.from_pretrained0802(config_path, model_path)
         self.encoder = base_model.feature_extractor.encodec.encoder
@@ -590,7 +590,7 @@ def save_sample(input_wav, output, target_wav, epoch, batch_idx, save_dir, devic
         # 使用絕對路徑載入WavTokenizer decoder模型
         current_dir = os.path.dirname(os.path.abspath(__file__))
         config_path = os.path.join(current_dir, "config/wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml")
-        model_path = os.path.join(current_dir, "wavtokenizer_large_speech_320_24k.ckpt")
+        model_path = os.path.join(os.getcwd(), "models", "wavtokenizer_large_speech_320_24k.ckpt")
         
         # 初始化WavTokenizer模型作為解碼器
         try:
@@ -1039,7 +1039,7 @@ def plot_tsne_visualization(enhanced_features, target_features, save_path, perpl
             plt.savefig(save_path)
             plt.close()
 
-def train_model(model, train_loader, optimizer, device, save_dir, config, num_epochs=500, scheduler=None, val_loader=None, use_content_loss=True):
+def train_model(model, train_loader, optimizer, device, save_dir, config, num_epochs=100, scheduler=None, val_loader=None, use_content_loss=True):
     """修改訓練函數以記錄和繪製訓練指標，包括驗證損失，不使用早停法"""
     model.train()
     os.makedirs(save_dir, exist_ok=True)
@@ -2049,7 +2049,7 @@ def main():
         'config_path': os.path.join(os.getcwd(), "config", "wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml"),
         'model_path': os.path.join(os.getcwd(), "models", "wavtokenizer_large_speech_320_24k.ckpt"),        
         'save_dir': output_dir,
-        'epochs': 500,              # 設定訓練輪數
+        'epochs': 600,              # 設定訓練輪數
         'batch_size': 8,             # 減小批次大小以節省記憶體
         'learning_rate': 0.005,      # 適當增加學習率以加快收斂
         'weight_decay': 0.001,
@@ -2761,7 +2761,7 @@ def compute_content_consistency_loss(intermediate_features, content_ids, device)
 
 
 def compute_layered_hybrid_loss(output, target_wav, enhanced_features, target_features, 
-                           intermediate_features_list, content_ids, device, current_epoch=0, total_epochs=500,
+                           intermediate_features_list, content_ids, device, current_epoch=0, total_epochs=100,
                            input_features=None, discrete_code=None, target_discrete_code=None, wavtokenizer=None, is_validation=False):
     """
     增強版分層損失函數 - 包含manifold正則化和碼本一致性：
