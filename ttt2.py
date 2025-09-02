@@ -538,6 +538,99 @@ def compute_hybrid_loss_with_content(output, target_wav, enhanced_features, targ
         'total_loss': total_loss.item()
     }
 
+
+def compute_hybrid_loss_with_discrete_content(output, target_wav, enhanced_features, target_features, 
+                           discrete_features, content_ids, device, alpha=0.01, beta=0.99):
+    """
+    實驗方案二：純離散內容一致性損失
+    
+    Args:
+        output (torch.Tensor): 模型輸出的音頻波形
+        target_wav (torch.Tensor): 目標波形
+        enhanced_features (torch.Tensor): 增強後的特徵
+        target_features (torch.Tensor): 目標特徵
+        discrete_features (torch.Tensor): 離散特徵
+        content_ids (list or torch.Tensor): 批次中每個樣本的內容ID
+        device (torch.device): 計算設備
+        alpha (float): 內容一致性損失權重
+        beta (float): 特徵損失權重
+        
+    Returns:
+        tuple: (total_loss, loss_details)
+    """
+    # 計算離散內容一致性損失
+    discrete_content_loss = compute_discrete_content_consistency_loss(discrete_features, content_ids, device)
+    
+    # 計算特徵空間的L2損失
+    feature_loss = compute_feature_loss(enhanced_features, target_features, device)
+
+    # 計算總損失
+    total_loss = alpha * discrete_content_loss + beta * feature_loss
+
+    return total_loss, {
+        'feature_loss': feature_loss.item(),
+        'discrete_content_consistency_loss': discrete_content_loss.item(),
+        'voice_loss': 0.0,
+        'total_loss': total_loss.item()
+    }
+
+
+def compute_hybrid_loss_with_hierarchical_content(output, target_wav, enhanced_features, target_features, 
+                           intermediate_enhanced_features, discrete_features, content_ids, device, 
+                           alpha=0.01, beta=0.99, hierarchy_alpha=0.7):
+    """
+    實驗方案一：階層式內容一致性損失
+    
+    Args:
+        output (torch.Tensor): 模型輸出的音頻波形
+        target_wav (torch.Tensor): 目標波形
+        enhanced_features (torch.Tensor): 增強後的特徵
+        target_features (torch.Tensor): 目標特徵
+        intermediate_enhanced_features (torch.Tensor 或 list): 中間特徵
+        discrete_features (torch.Tensor): 離散特徵
+        content_ids (list or torch.Tensor): 批次中每個樣本的內容ID
+        device (torch.device): 計算設備
+        alpha (float): 內容一致性損失權重
+        beta (float): 特徵損失權重
+        hierarchy_alpha (float): 階層式損失中連續特徵權重
+        
+    Returns:
+        tuple: (total_loss, loss_details)
+    """
+    # 處理中間特徵
+    if isinstance(intermediate_enhanced_features, list):
+        if len(intermediate_enhanced_features) > 1:
+            continuous_features = intermediate_enhanced_features[1]
+            if continuous_features.dim() == 2:
+                continuous_features = continuous_features.unsqueeze(0)
+        else:
+            continuous_features = enhanced_features
+    else:
+        if intermediate_enhanced_features.dim() == 2:
+            intermediate_enhanced_features = intermediate_enhanced_features.unsqueeze(0)
+        continuous_features = intermediate_enhanced_features
+    
+    # 計算階層式內容一致性損失
+    hierarchical_content_result = compute_hierarchical_content_consistency_loss(
+        continuous_features, discrete_features, content_ids, device, hierarchy_alpha
+    )
+    
+    # 計算特徵空間的L2損失
+    feature_loss = compute_feature_loss(enhanced_features, target_features, device)
+
+    # 計算總損失
+    total_loss = alpha * hierarchical_content_result['total_loss'] + beta * feature_loss
+
+    return total_loss, {
+        'feature_loss': feature_loss.item(),
+        'hierarchical_content_consistency_loss': hierarchical_content_result['total_loss'].item(),
+        'continuous_content_loss': hierarchical_content_result['continuous_loss'].item(),
+        'discrete_content_loss': hierarchical_content_result['discrete_loss'].item(),
+        'voice_loss': 0.0,
+        'total_loss': total_loss.item()
+    }
+
+
 # 修改為與新的compute_hybrid_loss_with_content保持一致，使用第二層內容一致性損失和最終層L2損失
 def compute_hybrid_loss_with_tsne_flow(output, target_wav, enhanced_features, target_features, 
                            intermediate_enhanced_features, content_ids, device, alpha=0.01, beta=0.99):
@@ -761,22 +854,28 @@ def collate_fn(batch, trim_to_shortest=True):
     """
     input_wavs = [item[0] for item in batch]
     target_wavs = [item[1] for item in batch]
-    
+
     # 獲取內容ID (如果提供)
     content_ids = None
-    if len(batch[0]) > 2:  # 檢查是否有內容ID
+    if len(batch[0]) > 2:
         content_ids = [item[2] for item in batch]
-    
-    # 找出最短的音訊長度 (與tsne.py保持一致的處理方式)
-    min_len = min(
-        min(wav.size(-1) for wav in input_wavs),
-        min(wav.size(-1) for wav in target_wavs)
+
+    # 找出最長的音訊長度（input和target都考慮）
+    max_len = max(
+        max(wav.size(-1) for wav in input_wavs),
+        max(wav.size(-1) for wav in target_wavs)
     )
-    
-    # 對齊長度 - 始終裁剪到最短長度，與tsne.py一致
-    input_wavs = [wav[..., :min_len] for wav in input_wavs]
-    target_wavs = [wav[..., :min_len] for wav in target_wavs]
-    
+
+    # 填充所有音訊到最長長度
+    def pad_to_max(wav, max_len):
+        pad_len = max_len - wav.size(-1)
+        if pad_len > 0:
+            return F.pad(wav, (0, pad_len))
+        return wav
+
+    input_wavs = [pad_to_max(wav, max_len) for wav in input_wavs]
+    target_wavs = [pad_to_max(wav, max_len) for wav in target_wavs]
+
     # 返回堆疊的張量和內容ID (如果有)
     if content_ids is not None:
         return torch.stack(input_wavs), torch.stack(target_wavs), content_ids
@@ -1176,7 +1275,37 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
                 all_target_discrete_codes.append(target_discrete_code.detach().cpu())
                 all_input_discrete_codes.append(input_discrete_code.detach().cpu())            # 計算損失 - 根據不同的模式選擇不同的損失函數
             # 檢查是否啟用了分層損失和內容一致性的組合模式
-            if config.get('use_layered_loss', False) and config.get('tsne_flow_with_content', False) and content_ids is not None and 'intermediate_features_list' in locals():
+            if config.get('experiment_hierarchical_content', False) and content_ids is not None:
+                # 實驗方案一：階層式內容一致性損失
+                # 需要同時使用連續特徵（中間特徵）和離散特徵
+                if 'intermediate_features_list' in locals() and len(intermediate_features_list) > 1:
+                    continuous_features = intermediate_features_list[1]  # 使用第二層特徵
+                else:
+                    continuous_features = enhanced_features
+                
+                # 使用target_discrete_code作為離散特徵
+                discrete_features = target_discrete_code if target_discrete_code is not None else input_discrete_code
+                
+                loss, loss_details = compute_hybrid_loss_with_hierarchical_content(
+                    output, target_wav, enhanced_features, target_features, 
+                    continuous_features, discrete_features, content_ids, device,
+                    alpha=config.get('content_alpha', 0.01), beta=0.99, 
+                    hierarchy_alpha=config.get('hierarchy_alpha', 0.7)
+                )
+                print(f"\r實驗方案一-階層式 - 特徵: {loss_details['feature_loss']:.4f}, 階層內容: {loss_details['hierarchical_content_consistency_loss']:.4f}, 連續: {loss_details['continuous_content_loss']:.4f}, 離散: {loss_details['discrete_content_loss']:.4f}", end='')
+                
+            elif config.get('experiment_discrete_content', False) and content_ids is not None:
+                # 實驗方案二：純離散內容一致性損失
+                discrete_features = target_discrete_code if target_discrete_code is not None else input_discrete_code
+                
+                loss, loss_details = compute_hybrid_loss_with_discrete_content(
+                    output, target_wav, enhanced_features, target_features, 
+                    discrete_features, content_ids, device,
+                    alpha=config.get('content_alpha', 0.01), beta=0.99
+                )
+                print(f"\r實驗方案二-純離散 - 特徵: {loss_details['feature_loss']:.4f}, 離散內容: {loss_details['discrete_content_consistency_loss']:.4f}", end='')
+                
+            elif config.get('use_layered_loss', False) and config.get('tsne_flow_with_content', False) and content_ids is not None and 'intermediate_features_list' in locals():
                 # 使用分層損失：前兩層著重內容一致性，後三層著重L2特徵損失
                 # 這是 --tsne_flow_with_content --use_layered_loss --first_two_blocks_only 模式
                 loss, loss_details = compute_layered_hybrid_loss(
@@ -1393,7 +1522,34 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
                     target_features = model.feature_extractor.ensure_feature_shape(target_features)
                     
                     # 根據模式選擇損失函數，與訓練階段保持一致
-                    if config.get('use_layered_loss', False):
+                    if config.get('experiment_hierarchical_content', False):
+                        # 實驗方案一：階層式內容一致性損失（驗證時不使用content_ids）
+                        if 'intermediate_features_list' in locals() and len(intermediate_features_list) > 1:
+                            continuous_features = intermediate_features_list[1]
+                        else:
+                            continuous_features = enhanced_features
+                        
+                        # 在驗證時使用虛擬的離散特徵
+                        discrete_features = torch.zeros((input_wav.size(0), 100), device=device)  # 虛擬離散特徵
+                        
+                        loss, loss_details = compute_hybrid_loss_with_hierarchical_content(
+                            output, target_wav, enhanced_features, target_features, 
+                            continuous_features, discrete_features, None, device,
+                            alpha=config.get('content_alpha', 0.01), beta=0.99, 
+                            hierarchy_alpha=config.get('hierarchy_alpha', 0.7)
+                        )
+                        
+                    elif config.get('experiment_discrete_content', False):
+                        # 實驗方案二：純離散內容一致性損失（驗證時不使用content_ids）
+                        discrete_features = torch.zeros((input_wav.size(0), 100), device=device)  # 虛擬離散特徵
+                        
+                        loss, loss_details = compute_hybrid_loss_with_discrete_content(
+                            output, target_wav, enhanced_features, target_features, 
+                            discrete_features, None, device,
+                            alpha=config.get('content_alpha', 0.01), beta=0.99
+                        )
+                        
+                    elif config.get('use_layered_loss', False):
                         # 使用分層損失：前幾層著重內容一致性，後幾層著重L2特徵損失，隨訓練進度動態調整權重
                         loss, loss_details = compute_layered_hybrid_loss(
                             output, target_wav, enhanced_features, target_features, intermediate_features_list, None, device,
@@ -1417,8 +1573,9 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
                             output, target_wav, enhanced_features, target_features, intermediate_enhanced_features, None, device
                         )
                         val_loss += loss.item()
-                        val_feature_loss += loss_details["feature_loss"]
-                        val_voice_loss += loss_details["voice_loss"]
+                        val_feature_loss += loss_details.get("feature_loss", 0.0)
+                        val_voice_loss += loss_details.get("voice_loss", 0.0)
+
                       # 累計內容一致性損失
                     if "content_consistency_loss" in loss_details or "avg_layer_content_loss" in loss_details:
                         content_loss = loss_details.get("content_consistency_loss", 0.0) or loss_details.get("avg_layer_content_loss", 0.0)
@@ -2007,6 +2164,13 @@ def main():
     parser.add_argument("--tsne_flow_with_L2", action="store_true", help="處理流程與tsne.py盡可能一致，僅使用標準L2損失函數")
     parser.add_argument("--use_layered_loss", action="store_true", help="使用分層損失：前幾層專注於內容一致性損失，後幾層專注於L2特徵損失")
     parser.add_argument("--first_two_blocks_only", action="store_true", help="內容一致性損失僅影響前兩個residual block，後續層完全交給特徵接近的L2損失")
+    
+    # 實驗模式參數
+    parser.add_argument("--experiment_hierarchical_content", action="store_true", help="實驗方案一：階層式內容一致性損失（連續+離散特徵）")
+    parser.add_argument("--experiment_discrete_content", action="store_true", help="實驗方案二：純離散內容一致性損失")
+    parser.add_argument("--hierarchy_alpha", type=float, default=0.7, help="階層式損失中連續特徵權重（0-1）")
+    parser.add_argument("--content_alpha", type=float, default=0.01, help="內容一致性損失權重")
+    
     args = parser.parse_args()
 
     # 初始化分布式環境
@@ -2021,17 +2185,36 @@ def main():
         print("\n✅ 啟用了tsne處理流程與內容一致性損失混合模式")
     elif args.tsne_flow_with_L2:
         print("\n✅ 啟用了tsne處理流程僅使用L2損失模式")
+    
+    # 實驗模式檢查
+    if args.experiment_hierarchical_content and args.experiment_discrete_content:
+        print("\n❌ 錯誤：不能同時啟用兩種實驗模式")
+        sys.exit(1)
+    elif args.experiment_hierarchical_content:
+        print(f"\n🧪 實驗模式一：階層式內容一致性損失（連續權重={args.hierarchy_alpha}，內容權重={args.content_alpha}）")
+    elif args.experiment_discrete_content:
+        print(f"\n🧪 實驗模式二：純離散內容一致性損失（內容權重={args.content_alpha}）")
+    
     if args.use_layered_loss:
         print("\n✅ 啟用了分層損失：前幾層專注於內容一致性損失，後幾層專注於L2特徵損失")
     if args.first_two_blocks_only:
         print("\n✅ 啟用了內容一致性損失僅前兩層模式：僅前兩個residual block使用內容一致性損失，後續層完全使用L2損失")
-    # 設置固定輸出目錄 (與tsne.py類似，使用固定的output3目錄)
+    # 設置輸出目錄，根據實驗模式決定
     output_base_dir = os.path.join(os.getcwd(), "results", "tsne_outputs")
     # 確保輸出目錄存在
     os.makedirs(output_base_dir, exist_ok=True)
     
-    # 使用固定的output3目錄
-    output_dir = os.path.join(output_base_dir, "b-output4")
+    # 根據實驗模式設置不同的輸出目錄
+    if args.experiment_hierarchical_content:
+        exp_id = os.environ.get('TTT_EXPERIMENT_ID', 'test')
+        output_dir = os.path.join(output_base_dir, f"exp1-hierarchical-{exp_id}")
+    elif args.experiment_discrete_content:
+        exp_id = os.environ.get('TTT_EXPERIMENT_ID', 'test')
+        output_dir = os.path.join(output_base_dir, f"exp2-discrete-{exp_id}")
+    else:
+        # 使用固定的c-output4目錄（原始行為）
+        output_dir = os.path.join(output_base_dir, "c-output4")
+    
     os.makedirs(output_dir, exist_ok=True)
     
     # 創建子目錄
@@ -2081,6 +2264,15 @@ def main():
         # 處理模式設定
         'use_content_loss': not args.tsne_flow_with_L2,  # 使用L2損失時不使用內容一致性損失
         'tsne_flow_with_content': args.tsne_flow_with_content,  # 啟用tsne處理流程與內容一致性混合模式
+        'tsne_flow_with_L2': args.tsne_flow_with_L2,     # 啟用tsne處理流程僅使用L2損失
+        'use_layered_loss': args.use_layered_loss,       # 啟用分層損失計算
+        'first_two_blocks_only': args.first_two_blocks_only,  # 內容損失僅前兩層
+        
+        # 實驗模式設定
+        'experiment_hierarchical_content': args.experiment_hierarchical_content,  # 實驗方案一：階層式內容一致性
+        'experiment_discrete_content': args.experiment_discrete_content,          # 實驗方案二：純離散內容一致性
+        'hierarchy_alpha': args.hierarchy_alpha,         # 階層式損失中連續特徵權重
+        'content_alpha': args.content_alpha,             # 內容一致性損失權重
         'tsne_flow_with_L2': args.tsne_flow_with_L2,  # 啟用僅使用L2損失的tsne處理流程
         'use_layered_loss': args.use_layered_loss  # 啟用分層損失計算
     }
@@ -2239,7 +2431,7 @@ def main():
     
     target_dir = os.path.join(os.getcwd(), "data", "clean", "box2")
     # Create full dataset
-    dataset = AudioDataset(input_dirs=input_dirs, target_dir=target_dir, max_files_per_dir=None)
+    dataset = AudioDataset(input_dirs=input_dirs, target_dir=target_dir, max_files_per_dir=None, max_sentences_per_speaker=100)
     
     # 不再過濾只保留5個樣本，而是使用完整的數據集
     print(f"Using all available samples: {len(dataset.paired_files)} paired files")
@@ -2668,6 +2860,119 @@ def analyze_feature_stability(features, n_runs=10, perplexity=30, n_iter=1000):
     # 原函數內容已注釋
     pass
 """
+
+def compute_discrete_content_consistency_loss(discrete_features, content_ids, device):
+    """
+    基於離散特徵的內容一致性損失（實驗方案二）
+    
+    Args:
+        discrete_features: 離散特徵 [batch_size, seq_len] 或 [batch_size, seq_len, vocab_size]
+        content_ids: 內容ID列表
+        device: 計算設備
+    
+    Returns:
+        torch.Tensor: 離散內容一致性損失
+    """
+    # 確保content_ids是張量
+    if content_ids is None:
+        content_ids = torch.arange(discrete_features.size(0), device=device)
+    elif not isinstance(content_ids, torch.Tensor):
+        try:
+            numeric_ids = []
+            for cid in content_ids:
+                if isinstance(cid, str):
+                    digits = ''.join(c for c in cid if c.isdigit())
+                    if digits:
+                        numeric_ids.append(int(digits))
+                    else:
+                        numeric_ids.append(hash(cid) % 10000)
+                else:
+                    numeric_ids.append(int(cid) if cid is not None else 0)
+            content_ids = torch.tensor(numeric_ids, device=device)
+        except Exception as e:
+            print(f"無法將content_ids轉換為張量: {e}")
+            content_ids = torch.arange(discrete_features.size(0), device=device)
+    
+    # 初始化損失
+    loss = torch.tensor(0.0, device=device, requires_grad=True)
+    unique_content_ids = torch.unique(content_ids)
+    valid_groups = 0
+    
+    for content_id in unique_content_ids:
+        indices = (content_ids == content_id).nonzero(as_tuple=True)[0]
+        
+        if len(indices) < 2:
+            continue
+            
+        group_features = discrete_features[indices]
+        
+        if discrete_features.dim() == 3:  # 機率分布形式 [batch, seq, vocab]
+            # 使用KL散度比較分布
+            target_dist = group_features.mean(dim=0, keepdim=True)  # [1, seq, vocab]
+            group_loss = torch.tensor(0.0, device=device)
+            
+            for i in range(group_features.size(0)):
+                kl_loss = F.kl_div(
+                    F.log_softmax(group_features[i:i+1], dim=-1),
+                    F.softmax(target_dist, dim=-1),
+                    reduction='batchmean'
+                )
+                group_loss = group_loss + kl_loss
+            
+            group_loss = group_loss / group_features.size(0)
+            
+        else:  # 離散索引形式 [batch, seq]
+            # 使用序列相似度
+            target_seq = group_features[0]  # 參考序列
+            group_loss = torch.tensor(0.0, device=device)
+            
+            for i in range(1, group_features.size(0)):
+                seq_diff = (group_features[i] != target_seq).float().mean()
+                group_loss = group_loss + seq_diff
+            
+            if group_features.size(0) > 1:
+                group_loss = group_loss / (group_features.size(0) - 1)
+        
+        loss = loss + group_loss
+        valid_groups += 1
+    
+    if valid_groups > 0:
+        loss = loss / valid_groups
+        
+    return loss
+
+
+def compute_hierarchical_content_consistency_loss(continuous_features, discrete_features, content_ids, device, alpha=0.7):
+    """
+    階層式內容一致性損失（實驗方案一）
+    結合連續和離散特徵的內容一致性約束
+    
+    Args:
+        continuous_features: 連續特徵 [batch_size, channels, time]
+        discrete_features: 離散特徵 [batch_size, seq_len] 或 [batch_size, seq_len, vocab_size]
+        content_ids: 內容ID列表
+        device: 計算設備
+        alpha: 連續特徵權重 (0-1)
+    
+    Returns:
+        dict: 包含總損失和子損失的字典
+    """
+    # 計算連續特徵的內容一致性損失
+    continuous_loss = compute_content_consistency_loss(continuous_features, content_ids, device)
+    
+    # 計算離散特徵的內容一致性損失
+    discrete_loss = compute_discrete_content_consistency_loss(discrete_features, content_ids, device)
+    
+    # 加權合併
+    total_loss = alpha * continuous_loss + (1 - alpha) * discrete_loss
+    
+    return {
+        'total_loss': total_loss,
+        'continuous_loss': continuous_loss,
+        'discrete_loss': discrete_loss,
+        'alpha': alpha
+    }
+
 
 def compute_content_consistency_loss(intermediate_features, content_ids, device):
     """
