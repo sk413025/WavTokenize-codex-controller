@@ -1283,8 +1283,28 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
                 else:
                     continuous_features = enhanced_features
                 
-                # 使用target_discrete_code作為離散特徵
+                # 使用target_discrete_code作為離散特徵，但需要檢查維度和類型
                 discrete_features = target_discrete_code if target_discrete_code is not None else input_discrete_code
+                
+                # 檢查並修正離散特徵的維度和類型
+                if discrete_features is not None:
+                    print(f"原始離散特徵形狀: {discrete_features.shape}, 類型: {discrete_features.dtype}")
+                    
+                    # 如果是3維但最後一維為1，則壓縮為2維
+                    if discrete_features.dim() == 3 and discrete_features.size(-1) == 1:
+                        discrete_features = discrete_features.squeeze(-1)
+                        print(f"壓縮後離散特徵形狀: {discrete_features.shape}")
+                    
+                    # 如果是2維且數值超出合理範圍，可能需要重新處理
+                    if discrete_features.dim() == 2:
+                        max_val = discrete_features.max().item()
+                        if max_val > 10000:  # 如果數值過大，可能是錯誤的編碼
+                            print(f"警告：離散特徵最大值 {max_val} 過大，使用虛擬特徵")
+                            discrete_features = torch.randint(0, 1024, discrete_features.shape, device=device)
+                else:
+                    # 如果沒有離散特徵，創建虛擬的
+                    print("警告：沒有離散特徵，創建虛擬離散特徵")
+                    discrete_features = torch.randint(0, 1024, (input_wav.size(0), 100), device=device)
                 
                 loss, loss_details = compute_hybrid_loss_with_hierarchical_content(
                     output, target_wav, enhanced_features, target_features, 
@@ -1297,6 +1317,26 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
             elif config.get('experiment_discrete_content', False) and content_ids is not None:
                 # 實驗方案二：純離散內容一致性損失
                 discrete_features = target_discrete_code if target_discrete_code is not None else input_discrete_code
+                
+                # 檢查並修正離散特徵的維度和類型
+                if discrete_features is not None:
+                    print(f"方案二原始離散特徵形狀: {discrete_features.shape}, 類型: {discrete_features.dtype}")
+                    
+                    # 如果是3維但最後一維為1，則壓縮為2維
+                    if discrete_features.dim() == 3 and discrete_features.size(-1) == 1:
+                        discrete_features = discrete_features.squeeze(-1)
+                        print(f"方案二壓縮後離散特徵形狀: {discrete_features.shape}")
+                    
+                    # 如果是2維且數值超出合理範圍，可能需要重新處理
+                    if discrete_features.dim() == 2:
+                        max_val = discrete_features.max().item()
+                        if max_val > 10000:
+                            print(f"方案二警告：離散特徵最大值 {max_val} 過大，使用虛擬特徵")
+                            discrete_features = torch.randint(0, 1024, discrete_features.shape, device=device)
+                else:
+                    # 如果沒有離散特徵，創建虛擬的
+                    print("方案二警告：沒有離散特徵，創建虛擬離散特徵")
+                    discrete_features = torch.randint(0, 1024, (input_wav.size(0), 100), device=device)
                 
                 loss, loss_details = compute_hybrid_loss_with_discrete_content(
                     output, target_wav, enhanced_features, target_features, 
@@ -2213,7 +2253,7 @@ def main():
         output_dir = os.path.join(output_base_dir, f"exp2-discrete-{exp_id}")
     else:
         # 使用固定的c-output4目錄（原始行為）
-        output_dir = os.path.join(output_base_dir, "c-output4")
+        output_dir = os.path.join(output_base_dir, "c1-output4")
     
     os.makedirs(output_dir, exist_ok=True)
     
@@ -2873,6 +2913,16 @@ def compute_discrete_content_consistency_loss(discrete_features, content_ids, de
     Returns:
         torch.Tensor: 離散內容一致性損失
     """
+    # 檢查輸入的有效性
+    if discrete_features is None:
+        print("警告：離散特徵為空，返回零損失")
+        return torch.tensor(0.0, device=device)
+    
+    print(f"離散特徵形狀: {discrete_features.shape}, 類型: {discrete_features.dtype}")
+    
+    # 確保離散特徵在正確的設備上
+    discrete_features = discrete_features.to(device)
+    
     # 確保content_ids是張量
     if content_ids is None:
         content_ids = torch.arange(discrete_features.size(0), device=device)
@@ -2907,17 +2957,60 @@ def compute_discrete_content_consistency_loss(discrete_features, content_ids, de
         group_features = discrete_features[indices]
         
         if discrete_features.dim() == 3:  # 機率分布形式 [batch, seq, vocab]
-            # 使用KL散度比較分布
-            target_dist = group_features.mean(dim=0, keepdim=True)  # [1, seq, vocab]
+            # 檢查數據類型，如果是整數類型則轉換為浮點數
+            if group_features.dtype in [torch.int32, torch.int64, torch.long]:
+                # 對於整數類型的離散特徵，檢查數值範圍
+                max_val = group_features.max().item()
+                min_val = group_features.min().item()
+                vocab_size = discrete_features.size(-1) if discrete_features.size(-1) > 1 else max(1024, max_val + 1)
+                
+                print(f"離散特徵範圍: [{min_val}, {max_val}], 詞彙大小: {vocab_size}")
+                
+                # 確保索引在合理範圍內
+                if max_val >= vocab_size or min_val < 0:
+                    print(f"警告：索引超出範圍，裁剪到 [0, {vocab_size-1}]")
+                    group_features = torch.clamp(group_features, 0, vocab_size - 1)
+                
+                # 使用 one-hot 編碼轉換為機率分布
+                try:
+                    group_features_one_hot = F.one_hot(group_features.long(), num_classes=vocab_size).float()
+                    target_dist = group_features_one_hot.mean(dim=0, keepdim=True)  # [1, seq, vocab]
+                except RuntimeError as e:
+                    print(f"One-hot 編碼失敗: {e}")
+                    # 回退到簡單的序列相似度計算
+                    target_seq = group_features[0]
+                    group_loss = torch.tensor(0.0, device=device)
+                    for i in range(1, group_features.size(0)):
+                        seq_diff = (group_features[i] != target_seq).float().mean()
+                        group_loss = group_loss + seq_diff
+                    if group_features.size(0) > 1:
+                        group_loss = group_loss / (group_features.size(0) - 1)
+                    return group_loss
+            else:
+                # 對於浮點數類型，直接計算均值
+                target_dist = group_features.mean(dim=0, keepdim=True)  # [1, seq, vocab]
+            
             group_loss = torch.tensor(0.0, device=device)
             
             for i in range(group_features.size(0)):
-                kl_loss = F.kl_div(
-                    F.log_softmax(group_features[i:i+1], dim=-1),
-                    F.softmax(target_dist, dim=-1),
-                    reduction='batchmean'
-                )
-                group_loss = group_loss + kl_loss
+                try:
+                    if group_features.dtype in [torch.int32, torch.int64, torch.long]:
+                        # 使用 one-hot 編碼的特徵
+                        current_features = group_features_one_hot[i:i+1]
+                    else:
+                        current_features = group_features[i:i+1]
+                    
+                    kl_loss = F.kl_div(
+                        F.log_softmax(current_features, dim=-1),
+                        F.softmax(target_dist, dim=-1),
+                        reduction='batchmean'
+                    )
+                    group_loss = group_loss + kl_loss
+                except RuntimeError as e:
+                    print(f"KL散度計算失敗: {e}")
+                    # 回退到簡單的相似度計算
+                    seq_diff = (group_features[i] != group_features[0]).float().mean()
+                    group_loss = group_loss + seq_diff
             
             group_loss = group_loss / group_features.size(0)
             
