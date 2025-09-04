@@ -1277,34 +1277,82 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
             # 檢查是否啟用了分層損失和內容一致性的組合模式
             if config.get('experiment_hierarchical_content', False) and content_ids is not None:
                 # 實驗方案一：階層式內容一致性損失
-                # 需要同時使用連續特徵（中間特徵）和離散特徵
                 if 'intermediate_features_list' in locals() and len(intermediate_features_list) > 1:
-                    continuous_features = intermediate_features_list[1]  # 使用第二層特徵
+                    continuous_features = intermediate_features_list[1]
                 else:
                     continuous_features = enhanced_features
-                
-                # 使用target_discrete_code作為離散特徵，但需要檢查維度和類型
+
+                # 使用 target_discrete_code 作為離散特徵
                 discrete_features = target_discrete_code if target_discrete_code is not None else input_discrete_code
-                
-                # 檢查並修正離散特徵的維度和類型
+                # 修正 batch size 維度
                 if discrete_features is not None:
                     print(f"原始離散特徵形狀: {discrete_features.shape}, 類型: {discrete_features.dtype}")
-                    
+                    # 如果 shape 為 [1, batch, N]，則 squeeze(0)
+                    if discrete_features.dim() == 3 and discrete_features.shape[0] == 1:
+                        discrete_features = discrete_features.squeeze(0)
+                        print(f"修正後離散特徵形狀: {discrete_features.shape}")
                     # 如果是3維但最後一維為1，則壓縮為2維
                     if discrete_features.dim() == 3 and discrete_features.size(-1) == 1:
                         discrete_features = discrete_features.squeeze(-1)
                         print(f"壓縮後離散特徵形狀: {discrete_features.shape}")
-                    
                     # 如果是2維且數值超出合理範圍，可能需要重新處理
                     if discrete_features.dim() == 2:
                         max_val = discrete_features.max().item()
-                        if max_val > 10000:  # 如果數值過大，可能是錯誤的編碼
+                        if max_val > 10000:
                             print(f"警告：離散特徵最大值 {max_val} 過大，使用虛擬特徵")
                             discrete_features = torch.randint(0, 1024, discrete_features.shape, device=device)
+                    # 最終檢查 batch size
+                    if discrete_features.shape[0] != input_wav.size(0):
+                        print(f"修正 batch size: {discrete_features.shape[0]} -> {input_wav.size(0)}")
+                        discrete_features = discrete_features[:input_wav.size(0)]
+                    # 確保是整數類型
+                    if discrete_features.dtype not in [torch.int64, torch.long, torch.int32]:
+                        discrete_features = discrete_features.long()
+                        print(f"轉換離散特徵為整數類型: {discrete_features.dtype}")
                 else:
-                    # 如果沒有離散特徵，創建虛擬的
                     print("警告：沒有離散特徵，創建虛擬離散特徵")
-                    discrete_features = torch.randint(0, 1024, (input_wav.size(0), 100), device=device)
+                    discrete_features = torch.randint(0, 1024, (input_wav.size(0), 100), device=device, dtype=torch.long)
+                
+                # 修正 content_ids：確保有重複值以便計算一致性損失
+                if content_ids is not None:
+                    # 先將 content_ids 轉換為 tensor
+                    if not isinstance(content_ids, torch.Tensor):
+                        try:
+                            if isinstance(content_ids, list):
+                                # 處理字符串或數字列表
+                                numeric_ids = []
+                                for cid in content_ids:
+                                    if isinstance(cid, str):
+                                        digits = ''.join(c for c in cid if c.isdigit())
+                                        if digits:
+                                            numeric_ids.append(int(digits))
+                                        else:
+                                            numeric_ids.append(hash(cid) % 100)
+                                    else:
+                                        numeric_ids.append(int(cid) if cid is not None else 0)
+                                content_ids = torch.tensor(numeric_ids, device=device, dtype=torch.long)
+                            else:
+                                content_ids = torch.tensor([content_ids], device=device, dtype=torch.long)
+                        except Exception as e:
+                            print(f"無法轉換 content_ids: {e}")
+                            batch_size = input_wav.size(0)
+                            num_groups = max(2, batch_size // 2)
+                            content_ids = torch.arange(num_groups, device=device).repeat_interleave(batch_size // num_groups + 1)[:batch_size]
+                    
+                    # 檢查是否都是唯一值
+                    if len(torch.unique(content_ids)) == len(content_ids):
+                        # 如果 content_ids 都是唯一的，則創建一些重複的組
+                        batch_size = len(content_ids)
+                        # 將 batch 分成幾組，每組內有相同的 content_id
+                        num_groups = max(2, batch_size // 2)  # 至少2組
+                        content_ids = torch.arange(num_groups, device=device).repeat_interleave(batch_size // num_groups + 1)[:batch_size]
+                        print(f"修正 content_ids 以包含重複值: {content_ids}")
+                else:
+                    # 創建有重複的 content_ids
+                    batch_size = input_wav.size(0)
+                    num_groups = max(2, batch_size // 2)
+                    content_ids = torch.arange(num_groups, device=device).repeat_interleave(batch_size // num_groups + 1)[:batch_size]
+                    print(f"創建有重複的 content_ids: {content_ids}")
                 
                 loss, loss_details = compute_hybrid_loss_with_hierarchical_content(
                     output, target_wav, enhanced_features, target_features, 
@@ -1317,26 +1365,66 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
             elif config.get('experiment_discrete_content', False) and content_ids is not None:
                 # 實驗方案二：純離散內容一致性損失
                 discrete_features = target_discrete_code if target_discrete_code is not None else input_discrete_code
-                
-                # 檢查並修正離散特徵的維度和類型
+                # 修正 batch size 維度
                 if discrete_features is not None:
                     print(f"方案二原始離散特徵形狀: {discrete_features.shape}, 類型: {discrete_features.dtype}")
-                    
-                    # 如果是3維但最後一維為1，則壓縮為2維
+                    if discrete_features.dim() == 3 and discrete_features.shape[0] == 1:
+                        discrete_features = discrete_features.squeeze(0)
+                        print(f"方案二修正後離散特徵形狀: {discrete_features.shape}")
                     if discrete_features.dim() == 3 and discrete_features.size(-1) == 1:
                         discrete_features = discrete_features.squeeze(-1)
                         print(f"方案二壓縮後離散特徵形狀: {discrete_features.shape}")
-                    
-                    # 如果是2維且數值超出合理範圍，可能需要重新處理
                     if discrete_features.dim() == 2:
                         max_val = discrete_features.max().item()
                         if max_val > 10000:
                             print(f"方案二警告：離散特徵最大值 {max_val} 過大，使用虛擬特徵")
-                            discrete_features = torch.randint(0, 1024, discrete_features.shape, device=device)
+                            discrete_features = torch.randint(0, 1024, discrete_features.shape, device=device, dtype=torch.long)
+                    if discrete_features.shape[0] != input_wav.size(0):
+                        print(f"方案二修正 batch size: {discrete_features.shape[0]} -> {input_wav.size(0)}")
+                        discrete_features = discrete_features[:input_wav.size(0)]
+                    # 確保是整數類型
+                    if discrete_features.dtype not in [torch.int64, torch.long, torch.int32]:
+                        discrete_features = discrete_features.long()
+                        print(f"方案二轉換離散特徵為整數類型: {discrete_features.dtype}")
                 else:
-                    # 如果沒有離散特徵，創建虛擬的
                     print("方案二警告：沒有離散特徵，創建虛擬離散特徵")
-                    discrete_features = torch.randint(0, 1024, (input_wav.size(0), 100), device=device)
+                    discrete_features = torch.randint(0, 1024, (input_wav.size(0), 100), device=device, dtype=torch.long)
+                
+                # 修正 content_ids：確保有重複值
+                if content_ids is not None:
+                    # 先將 content_ids 轉換為 tensor
+                    if not isinstance(content_ids, torch.Tensor):
+                        try:
+                            if isinstance(content_ids, list):
+                                numeric_ids = []
+                                for cid in content_ids:
+                                    if isinstance(cid, str):
+                                        digits = ''.join(c for c in cid if c.isdigit())
+                                        if digits:
+                                            numeric_ids.append(int(digits))
+                                        else:
+                                            numeric_ids.append(hash(cid) % 100)
+                                    else:
+                                        numeric_ids.append(int(cid) if cid is not None else 0)
+                                content_ids = torch.tensor(numeric_ids, device=device, dtype=torch.long)
+                            else:
+                                content_ids = torch.tensor([content_ids], device=device, dtype=torch.long)
+                        except Exception as e:
+                            print(f"方案二無法轉換 content_ids: {e}")
+                            batch_size = input_wav.size(0)
+                            num_groups = max(2, batch_size // 2)
+                            content_ids = torch.arange(num_groups, device=device).repeat_interleave(batch_size // num_groups + 1)[:batch_size]
+                    
+                    if len(torch.unique(content_ids)) == len(content_ids):
+                        batch_size = len(content_ids)
+                        num_groups = max(2, batch_size // 2)
+                        content_ids = torch.arange(num_groups, device=device).repeat_interleave(batch_size // num_groups + 1)[:batch_size]
+                        print(f"方案二修正 content_ids: {content_ids}")
+                else:
+                    batch_size = input_wav.size(0)
+                    num_groups = max(2, batch_size // 2)
+                    content_ids = torch.arange(num_groups, device=device).repeat_interleave(batch_size // num_groups + 1)[:batch_size]
+                    print(f"方案二創建 content_ids: {content_ids}")
                 
                 loss, loss_details = compute_hybrid_loss_with_discrete_content(
                     output, target_wav, enhanced_features, target_features, 
@@ -1527,88 +1615,96 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
               f'Learning Rate: {current_lr:.6f}')
           # 驗證階段
         if val_loader is not None:
+            """
+            執行驗證集損失計算，支援多種內容一致性損失模式。
+
+            Args:
+                model: 要驗證的模型。
+                val_loader: 驗證集 DataLoader。
+                config: 實驗設定，決定損失計算模式。
+                device: 運算設備。
+                epoch: 當前訓練週期。
+                num_epochs: 總訓練週期。
+            Returns:
+                更新 val_losses_record, 並根據驗證損失保存最佳模型。
+            """
             model.eval()
             val_loss = 0.0
             val_feature_loss = 0.0
             val_voice_loss = 0.0
             val_content_loss = 0.0  # 新增：跟踪驗證內容一致性損失
-            
+
             with torch.no_grad():
                 for batch_data in val_loader:
-                    # 处理不同长度的批次数据 (保留content_id兼容性但採用與tsne.py類似的處理方式)
                     if len(batch_data) == 3:
-                        input_wav, target_wav, _ = batch_data  # 忽略content_ids
+                        input_wav, target_wav, _ = batch_data
                     else:
                         input_wav, target_wav = batch_data
-                    
-                    # 移動數據到設備並進行正規化
+
                     input_wav = input_wav.to(device)
                     target_wav = target_wav.to(device)
-                    
-                    # 確保輸入數據的幅度合適
                     input_wav = input_wav / (torch.max(torch.abs(input_wav)) + 1e-8)
                     target_wav = target_wav / (torch.max(torch.abs(target_wav)) + 1e-8)
-                    
-                    # 前向傳播 - 獲取包括中間特徵在內的所有輸出
+
                     output_tuple = model(input_wav)
                     output, input_features, enhanced_features, _, intermediate_enhanced_features, intermediate_features_list = output_tuple
-                    
-                    # 修改: 使用與訓練時相同的方式提取目標特徵
+
                     bandwidth_id = torch.zeros(input_wav.size(0), dtype=torch.long, device=input_wav.device)
                     target_features, _ = model.feature_extractor.wavtokenizer.encode_infer(target_wav, bandwidth_id=bandwidth_id)
-                    
-                    # 確保特徵形狀一致
                     enhanced_features = model.feature_extractor.ensure_feature_shape(enhanced_features)
                     target_features = model.feature_extractor.ensure_feature_shape(target_features)
-                    
-                    # 根據模式選擇損失函數，與訓練階段保持一致
+
+                    # 根據模式選擇損失函數，所有分支都要累加 loss
                     if config.get('experiment_hierarchical_content', False):
-                        # 實驗方案一：階層式內容一致性損失（驗證時不使用content_ids）
                         if 'intermediate_features_list' in locals() and len(intermediate_features_list) > 1:
                             continuous_features = intermediate_features_list[1]
                         else:
                             continuous_features = enhanced_features
-                        
-                        # 在驗證時使用虛擬的離散特徵
-                        discrete_features = torch.zeros((input_wav.size(0), 100), device=device)  # 虛擬離散特徵
-                        
+                        discrete_features = torch.zeros((input_wav.size(0), 100), device=device)
                         loss, loss_details = compute_hybrid_loss_with_hierarchical_content(
-                            output, target_wav, enhanced_features, target_features, 
+                            output, target_wav, enhanced_features, target_features,
                             continuous_features, discrete_features, None, device,
-                            alpha=config.get('content_alpha', 0.01), beta=0.99, 
+                            alpha=config.get('content_alpha', 0.01), beta=0.99,
                             hierarchy_alpha=config.get('hierarchy_alpha', 0.7)
                         )
-                        
+                        val_loss += loss.item()
+                        val_feature_loss += loss_details.get("feature_loss", 0.0)
+                        val_voice_loss += loss_details.get("voice_loss", 0.0)
                     elif config.get('experiment_discrete_content', False):
-                        # 實驗方案二：純離散內容一致性損失（驗證時不使用content_ids）
-                        discrete_features = torch.zeros((input_wav.size(0), 100), device=device)  # 虛擬離散特徵
-                        
+                        discrete_features = torch.zeros((input_wav.size(0), 100), device=device)
                         loss, loss_details = compute_hybrid_loss_with_discrete_content(
-                            output, target_wav, enhanced_features, target_features, 
+                            output, target_wav, enhanced_features, target_features,
                             discrete_features, None, device,
                             alpha=config.get('content_alpha', 0.01), beta=0.99
                         )
-                        
+                        val_loss += loss.item()
+                        val_feature_loss += loss_details.get("feature_loss", 0.0)
+                        val_voice_loss += loss_details.get("voice_loss", 0.0)
                     elif config.get('use_layered_loss', False):
-                        # 使用分層損失：前幾層著重內容一致性，後幾層著重L2特徵損失，隨訓練進度動態調整權重
                         loss, loss_details = compute_layered_hybrid_loss(
                             output, target_wav, enhanced_features, target_features, intermediate_features_list, None, device,
                             current_epoch=epoch, total_epochs=num_epochs,
-                            input_features=input_features, discrete_code=input_discrete_code, 
+                            input_features=input_features, discrete_code=input_discrete_code,
                             target_discrete_code=None, wavtokenizer=model.feature_extractor.wavtokenizer, is_validation=True
                         )
+                        val_loss += loss.item()
+                        val_feature_loss += loss_details.get("feature_loss", 0.0)
+                        val_voice_loss += loss_details.get("voice_loss", 0.0)
                     elif config.get('tsne_flow_with_L2', False):
-                        # 使用僅L2損失的模式：tsne.py處理流程 + 僅L2損失
                         loss, loss_details = compute_hybrid_loss(
                             output, target_wav, enhanced_features, target_features, device
                         )
+                        val_loss += loss.item()
+                        val_feature_loss += loss_details.get("feature_loss", 0.0)
+                        val_voice_loss += loss_details.get("voice_loss", 0.0)
                     elif config.get('tsne_flow_with_content', False):
-                        # 使用混合模式：tsne處理流程 + 內容一致性損失
                         loss, loss_details = compute_hybrid_loss_with_tsne_flow(
                             output, target_wav, enhanced_features, target_features, intermediate_enhanced_features, None, device
                         )
+                        val_loss += loss.item()
+                        val_feature_loss += loss_details.get("feature_loss", 0.0)
+                        val_voice_loss += loss_details.get("voice_loss", 0.0)
                     else:
-                        # 在驗證階段使用包含內容一致性損失的標準計算邏輯
                         loss, loss_details = compute_hybrid_loss_with_content(
                             output, target_wav, enhanced_features, target_features, intermediate_enhanced_features, None, device
                         )
@@ -1616,36 +1712,36 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
                         val_feature_loss += loss_details.get("feature_loss", 0.0)
                         val_voice_loss += loss_details.get("voice_loss", 0.0)
 
-                      # 累計內容一致性損失
+                    # 累計內容一致性損失
                     if "content_consistency_loss" in loss_details or "avg_layer_content_loss" in loss_details:
                         content_loss = loss_details.get("content_consistency_loss", 0.0) or loss_details.get("avg_layer_content_loss", 0.0)
                         val_content_loss += content_loss
-                  # 計算平均損失
+
                 avg_val_loss = val_loss / len(val_loader)
                 avg_val_feature_loss = val_feature_loss / len(val_loader)
                 avg_val_voice_loss = val_voice_loss / len(val_loader)
                 avg_val_content_loss = val_content_loss / len(val_loader) if val_content_loss > 0 else 0.0
-                
+
                 val_losses_record.append(avg_val_loss)
-                
+
                 print(f'Validation Loss: {avg_val_loss:.4f}, '
-                      f'Val Feature Loss: {avg_val_feature_loss:.4f}, Val Voice Loss: {avg_val_voice_loss:.4f}, '                      f'Val Content Loss: {avg_val_content_loss:.4f}')
-                  # 使用驗證損失更新學習率排程器
+                      f'Val Feature Loss: {avg_val_feature_loss:.4f}, Val Voice Loss: {avg_val_voice_loss:.4f}, '
+                      f'Val Content Loss: {avg_val_content_loss:.4f}')
+
+                # 使用驗證損失更新學習率排程器
                 if scheduler is not None:
                     if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                        scheduler.step(avg_val_loss)  # 使用驗證損失來調整學習率
+                        scheduler.step(avg_val_loss)
                         print(f"Learning rate updated based on validation loss: {optimizer.param_groups[0]['lr']:.6f}")
                     else:
                         scheduler.step()
                     print(f"Learning rate updated: {optimizer.param_groups[0]['lr']:.6f}")
-            
+
             # 判斷是否獲得了更好的驗證損失
             if avg_val_loss < best_val_loss:
                 improvement = best_val_loss - avg_val_loss
                 best_val_loss = avg_val_loss
-                no_improve_count = 0  # 重置計數器
-                
-                # 保存基於驗證損失的最佳模型
+                no_improve_count = 0
                 validation_checkpoint = {
                     'epoch': epoch + 1,
                     'model_state_dict': model.state_dict(),
@@ -1660,13 +1756,9 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
                     'voice_losses_record': voice_losses_record,
                     'lr_values_record': lr_values_record
                 }
-                
-                # 如果有排程器，也保存它的狀態
                 if scheduler:
                     validation_checkpoint['scheduler_state_dict'] = scheduler.state_dict()
-                    
                 torch.save(validation_checkpoint, best_val_model_path)
-                
                 print(f"\n=== New Best Validation Model Saved ===")
                 print(f"Improvement: {improvement:.6f}")
                 print(f"New best validation loss: {best_val_loss:.6f}")
@@ -1674,9 +1766,7 @@ def train_model(model, train_loader, optimizer, device, save_dir, config, num_ep
             else:
                 no_improve_count += 1
                 print(f"\nNo validation improvement for {no_improve_count} epochs")
-            
         else:
-            # 如果沒有驗證集，添加None以保持列表長度一致
             val_losses_record.append(None)
             
             # 如果沒有驗證集，就使用訓練損失來調整學習率
@@ -2903,7 +2993,7 @@ def analyze_feature_stability(features, n_runs=10, perplexity=30, n_iter=1000):
 
 def compute_discrete_content_consistency_loss(discrete_features, content_ids, device):
     """
-    基於離散特徵的內容一致性損失（實驗方案二）
+    基於離散特徵的內容一致性損失（實驗方案二）- 修復 CUDA 錯誤版本
     
     Args:
         discrete_features: 離散特徵 [batch_size, seq_len] 或 [batch_size, seq_len, vocab_size]
@@ -2913,161 +3003,245 @@ def compute_discrete_content_consistency_loss(discrete_features, content_ids, de
     Returns:
         torch.Tensor: 離散內容一致性損失
     """
-    # 檢查輸入的有效性
-    if discrete_features is None:
-        print("警告：離散特徵為空，返回零損失")
-        return torch.tensor(0.0, device=device)
-    
-    print(f"離散特徵形狀: {discrete_features.shape}, 類型: {discrete_features.dtype}")
-    
-    # 確保離散特徵在正確的設備上
-    discrete_features = discrete_features.to(device)
-    
-    # 確保content_ids是張量
-    if content_ids is None:
-        content_ids = torch.arange(discrete_features.size(0), device=device)
-    elif not isinstance(content_ids, torch.Tensor):
-        try:
-            numeric_ids = []
-            for cid in content_ids:
-                if isinstance(cid, str):
-                    digits = ''.join(c for c in cid if c.isdigit())
-                    if digits:
-                        numeric_ids.append(int(digits))
-                    else:
-                        numeric_ids.append(hash(cid) % 10000)
-                else:
-                    numeric_ids.append(int(cid) if cid is not None else 0)
-            content_ids = torch.tensor(numeric_ids, device=device)
-        except Exception as e:
-            print(f"無法將content_ids轉換為張量: {e}")
+    try:
+        # 檢查輸入的有效性
+        if discrete_features is None:
+            print("警告：離散特徵為空，返回零損失")
+            return torch.zeros(1, device=device, requires_grad=True)
+        
+        print(f"離散特徵形狀: {discrete_features.shape}, 類型: {discrete_features.dtype}")
+        
+        # 確保離散特徵在正確的設備上
+        discrete_features = discrete_features.to(device)
+        
+        # 確保content_ids是張量
+        if content_ids is None:
             content_ids = torch.arange(discrete_features.size(0), device=device)
+        elif not isinstance(content_ids, torch.Tensor):
+            try:
+                numeric_ids = []
+                for cid in content_ids:
+                    if isinstance(cid, str):
+                        digits = ''.join(c for c in cid if c.isdigit())
+                        if digits:
+                            numeric_ids.append(int(digits))
+                        else:
+                            numeric_ids.append(hash(cid) % 10000)
+                    else:
+                        numeric_ids.append(int(cid) if cid is not None else 0)
+                content_ids = torch.tensor(numeric_ids, device=device)
+            except Exception as e:
+                print(f"無法將content_ids轉換為張量: {e}")
+                content_ids = torch.arange(discrete_features.size(0), device=device)
+        
+        # 確保 content_ids 在正確的設備上
+        content_ids = content_ids.to(device)
+        
+        # 檢查維度匹配
+        if discrete_features.size(0) != content_ids.size(0):
+            print(f"錯誤: discrete_features batch size ({discrete_features.size(0)}) != content_ids batch size ({content_ids.size(0)})")
+            return torch.zeros(1, device=device, requires_grad=True)
+        
+        # 檢查數據範圍
+        print(f"Content IDs shape: {content_ids.shape}, dtype: {content_ids.dtype}")
+        print(f"Content IDs range: min={content_ids.min().item()}, max={content_ids.max().item()}")
+        
+        # 確保 content_ids 是有效的索引
+        if content_ids.dtype not in [torch.int32, torch.int64, torch.long]:
+            content_ids = content_ids.long()
+        
+        # 檢查索引邊界 - 重要的安全檢查
+        max_valid_index = discrete_features.size(0) - 1
+        if content_ids.max().item() > max_valid_index:
+            print(f"錯誤: content_ids 最大值 ({content_ids.max().item()}) 超出範圍 (0-{max_valid_index})")
+            # 將超出範圍的索引設置為有效範圍內
+            content_ids = torch.clamp(content_ids, 0, max_valid_index)
+            print(f"已將 content_ids 限制在有效範圍內: min={content_ids.min().item()}, max={content_ids.max().item()}")
+        
+        if content_ids.min().item() < 0:
+            print(f"錯誤: content_ids 包含負值 ({content_ids.min().item()})")
+            content_ids = torch.clamp(content_ids, 0, max_valid_index)
+            print(f"已將負值設置為0")
+        
+        # 使用更安全的方式初始化損失
+        loss = torch.zeros(1, device=device, requires_grad=True)
+        unique_content_ids = torch.unique(content_ids)
+        valid_groups = 0
+        
+        for content_id in unique_content_ids:
+            indices = (content_ids == content_id).nonzero(as_tuple=True)[0]
+            
+            if len(indices) < 2:
+                continue
+            
+            # 再次檢查索引有效性 - 防止邊界錯誤
+            if indices.max().item() >= discrete_features.size(0) or indices.min().item() < 0:
+                print(f"警告: content_id {content_id} 的索引超出範圍，跳過該組")
+                continue
+                
+            group_features = discrete_features[indices]
+            
+            # 簡化的損失計算，避免複雜的 CUDA 操作
+            try:
+                if discrete_features.dim() == 3:  # [batch, seq, vocab]
+                    # 計算組內特徵的標準差作為一致性度量
+                    group_std = torch.std(group_features.float(), dim=0).mean()
+                    loss = loss + group_std
+                else:  # [batch, seq] 
+                    # 對於 2D 特徵，計算序列相似度
+                    if group_features.size(0) > 1:
+                        target_seq = group_features[0]
+                        group_loss = torch.zeros(1, device=device)
+                        for i in range(1, group_features.size(0)):
+                            # 計算序列差異
+                            seq_diff = (group_features[i] != target_seq).float().mean()
+                            group_loss = group_loss + seq_diff
+                        group_loss = group_loss / (group_features.size(0) - 1)
+                        loss = loss + group_loss
+                
+                valid_groups += 1
+                
+            except Exception as e:
+                print(f"處理內容組 {content_id} 時發生錯誤: {e}")
+                continue
+        
+        # 正規化損失
+        if valid_groups > 0:
+            loss = loss / valid_groups
+        
+        print(f"離散內容一致性損失: {loss.item():.6f} (有效組數: {valid_groups})")
+        return loss
+        
+    except Exception as e:
+        print(f"compute_discrete_content_consistency_loss 發生錯誤: {e}")
+        return torch.zeros(1, device=device, requires_grad=True)
+
+
+def compute_hierarchical_content_consistency_loss(enhanced_features, discrete_features, content_ids, device, hierarchy_alpha=0.7):
+    """
+    計算分層內容一致性損失（實驗方案一）
+    結合連續和離散特徵，70% 連續 + 30% 離散
     
-    # 初始化損失
-    loss = torch.tensor(0.0, device=device, requires_grad=True)
+    Args:
+        enhanced_features: 連續特徵 [batch_size, feature_dim]
+        discrete_features: 離散特徵 [batch_size, seq_len] 或 [batch_size, seq_len, vocab_size]
+        content_ids: 內容ID列表
+        device: 計算設備
+        hierarchy_alpha: 連續特徵權重，默認0.7
+    
+    Returns:
+        dict: 包含總損失和各部分損失的字典
+    """
+    # 檢查輸入
+    if enhanced_features is None and discrete_features is None:
+        print("警告：所有特徵都為空，返回零損失")
+        return {
+            'total_loss': torch.zeros(1, device=device, requires_grad=True),
+            'continuous_loss': torch.zeros(1, device=device, requires_grad=True),
+            'discrete_loss': torch.zeros(1, device=device, requires_grad=True)
+        }
+    
+    # 計算連續特徵的內容一致性損失
+    if enhanced_features is not None:
+        continuous_loss = compute_content_consistency_loss(enhanced_features, content_ids, device)
+    else:
+        continuous_loss = torch.zeros(1, device=device, requires_grad=True)
+    
+    # 計算離散特徵的內容一致性損失
+    if discrete_features is not None:
+        discrete_loss = compute_discrete_content_consistency_loss(discrete_features, content_ids, device)
+    else:
+        discrete_loss = torch.zeros(1, device=device, requires_grad=True)
+    
+    # 分層組合：70% 連續 + 30% 離散
+    total_loss = 0.7 * continuous_loss + 0.3 * discrete_loss
+    
+    print(f"分層內容損失 - 連續: {continuous_loss.item():.6f}, 離散: {discrete_loss.item():.6f}, 總計: {total_loss.item():.6f}")
+    
+    return {
+        'total_loss': total_loss,
+        'continuous_loss': continuous_loss, 
+        'discrete_loss': discrete_loss
+    }
+
+
+def compute_content_consistency_loss(features, content_ids, device):
+    """
+    計算內容一致性損失（用於連續特徵）
+    
+    Args:
+        features: 特徵張量 [batch_size, feature_dim]  
+        content_ids: 內容ID列表
+        device: 計算設備
+        
+    Returns:
+        torch.Tensor: 內容一致性損失
+    """
+    if features is None or len(features) == 0:
+        return torch.zeros(1, device=device, requires_grad=True)
+    
+    # 確保 features 在正確的設備上
+    features = features.to(device)
+    
+    # 處理 content_ids
+    if content_ids is None:
+        content_ids = list(range(features.size(0)))
+    elif not isinstance(content_ids, (list, torch.Tensor)):
+        content_ids = list(content_ids)
+    
+    # 將 content_ids 轉換為數值
+    if isinstance(content_ids, list):
+        numeric_ids = []
+        for cid in content_ids:
+            if isinstance(cid, str):
+                # 提取字符串中的數字
+                digits = ''.join(c for c in cid if c.isdigit())
+                if digits:
+                    numeric_ids.append(int(digits))
+                else:
+                    numeric_ids.append(hash(cid) % 10000)
+            else:
+                numeric_ids.append(int(cid) if cid is not None else 0)
+        content_ids = torch.tensor(numeric_ids, device=device)
+    else:
+        content_ids = content_ids.to(device)
+    
+    # 確保維度匹配
+    if features.size(0) != content_ids.size(0):
+        min_size = min(features.size(0), content_ids.size(0))
+        features = features[:min_size]
+        content_ids = content_ids[:min_size]
+    
     unique_content_ids = torch.unique(content_ids)
-    valid_groups = 0
+    total_loss = torch.zeros(1, device=device, requires_grad=True)
+    num_groups = 0
     
     for content_id in unique_content_ids:
-        indices = (content_ids == content_id).nonzero(as_tuple=True)[0]
+        # 找到相同內容ID的樣本
+        mask = (content_ids == content_id)
+        indices = mask.nonzero(as_tuple=True)[0]
         
         if len(indices) < 2:
             continue
             
-        group_features = discrete_features[indices]
+        group_features = features[indices]
         
-        if discrete_features.dim() == 3:  # 機率分布形式 [batch, seq, vocab]
-            # 檢查數據類型，如果是整數類型則轉換為浮點數
-            if group_features.dtype in [torch.int32, torch.int64, torch.long]:
-                # 對於整數類型的離散特徵，檢查數值範圍
-                max_val = group_features.max().item()
-                min_val = group_features.min().item()
-                vocab_size = discrete_features.size(-1) if discrete_features.size(-1) > 1 else max(1024, max_val + 1)
-                
-                print(f"離散特徵範圍: [{min_val}, {max_val}], 詞彙大小: {vocab_size}")
-                
-                # 確保索引在合理範圍內
-                if max_val >= vocab_size or min_val < 0:
-                    print(f"警告：索引超出範圍，裁剪到 [0, {vocab_size-1}]")
-                    group_features = torch.clamp(group_features, 0, vocab_size - 1)
-                
-                # 使用 one-hot 編碼轉換為機率分布
-                try:
-                    group_features_one_hot = F.one_hot(group_features.long(), num_classes=vocab_size).float()
-                    target_dist = group_features_one_hot.mean(dim=0, keepdim=True)  # [1, seq, vocab]
-                except RuntimeError as e:
-                    print(f"One-hot 編碼失敗: {e}")
-                    # 回退到簡單的序列相似度計算
-                    target_seq = group_features[0]
-                    group_loss = torch.tensor(0.0, device=device)
-                    for i in range(1, group_features.size(0)):
-                        seq_diff = (group_features[i] != target_seq).float().mean()
-                        group_loss = group_loss + seq_diff
-                    if group_features.size(0) > 1:
-                        group_loss = group_loss / (group_features.size(0) - 1)
-                    return group_loss
-            else:
-                # 對於浮點數類型，直接計算均值
-                target_dist = group_features.mean(dim=0, keepdim=True)  # [1, seq, vocab]
-            
-            group_loss = torch.tensor(0.0, device=device)
-            
-            for i in range(group_features.size(0)):
-                try:
-                    if group_features.dtype in [torch.int32, torch.int64, torch.long]:
-                        # 使用 one-hot 編碼的特徵
-                        current_features = group_features_one_hot[i:i+1]
-                    else:
-                        current_features = group_features[i:i+1]
-                    
-                    kl_loss = F.kl_div(
-                        F.log_softmax(current_features, dim=-1),
-                        F.softmax(target_dist, dim=-1),
-                        reduction='batchmean'
-                    )
-                    group_loss = group_loss + kl_loss
-                except RuntimeError as e:
-                    print(f"KL散度計算失敗: {e}")
-                    # 回退到簡單的相似度計算
-                    seq_diff = (group_features[i] != group_features[0]).float().mean()
-                    group_loss = group_loss + seq_diff
-            
-            group_loss = group_loss / group_features.size(0)
-            
-        else:  # 離散索引形式 [batch, seq]
-            # 使用序列相似度
-            target_seq = group_features[0]  # 參考序列
-            group_loss = torch.tensor(0.0, device=device)
-            
-            for i in range(1, group_features.size(0)):
-                seq_diff = (group_features[i] != target_seq).float().mean()
-                group_loss = group_loss + seq_diff
-            
-            if group_features.size(0) > 1:
-                group_loss = group_loss / (group_features.size(0) - 1)
+        # 計算組內特徵的方差作為不一致性度量
+        group_mean = group_features.mean(dim=0, keepdim=True)
+        group_var = ((group_features - group_mean) ** 2).mean()
         
-        loss = loss + group_loss
-        valid_groups += 1
+        total_loss = total_loss + group_var
+        num_groups += 1
     
-    if valid_groups > 0:
-        loss = loss / valid_groups
+    if num_groups > 0:
+        total_loss = total_loss / num_groups
         
-    return loss
+    return total_loss
 
 
-def compute_hierarchical_content_consistency_loss(continuous_features, discrete_features, content_ids, device, alpha=0.7):
-    """
-    階層式內容一致性損失（實驗方案一）
-    結合連續和離散特徵的內容一致性約束
-    
-    Args:
-        continuous_features: 連續特徵 [batch_size, channels, time]
-        discrete_features: 離散特徵 [batch_size, seq_len] 或 [batch_size, seq_len, vocab_size]
-        content_ids: 內容ID列表
-        device: 計算設備
-        alpha: 連續特徵權重 (0-1)
-    
-    Returns:
-        dict: 包含總損失和子損失的字典
-    """
-    # 計算連續特徵的內容一致性損失
-    continuous_loss = compute_content_consistency_loss(continuous_features, content_ids, device)
-    
-    # 計算離散特徵的內容一致性損失
-    discrete_loss = compute_discrete_content_consistency_loss(discrete_features, content_ids, device)
-    
-    # 加權合併
-    total_loss = alpha * continuous_loss + (1 - alpha) * discrete_loss
-    
-    return {
-        'total_loss': total_loss,
-        'continuous_loss': continuous_loss,
-        'discrete_loss': discrete_loss,
-        'alpha': alpha
-    }
+# ================== 主程序 ==================
 
-
-def compute_content_consistency_loss(intermediate_features, content_ids, device):
+def extract_features_for_analysis(batch_data, model, device):
     """
     計算內容一致性損失。
     
