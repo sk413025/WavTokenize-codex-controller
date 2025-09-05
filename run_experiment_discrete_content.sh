@@ -68,6 +68,7 @@ echo "使用純離散內容一致性損失..."
 python ttt2.py \
     --experiment_discrete_content \
     --content_alpha 0.01 \
+    --max_sentences_per_speaker 100 \
     2>&1 | tee -a $LOG_FILE
 
 # 顯示完成訊息

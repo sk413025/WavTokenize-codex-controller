@@ -2300,6 +2300,7 @@ def main():
     parser.add_argument("--experiment_discrete_content", action="store_true", help="實驗方案二：純離散內容一致性損失")
     parser.add_argument("--hierarchy_alpha", type=float, default=0.7, help="階層式損失中連續特徵權重（0-1）")
     parser.add_argument("--content_alpha", type=float, default=0.01, help="內容一致性損失權重")
+    parser.add_argument("--max_sentences_per_speaker", type=int, default=None, help="限制每位語者最多使用的句子數量")
     
     args = parser.parse_args()
 

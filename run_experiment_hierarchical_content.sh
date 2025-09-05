@@ -70,6 +70,7 @@ python ttt2.py \
     --experiment_hierarchical_content \
     --hierarchy_alpha 0.7 \
     --content_alpha 0.01 \
+    --max_sentences_per_speaker 100 \
     2>&1 | tee -a $LOG_FILE
 
 # 顯示完成訊息
