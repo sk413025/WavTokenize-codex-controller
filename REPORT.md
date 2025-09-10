@@ -1775,3 +1775,36 @@ Content separation by layer:
 - 與方案一比較語音品質差異
 
 ----
+
+
+## 實驗記錄更新 - 2025-09-10 05:57:58
+
+### WavTokenizer-Transformer 端到端系統重構 (Commit: d7eddf1)
+
+**實驗背景：** 原始離散 token 系統存在架構缺陷，需要重構為真正的端到端音頻降噪系統
+
+**主要成果：**
+1. ✅ 完成端到端系統重構：Audio → WavTokenizer → Transformer → Audio
+2. ✅ 實現 89.3M 參數系統 (80.6M凍結 + 8.7M可訓練)
+3. ✅ 建立雙損失模式：CrossEntropy 基線 + Token Loss 高級版本
+4. ✅ 參數對齊 ttt2.py：batch_size=8, val_speakers=[girl9,boy7], box material only
+5. ✅ 完整文檔系統：4個技術README文件
+6. ✅ 清理舊文件：移除過時的 discrete_token_denoising.py 等
+
+**技術架構：**
+- WavTokenizer Encoder/Decoder：預訓練並凍結 (80.6M參數)
+- Transformer Denoiser：可訓練部分 (8.7M參數)
+- Token Loss 系統：移植 ttt2.py 的 5組件損失到離散空間
+- 數據配置：與 ttt2.py 完全一致的語者分割和句子限制
+
+**實驗就緒狀態：**
+- 運行基線實驗：./run_discrete_crossentropy.sh
+- 運行高級實驗：./run_discrete_tokenloss.sh
+- 系統文檔：DISCRETE_TOKEN_README.md, MODEL_ARCHITECTURE_EXPLAINED.md
+
+**下次實驗計劃：**
+1. 執行兩種損失模式的對比訓練
+2. 分析 Token Loss 系統在離散空間的有效性
+3. 評估端到端系統的音頻重建質量
+4. 與 ttt2.py 的連續空間結果進行比較
+
