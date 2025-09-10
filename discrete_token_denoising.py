@@ -540,7 +540,7 @@ def main():
     
     # 訓練參數
     parser.add_argument('--batch_size', type=int, default=8, help='批次大小')
-    parser.add_argument('--num_epochs', type=int, default=100, help='訓練輪數')
+    parser.add_argument('--num_epochs', type=int, default=300, help='訓練輪數')
     parser.add_argument('--learning_rate', type=float, default=1e-4, help='學習率')
     parser.add_argument('--weight_decay', type=float, default=1e-5, help='權重衰減')
     parser.add_argument('--warmup_steps', type=int, default=1000, help='預熱步數')
