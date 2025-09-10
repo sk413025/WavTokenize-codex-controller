@@ -431,10 +431,8 @@ class AudioDataset(Dataset):
             for key, pairs in speaker_groups.items():
                 if len(pairs) > self.max_sentences_per_speaker:
                     print(f"限制 {key} 從 {len(pairs)} 句話減少到 {self.max_sentences_per_speaker} 句話")
-                    # 按照content_id排序，選擇前N句（編號1-100）
-                    sorted_pairs = sorted(pairs, key=lambda x: int(x['content_id']))
-                    selected_pairs = sorted_pairs[:self.max_sentences_per_speaker]
-                    print(f"選擇 {key} 的編號 {selected_pairs[0]['content_id']}-{selected_pairs[-1]['content_id']}")
+                    # 隨機選擇指定數量的句子
+                    selected_pairs = random.sample(pairs, self.max_sentences_per_speaker)
                     limited_paired_files.extend(selected_pairs)
                 else:
                     print(f"保留 {key} 的全部 {len(pairs)} 句話")

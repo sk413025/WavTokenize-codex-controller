@@ -1,43 +1,42 @@
 #!/bin/bash
 
-# 離散 Token 降噪訓練 - 標準 CrossEntropy Loss 模式
-# 實驗編號：EXP-DISCRETE-CE-$(date +%Y%m%d%H%M)
+# WavTokenizer-Transformer 降噪訓練 - 標準 CrossEntropy Loss 模式
+# 實驗編號：EXP-WAVTOK-CE-$(date +%Y%m%d%H%M)
 
 set -e  # 腳本遇到錯誤時停止運行
 
 # 獲取實驗編號和時間戳
-EXP_ID="discrete_ce_$(date +%Y%m%d%H%M)"
+EXP_ID="wavtok_ce_$(date +%Y%m%d%H%M)"
 TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
 LOG_FILE="logs/${EXP_ID}.log"
-OUTPUT_DIR="results/discrete_token_denoising_${EXP_ID}"
+OUTPUT_DIR="results/wavtokenizer_crossentropy_${EXP_ID}"
 
 echo "====================================================="
-echo "🚀 離散 Token 降噪訓練 - 標準 CrossEntropy Loss 模式"
+echo "🚀 WavTokenizer-Transformer 降噪 - CrossEntropy Loss"
 echo "====================================================="
 echo "實驗編號: $EXP_ID"
 echo "開始時間: $TIMESTAMP"
 echo "輸出目錄: $OUTPUT_DIR"
 echo "日誌文件: $LOG_FILE"
 echo ""
-echo "🎯 實驗特點："
-echo "1. ✅ 使用標準 CrossEntropy Loss"
-echo "2. ✅ Token-to-Token Transformer 架構"
-echo "3. ✅ 序列到序列的直接映射學習"
-echo "4. ✅ 簡單高效的訓練方式"
+echo "🎯 系統架構："
+echo "1. ✅ Audio → WavTokenizer Encoder (凍結)"
+echo "2. ✅ Token → Transformer Denoiser (可訓練)"
+echo "3. ✅ Token → WavTokenizer Decoder (凍結)"
+echo "4. ✅ 端到端音頻降噪系統"
 echo ""
-echo "📊 數據設定："
-echo "   - 10位訓練語者（除了 girl9, boy7 之外的語者）"
-echo "   - 2位驗證語者（girl9, boy7）"
-echo "   - 每位語者使用前100句話"  
-echo "   - 僅使用 box 材質音檔"
-echo "   - 按語者分割（與 ttt2.py 相同）"
+echo "📊 參數配置："
+echo "   - 總參數: 89.3M (80.6M凍結 + 8.7M可訓練)"
+echo "   - 損失函數: 標準 CrossEntropy Loss"
+echo "   - 序列長度: ~150 tokens (2秒音頻)"
+echo "   - 詞彙表大小: 4096 tokens"
 echo "====================================================="
 
-# 設置環境變數
+# 設置環境變數 (與 ttt2.py 一致)
 export ONLY_USE_BOX_MATERIAL=true     # 僅處理 box 材質
 export PYTHONUNBUFFERED=1             # 即時輸出日誌
 export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128  # CUDA記憶體配置
-export TTT_BATCH_SIZE=8               # 批次大小
+export TTT_BATCH_SIZE=8               # 批次大小 (與 run_fixed_ttt2_branch.sh 一致)
 export TTT_NUM_WORKERS=4              # 資料載入工作線程數
 export CONTENT_BATCHING=true          # 啟用內容感知批次採樣
 
@@ -72,8 +71,8 @@ if [ ! -f "$MODEL_FILE" ]; then
     exit 1
 fi
 
-if [ ! -f "discrete_token_denoising.py" ]; then
-    echo "❌ 錯誤: 找不到訓練腳本 discrete_token_denoising.py"
+if [ ! -f "wavtokenizer_transformer_denoising.py" ]; then
+    echo "❌ 錯誤: 找不到訓練腳本 wavtokenizer_transformer_denoising.py"
     exit 1
 fi
 
@@ -117,27 +116,17 @@ echo "🚀 開始訓練 - 標準 CrossEntropy Loss 模式"
 echo "⏰ 開始時間: $(date)"
 echo ""
 
-# 執行訓練 - 標準模式（不使用 --use_token_loss）
-# 設定符合要求：10+2語者，每人100句，僅box材質
-python discrete_token_denoising.py \
-    --config "$CONFIG_FILE" \
-    --model_path "$MODEL_FILE" \
+# 執行訓練 - CrossEntropy 模式（不使用 --use_token_loss）
+# 參數設定與 ttt2.py 一致: batch_size=8, 語者分類, 每位語者100句話, 僅box材質
+python wavtokenizer_transformer_denoising.py \
     --output_dir "$OUTPUT_DIR" \
-    --d_model 512 \
-    --nhead 8 \
-    --num_encoder_layers 4 \
-    --num_decoder_layers 4 \
-    --dim_feedforward 1024 \
-    --max_length 256 \
-    --dropout 0.1 \
-    --batch_size 4 \
+    --batch_size 8 \
     --num_epochs 50 \
     --learning_rate 1e-4 \
-    --weight_decay 1e-5 \
-    --warmup_steps 500 \
-    --save_every 10 \
-    --validation_strategy speaker_only \
-    --custom_val_split \
+    --max_length 200 \
+    --data_dir data \
+    --save_interval 10 \
+    --log_interval 5 \
     --val_speakers girl9 boy7 \
     --max_sentences_per_speaker 100 \
     2>&1 | tee -a $LOG_FILE
@@ -147,7 +136,7 @@ TRAIN_EXIT_CODE=$?
 echo ""
 echo "====================================================="
 if [ $TRAIN_EXIT_CODE -eq 0 ]; then
-    echo "🎉 標準 CrossEntropy Loss 模式訓練完成！"
+    echo "🎉 WavTokenizer-Transformer CrossEntropy 訓練完成！"
     echo "📊 訓練成功結束時間: $(date)"
     echo "📁 結果保存位置: $OUTPUT_DIR"
     echo "📊 訓練日誌: $LOG_FILE"
@@ -170,10 +159,10 @@ if [ $TRAIN_EXIT_CODE -eq 0 ]; then
     
     echo ""
     echo "🎯 實驗總結："
-    echo "   模式: 標準 CrossEntropy Loss"
-    echo "   架構: Token-to-Token Transformer"
-    echo "   損失: 序列交叉熵損失"
-    echo "   特點: 簡單直接的 token 序列學習"
+    echo "   架構: Audio → WavTokenizer → Transformer → Audio"
+    echo "   損失: 標準 CrossEntropy Loss"
+    echo "   參數: 89.3M總參數 (80.6M凍結 + 8.7M可訓練)"
+    echo "   特點: 端到端音頻降噪系統基線"
     
 else
     echo "❌ 訓練失敗！退出碼: $TRAIN_EXIT_CODE"

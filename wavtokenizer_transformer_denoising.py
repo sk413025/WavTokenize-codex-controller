@@ -32,6 +32,7 @@ import matplotlib.pyplot as plt
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from decoder.pretrained import WavTokenizer
 from ttdata import AudioDataset
+from token_loss_system import compute_combined_token_loss
 
 def set_seed(seed=42):
     """設定隨機種子以確保實驗可重現"""
@@ -299,7 +300,7 @@ class AudioTokenDataset(Dataset):
         }
 
 def train_epoch(model, dataloader, optimizer, criterion, device, epoch):
-    """訓練一個 epoch"""
+    """使用原始 CrossEntropy 訓練一個 epoch"""
     model.train()
     total_loss = 0.0
     total_tokens = 0
@@ -346,6 +347,99 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch):
         progress_bar.set_postfix({'Loss': f'{avg_loss:.4f}', 'Tokens': total_tokens})
     
     return total_loss / len(dataloader)
+
+def train_epoch_with_token_loss(model, dataloader, optimizer, device, epoch, 
+                               loss_weights={'l2': 0.3, 'consistency': 0.4, 'manifold': 0.1, 
+                                           'normalization': 0.1, 'coherence': 0.1}):
+    """使用 Token Loss 系統訓練一個 epoch（ttt2.py 損失邏輯移植到離散空間）"""
+    model.train()
+    total_losses = {'total': 0.0}
+    loss_counts = 0
+    
+    # 獲取嵌入層用於 Token Loss 計算
+    embedding_layer = None
+    if hasattr(model, 'src_embedding'):
+        embedding_layer = model.src_embedding
+    elif hasattr(model, 'tgt_embedding'):
+        embedding_layer = model.tgt_embedding
+    
+    if embedding_layer is None:
+        logging.warning("無法找到嵌入層，將使用簡化的 token loss")
+    else:
+        logging.info(f"找到嵌入層：{type(embedding_layer).__name__}, 嵌入維度：{embedding_layer.embedding_dim}")
+    
+    progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} (Token Loss)")
+    
+    for batch_idx, batch in enumerate(progress_bar):
+        noisy_audio = batch['noisy_audio'].to(device)
+        clean_audio = batch['clean_audio'].to(device)
+        
+        optimizer.zero_grad()
+        
+        # 前向傳播
+        output = model(noisy_audio, clean_audio)
+        
+        logits = output['logits']  # [batch_size, seq_len, vocab_size]
+        target_tokens = output['target_tokens']  # [batch_size, seq_len]
+        noisy_tokens = output['noisy_tokens']  # [batch_size, seq_len]
+        
+        # 獲取預測 tokens
+        predicted_tokens = torch.argmax(logits, dim=-1)  # [batch_size, seq_len]
+        
+        # 使用 Token Loss 系統計算損失（ttt2.py 邏輯移植）
+        try:
+            total_loss, loss_dict = compute_combined_token_loss(
+                predicted_logits=logits,
+                predicted_tokens=predicted_tokens,
+                target_tokens=target_tokens,
+                input_tokens=noisy_tokens,
+                embedding_layer=embedding_layer,
+                weights=loss_weights
+            )
+        except Exception as e:
+            logging.warning(f"Token loss 計算失敗，回退到交叉熵: {e}")
+            # 回退到簡單交叉熵
+            logits_flat = logits.view(-1, logits.size(-1))
+            target_flat = target_tokens.view(-1)
+            mask = target_flat < model.codebook_size
+            if mask.sum() > 0:
+                total_loss = F.cross_entropy(logits_flat[mask], target_flat[mask])
+            else:
+                total_loss = torch.tensor(0.0, device=device, requires_grad=True)
+            loss_dict = {'total_loss': total_loss.item(), 'consistency_loss': total_loss.item()}
+        
+        # 反向傳播
+        total_loss.backward()
+        
+        # 梯度裁剪
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
+        optimizer.step()
+        
+        # 累積統計
+        for key, value in loss_dict.items():
+            if key not in total_losses:
+                total_losses[key] = 0.0
+            total_losses[key] += value
+        
+        loss_counts += 1
+        
+        # 更新進度條
+        avg_total_loss = total_losses.get('total_loss', total_losses['total']) / loss_counts
+        progress_info = {'Total': f'{avg_total_loss:.4f}'}
+        
+        # 添加主要 loss 組件到進度條
+        if 'consistency_loss' in total_losses:
+            progress_info['Consistency'] = f'{total_losses["consistency_loss"]/loss_counts:.4f}'
+        if 'l2_loss' in total_losses:
+            progress_info['L2'] = f'{total_losses["l2_loss"]/loss_counts:.4f}'
+        
+        progress_bar.set_postfix(progress_info)
+    
+    # 計算平均損失
+    avg_losses = {key: value / loss_counts for key, value in total_losses.items()}
+    
+    return avg_losses
 
 def validate_epoch(model, dataloader, criterion, device):
     """驗證一個 epoch"""
@@ -452,6 +546,15 @@ def main():
     parser.add_argument('--weight_decay', type=float, default=1e-5, help='權重衰減')
     parser.add_argument('--save_every', type=int, default=10, help='每幾個 epoch 保存一次')
     
+    # 損失函數選擇
+    parser.add_argument('--use_token_loss', action='store_true', 
+                        help='使用 Token Loss 系統（ttt2.py 邏輯移植到離散空間）而非單純交叉熵')
+    parser.add_argument('--l2_weight', type=float, default=0.3, help='L2 距離損失權重')
+    parser.add_argument('--consistency_weight', type=float, default=0.4, help='內容一致性損失權重')
+    parser.add_argument('--manifold_weight', type=float, default=0.1, help='Manifold 正則化權重')
+    parser.add_argument('--normalization_weight', type=float, default=0.1, help='正則化損失權重')
+    parser.add_argument('--coherence_weight', type=float, default=0.1, help='連貫性損失權重')
+
     # 數據參數
     parser.add_argument('--output_dir', type=str, default='results/wavtokenizer_transformer_denoising',
                         help='輸出目錄')
@@ -562,6 +665,15 @@ def main():
         pct_start=0.1
     )
     
+    # 準備損失權重字典
+    loss_weights = {
+        'l2': args.l2_weight,
+        'consistency': args.consistency_weight,
+        'manifold': args.manifold_weight,
+        'normalization': args.normalization_weight,
+        'coherence': args.coherence_weight
+    }
+    
     # 訓練循環
     logging.info("開始訓練...")
     train_losses = []
@@ -570,8 +682,22 @@ def main():
     best_val_loss = float('inf')
     
     for epoch in range(1, args.num_epochs + 1):
-        # 訓練
-        train_loss = train_epoch(model, train_loader, optimizer, criterion, device, epoch)
+        # 選擇訓練函數
+        if args.use_token_loss:
+            # 使用 Token Loss 系統（ttt2.py 邏輯移植到離散空間）
+            train_loss_dict = train_epoch_with_token_loss(
+                model, train_loader, optimizer, device, epoch, loss_weights
+            )
+            train_loss = train_loss_dict.get('total_loss', 0.0)
+            
+            # 記錄詳細的損失信息
+            loss_info = " | ".join([f"{k}: {v:.4f}" for k, v in train_loss_dict.items() 
+                                   if k != 'total_loss'])
+            logging.info(f"Epoch {epoch} Train Loss Components: {loss_info}")
+        else:
+            # 使用原始交叉熵
+            train_loss = train_epoch(model, train_loader, optimizer, criterion, device, epoch)
+        
         train_losses.append(train_loss)
         
         # 驗證
@@ -586,6 +712,7 @@ def main():
         logging.info(f"Epoch {epoch}/{args.num_epochs}")
         logging.info(f"Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.4f}")
         logging.info(f"Learning Rate: {scheduler.get_last_lr()[0]:.6f}")
+        logging.info(f"Loss System: {'Token Loss (ttt2.py style)' if args.use_token_loss else 'Cross Entropy'}")
         
         # 保存最佳模型
         if val_loss < best_val_loss:

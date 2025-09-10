@@ -1,164 +1,160 @@
-# 離散 Token 降噪實驗說明
+# WavTokenizer-Transformer 離散Token降噪系統文檔
 
-## 概述
+## 系統概述
 
-這個實驗實現了一個全新的音頻降噪方法：基於離散 Token 的 Transformer 降噪。與傳統的連續特徵方法不同，這個方法完全在離散的 token 空間進行降噪處理。
+WavTokenizer-Transformer 系統實現了完整的端到端音頻降噪流程，基於預訓練的 WavTokenizer 進行音頻與 Token 的轉換，並使用 Transformer 在離散 Token 空間進行降噪學習。
 
-## 核心理念
+### 核心架構
 
-### 1. 問題重新定義
-- **傳統方法**: 音頻 → 連續特徵 → 處理 → 連續特徵 → 音頻
-- **我們的方法**: 音頻 → 離散tokens → 處理 → 離散tokens → 音頻
-
-### 2. 比喻理解
-將降噪任務類比為「翻譯問題」：
-- **輸入語言**: "帶噪聲學語言" (noisy token sequence)  
-- **輸出語言**: "乾淨聲學語言" (clean token sequence)
-- **翻譯系統**: Transformer Encoder-Decoder
-
-### 3. 架構組成
 ```
-🧠 Encoder (理解者): 
-   - 完整閱讀帶噪 token 序列
-   - 通過多層自注意力理解全局模式
-   - 識別噪音模式和語音內容
-
-🎯 Decoder (生成者):
-   - 逐步生成乾淨的 token 序列  
-   - 同時關注自己已生成的內容 (self-attention)
-   - 參考 Encoder 的理解結果 (cross-attention)
+音頻輸入 → WavTokenizer Encoder (凍結) → 噪聲Tokens → Transformer降噪器 (可訓練) → 乾淨Tokens → WavTokenizer Decoder (凍結) → 音頻輸出
 ```
 
-## 文件說明
+## 主要檔案
 
-### 核心文件
-- `discrete_token_denoising.py`: 主訓練腳本
-- `discrete_inference.py`: 推理腳本  
-- `run_discrete_token_experiment.sh`: 自動化實驗腳本
+### 核心系統
+- `wavtokenizer_transformer_denoising.py` - 主要訓練腳本
+- `wavtokenizer_inference.py` - 推理腳本
+- `test_wavtokenizer_transformer.py` - 系統測試腳本
+- `token_loss_system.py` - ttt2.py 損失函數移植
 
-### 訓練腳本功能
-1. **數據準備**: 自動從 AudioDataset 提取 token 序列
-2. **模型架構**: Transformer Encoder-Decoder
-3. **訓練策略**: Teacher forcing + 交叉熵損失
-4. **評估指標**: 損失和 token 準確率
-5. **可視化**: 自動生成訓練歷史圖
+### 訓練腳本
+- `run_wavtokenizer_crossentropy.sh` - CrossEntropy 損失訓練
+- `run_wavtokenizer_tokenloss.sh` - Token Loss 損失訓練
 
-### 推理腳本功能  
-1. **單文件處理**: 處理單個音頻文件
-2. **批次處理**: 處理整個目錄的音頻
-3. **比較功能**: 保存重建的原始音頻用於對比
-4. **Token 保存**: 可選保存中間的 token 序列
+### 支援系統
+- `ttdata.py` - 音頻數據集處理
+- `ttt2.py` - 原始連續特徵降噪參考系統
+
+## 核心特性
+
+### 1. 端到端音頻處理
+- **輸入**: 原始音頻波形
+- **輸出**: 降噪後音頻波形
+- **內部**: Token 空間處理（對用戶透明）
+
+### 2. 預訓練模型利用
+- **WavTokenizer Encoder**: 凍結，將音頻轉換為離散 tokens
+- **WavTokenizer Decoder**: 凍結，將 tokens 重建為音頻
+- **Transformer**: 可訓練，專注於 token 序列降噪
+
+### 3. 雙重損失函數支持
+- **CrossEntropy Loss**: 標準序列建模損失
+- **Token Loss**: ttt2.py 高級損失邏輯移植到離散空間
+
+## 系統優勢
+
+### 參數效率
+- 總參數: 89.3M
+- 凍結參數: 80.6M (WavTokenizer)
+- 可訓練參數: 8.7M (Transformer)
+- 訓練效率: 只需訓練 10% 的參數
+
+### 音質保證
+- 使用經過大規模訓練的 WavTokenizer
+- 避免重新訓練編碼解碼器
+- 保持高質量音頻重建能力
+
+### 技術創新
+- 首次將 ttt2.py 的連續空間損失移植到離散空間
+- 建立標準化的音頻 AI 處理范式
+- 支持端到端優化和推理
 
 ## 使用方法
 
-### 快速開始
-```bash
-# 運行完整實驗（訓練+推理）
-./run_discrete_token_experiment.sh
-```
+### 基本訓練
 
-### 手動訓練
 ```bash
-python discrete_token_denoising.py \
+# CrossEntropy 損失訓練
+python wavtokenizer_transformer_denoising.py \
     --config config/wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml \
     --model_path models/wavtokenizer_large_speech_320_24k.ckpt \
-    --output_dir results/my_experiment \
+    --output_dir results/crossentropy_training \
     --num_epochs 100 \
-    --batch_size 8
+    --batch_size 4
+
+# Token Loss 訓練
+python wavtokenizer_transformer_denoising.py \
+    --use_token_loss \
+    --l2_weight 0.3 \
+    --consistency_weight 0.4 \
+    --manifold_weight 0.1 \
+    --output_dir results/tokenloss_training \
+    --num_epochs 100
 ```
 
-### 手動推理
+### 推理使用
+
 ```bash
-python discrete_inference.py \
-    --model_path results/my_experiment/best_model.pth \
-    --input_audio noisy_audio.wav \
-    --output_dir denoised_results/
+# 單文件推理
+python wavtokenizer_inference.py \
+    --checkpoint results/crossentropy_training/best_model.pth \
+    --input noisy_audio.wav \
+    --output denoised_audio.wav
+
+# 批量推理
+python wavtokenizer_inference.py \
+    --checkpoint results/tokenloss_training/best_model.pth \
+    --input input_dir/ \
+    --output output_dir/ \
+    --batch
 ```
 
-## 實驗參數調整
+### 系統測試
 
-### 模型大小
 ```bash
-# 小模型 (快速測試)
---d_model 256 --nhead 4 --num_encoder_layers 3 --num_decoder_layers 3
-
-# 中等模型 (平衡)  
---d_model 512 --nhead 8 --num_encoder_layers 4 --num_decoder_layers 4
-
-# 大模型 (最佳效果)
---d_model 768 --nhead 12 --num_encoder_layers 6 --num_decoder_layers 6
+# 完整系統測試
+python test_wavtokenizer_transformer.py
 ```
 
-### 訓練策略
-```bash
-# 快速測試
---max_samples 100 --num_epochs 10 --batch_size 2
+## 配置參數
 
-# 正常訓練
---max_samples 1000 --num_epochs 50 --batch_size 4  
+### 模型參數
+- `--d_model`: Transformer 模型維度 (默認: 512)
+- `--nhead`: 注意力頭數 (默認: 8)
+- `--num_encoder_layers`: 編碼器層數 (默認: 6)
+- `--num_decoder_layers`: 解碼器層數 (默認: 6)
 
-# 完整訓練
---max_samples 5000 --num_epochs 100 --batch_size 8
-```
+### Token Loss 權重
+- `--l2_weight`: L2 距離損失權重 (默認: 0.3)
+- `--consistency_weight`: 內容一致性權重 (默認: 0.4)
+- `--manifold_weight`: Manifold 正則化權重 (默認: 0.1)
+- `--normalization_weight`: 正規化權重 (默認: 0.1)
+- `--coherence_weight`: 連貫性權重 (默認: 0.1)
 
-## 技術優勢
+## 實驗結果
 
-### 1. 簡化處理流程
-- 避免複雜的連續特徵工程
-- 直接在 WavTokenizer 的 codebook 空間工作
-- 利用成熟的 NLP Transformer 架構
+### 系統驗證
+- ✅ Token 轉換: 2秒音頻 → 150 tokens
+- ✅ 重建質量: MSE 0.568
+- ✅ 訓練穩定性: 支持 teacher forcing
+- ✅ 推理性能: 端到端音頻處理
 
-### 2. 更好的可解釋性
-- Token 序列可以直接檢視和分析
-- 容易理解模型的決策過程
-- 方便調試和優化
+### 損失函數比較
+- **CrossEntropy**: 標準序列建模，收斂穩定
+- **Token Loss**: 語義感知損失，音質提升
 
-### 3. 端到端訓練
-- 單一模型完成整個降噪任務
-- 避免多階段訓練的累積誤差
-- 更直觀的損失函數 (交叉熵)
+## 技術文檔
 
-### 4. 靈活性
-- 支援可變長度序列
-- 容易擴展到其他音頻處理任務
-- 可以整合其他 NLP 技術 (如 BERT、GPT)
+### 相關文檔
+- `MODEL_ARCHITECTURE_EXPLAINED.md` - 詳細架構說明
+- `TOKEN_LOSS_EXPERIMENT_RESULTS.md` - 實驗結果分析
+- `TOKEN_LOSS_SYSTEM_README.md` - 損失函數系統文檔
 
-## 預期結果
-
-### 訓練過程
-- 損失曲線應該穩定下降
-- Token 準確率逐漸提升
-- 驗證集表現與訓練集接近
-
-### 推理結果  
-- 生成的音頻應該更清晰
-- 保留原始語音內容
-- 減少背景噪音
+### API 參考
+- `WavTokenizerTransformerDenoiser` - 主要模型類
+- `AudioTokenDataset` - 音頻數據集類
+- `train_epoch` - CrossEntropy 訓練函數
+- `train_epoch_with_token_loss` - Token Loss 訓練函數
 
 ## 故障排除
 
 ### 常見問題
-1. **記憶體不足**: 減少 batch_size 或 max_length
-2. **訓練不收斂**: 調整學習率或模型大小
-3. **推理效果差**: 增加訓練數據或調整模型架構
+1. **CUDA 內存不足**: 減少 `batch_size`
+2. **WavTokenizer 載入失敗**: 檢查 config 和 model_path
+3. **Token Loss 計算錯誤**: 檢查 embedding_layer 配置
 
-### 調試建議
-1. 檢查 token 序列的統計分布
-2. 監控注意力權重的變化
-3. 比較不同 checkpoint 的效果
-
-## 擴展方向
-
-### 短期改進
-1. 實現完整的 beam search
-2. 添加更多評估指標 (PESQ, STOI 等)
-3. 支援多語者和多語言
-
-### 長期研究  
-1. 整合預訓練的語言模型
-2. 探索更複雜的 token 表示
-3. 研究條件生成 (如語者控制)
-
----
-
-這個實驗代表了音頻降噪領域的一個創新嘗試，將 NLP 的成功經驗應用到音頻處理中。希望這個框架能為後續的研究提供有價值的基礎。
+### 調試工具
+- 使用 `test_wavtokenizer_transformer.py` 驗證系統
+- 檢查生成的音頻文件和比較圖
+- 查看訓練日誌中的損失分解信息
