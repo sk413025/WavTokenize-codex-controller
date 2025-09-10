@@ -1,11 +1,12 @@
-# Token 序列分析與專案清理 - 20250904
+feat: 完整離散Token降噪系統實現 - EXP-DISCRETE-TOKEN-20250910-001
 
-## 實驗背景
-為了深入理解 WavTokenizer 如何編碼不同音檔的特徵，建立了 token 序列分析工具，並清理了過時的實驗檔案。
+## 📋 系統概述
+建立完整的Token-to-Token Transformer降噪系統，成功將ttt2.py的高級損失邏輯
+創新移植到離散Token空間，實現端到端的音頻Token降噪管線。
 
-## 實驗動機與目的
-- **動機**: 需要驗證 WavTokenizer 對不同說話者、內容、背景噪音的 token 編碼差異
-- **目的**: 建立自動化工具來分析音檔的離散 token 序列，以支援後續的解離性 (disentanglement) 研究
+## 🎯 實驗背景與動機
+基於之前連續特徵降噪的成功經驗，開發離散Token空間降噪系統。將ttt2.py中
+成熟的損失計算邏輯完整移植到Token序列建模，建立Token-to-Token的降噪學習框架。
 
 ## 主要變更
 
