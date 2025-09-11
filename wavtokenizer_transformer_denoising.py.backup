@@ -27,6 +27,40 @@ from typing import Tuple, Optional, List
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import librosa
+import librosa.display
+import numpy as np
+from tqdm import tqdm
+from datetime import datetime
+import math
+from typing import Tuple, Optional, List
+                # AudioDataset.__getitem__ 返回 (input_wav, target_wav, content_id)
+                input_wav, target_wav, content_id = item
+                
+                # 確認音頻是 tensor 而不是 string
+                if not isinstance(input_wav, torch.Tensor):
+                    print(f"Warning: input_wav is not a tensor, type: {type(input_wav)}, value: {input_wav}")
+                    continue
+                if not isinstance(target_wav, torch.Tensor):
+                    print(f"Warning: target_wav is not a tensor, type: {type(target_wav)}, value: {target_wav}")
+                    continue
+                    
+                input_wavs.append(input_wav)
+                target_wavs.append(target_wav)
+                content_ids.append(content_id)
+            except Exception as e:
+                print(f"Error in collate_fn processing item: {e}")
+                print(f"Item type: {type(item)}, Item value: {item}")
+                continue
+        
+        if len(input_wavs) == 0:
+            raise RuntimeError("No valid audio tensors found in batch")
+        
+        # 找出最長的音訊長度
+        max_len = max(
+            max(wav.size(-1) for wav in input_wavs),
+            max(wav.size(-1) for wav in target_wavs)
+        )lib.pyplot as plt
 import torchaudio
 
 # 添加模組路徑
@@ -212,10 +246,7 @@ class WavTokenizerTransformerDenoiser(nn.Module):
             else:
                 tokens = discrete_codes
             
-            tokens = tokens.long()
-            # 確保tokens在詞彙範圍內
-            tokens = torch.clamp(tokens, 0, self.codebook_size - 1)
-            return tokens
+            return tokens.long()
     
     def decode_tokens_to_audio(self, tokens):
         """使用 WavTokenizer Decoder 將 tokens 轉換為音頻"""
@@ -312,18 +343,20 @@ class WavTokenizerTransformerDenoiser(nn.Module):
                           device=noisy_tokens.device, dtype=torch.long)
             ], dim=1)
             
+            # 目標序列：SOS + clean tokens + EOS
+            target_tokens = torch.cat([
+                torch.full((clean_tokens.size(0), 1), self.sos_token, 
+                          device=clean_tokens.device, dtype=torch.long),
+                clean_tokens,
+                torch.full((clean_tokens.size(0), 1), self.eos_token, 
+                          device=clean_tokens.device, dtype=torch.long)
+            ], dim=1)
+            
             # 解碼器輸入：SOS + clean tokens (teacher forcing)
             decoder_input = torch.cat([
                 torch.full((clean_tokens.size(0), 1), self.sos_token, 
                           device=clean_tokens.device, dtype=torch.long),
                 clean_tokens
-            ], dim=1)
-            
-            # 目標序列：clean tokens + EOS (與logits輸出長度匹配)
-            target_tokens = torch.cat([
-                clean_tokens,
-                torch.full((clean_tokens.size(0), 1), self.eos_token, 
-                          device=clean_tokens.device, dtype=torch.long)
             ], dim=1)
             
             # Step 2: Transformer 降噪 (在 token 空間)
@@ -381,7 +414,11 @@ class AudioTokenDataset(Dataset):
         if clean_audio.dim() == 1:
             clean_audio = clean_audio.unsqueeze(0)
         
-        return (noisy_audio, clean_audio, content_id)
+        return {
+            'noisy_audio': noisy_audio,
+            'clean_audio': clean_audio,
+            'content_id': content_id
+        }
 
 def train_epoch(model, dataloader, optimizer, criterion, device, epoch):
     """使用原始 CrossEntropy 訓練一個 epoch"""
@@ -392,9 +429,8 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch):
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch}")
     
     for batch_idx, batch in enumerate(progress_bar):
-        # batch 是 tuple 格式: (noisy_audio, clean_audio, content_id)
-        noisy_audio = batch[0].to(device)
-        clean_audio = batch[1].to(device)
+        noisy_audio = batch['noisy_audio'].to(device)
+        clean_audio = batch['clean_audio'].to(device)
         
         optimizer.zero_grad()
         
@@ -456,9 +492,8 @@ def train_epoch_with_token_loss(model, dataloader, optimizer, device, epoch,
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} (Token Loss)")
     
     for batch_idx, batch in enumerate(progress_bar):
-        # batch 是 tuple 格式: (noisy_audio, clean_audio, content_id)
-        noisy_audio = batch[0].to(device)
-        clean_audio = batch[1].to(device)
+        noisy_audio = batch['noisy_audio'].to(device)
+        clean_audio = batch['clean_audio'].to(device)
         
         optimizer.zero_grad()
         
@@ -534,101 +569,32 @@ def validate_epoch(model, dataloader, criterion, device):
     total_correct = 0
     total_tokens = 0
     
-    # 限制驗證批次數量以節省內存
-    max_val_batches = 50
-    batch_count = 0
-    
     with torch.no_grad():
         for batch in tqdm(dataloader, desc="Validation"):
-            if batch_count >= max_val_batches:
-                break
+            noisy_audio = batch['noisy_audio'].to(device)
+            clean_audio = batch['clean_audio'].to(device)
+            
+            # 前向傳播
+            output = model(noisy_audio, clean_audio)
+            
+            logits = output['logits']
+            target_tokens = output['target_tokens']
+            
+            # 計算損失
+            logits_flat = logits.view(-1, logits.size(-1))
+            target_flat = target_tokens.view(-1)
+            
+            mask = target_flat < model.codebook_size
+            if mask.sum() > 0:
+                loss = criterion(logits_flat[mask], target_flat[mask])
+                total_loss += loss.item()
                 
-            try:
-                # batch 是 tuple 格式: (noisy_audio, clean_audio, content_id)
-                noisy_audio = batch[0].to(device)
-                clean_audio = batch[1].to(device)
-                
-                # 將音頻轉換為tokens
-                with torch.no_grad():
-                    # 確保音頻張量是正確的形狀 [B, 1, T]
-                    while noisy_audio.dim() > 3:
-                        noisy_audio = noisy_audio.squeeze()
-                    while clean_audio.dim() > 3:
-                        clean_audio = clean_audio.squeeze()
-                    
-                    # 確保是3D張量
-                    if noisy_audio.dim() == 2:
-                        noisy_audio = noisy_audio.unsqueeze(1)
-                    if clean_audio.dim() == 2:
-                        clean_audio = clean_audio.unsqueeze(1)
-                        
-                    # 編碼音頻為tokens
-                    noisy_tokens = model.wavtokenizer.encode_infer(noisy_audio, bandwidth_id=torch.tensor([0]))
-                    clean_tokens = model.wavtokenizer.encode_infer(clean_audio, bandwidth_id=torch.tensor([0]))
-                    
-                    # 提取第一層tokens [batch_size, time_frames] 並轉換為整數
-                    noisy_tokens = noisy_tokens[0][0].squeeze(1).long()  # 轉為長整數
-                    clean_tokens = clean_tokens[0][0].squeeze(1).long()  # 轉為長整數
-                    
-                    # 檢查token範圍並截斷超出詞彙的tokens
-                    max_token = model.codebook_size - 1
-                    noisy_tokens = torch.clamp(noisy_tokens, 0, max_token)
-                    clean_tokens = torch.clamp(clean_tokens, 0, max_token)
-                
-                # 前向傳播 - 設置為訓練模式以獲得logits，但不計算梯度
-                model.train()  # 臨時設為訓練模式
-                
-                # 準備訓練所需的序列格式
-                input_tokens = torch.cat([
-                    noisy_tokens, 
-                    torch.full((noisy_tokens.size(0), 1), model.eos_token, 
-                              device=noisy_tokens.device, dtype=torch.long)
-                ], dim=1)
-                
-                decoder_input = torch.cat([
-                    torch.full((clean_tokens.size(0), 1), model.sos_token, 
-                              device=clean_tokens.device, dtype=torch.long),
-                    clean_tokens
-                ], dim=1)
-                
-                target_tokens = torch.cat([
-                    clean_tokens,
-                    torch.full((clean_tokens.size(0), 1), model.eos_token, 
-                              device=clean_tokens.device, dtype=torch.long)
-                ], dim=1)
-                
-                # 使用transformer前向傳播
-                logits = model.forward_transformer(input_tokens, decoder_input)
-                
-                model.eval()  # 恢復驗證模式
-                
-                # 計算損失
-                logits_flat = logits.view(-1, logits.size(-1))
-                target_flat = target_tokens.view(-1)
-                
-                mask = target_flat < model.codebook_size
-                if mask.sum() > 0:
-                    loss = criterion(logits_flat[mask], target_flat[mask])
-                    total_loss += loss.item()
-                    
-                    # 計算準確率
-                    predictions = torch.argmax(logits_flat[mask], dim=-1)
-                    total_correct += (predictions == target_flat[mask]).sum().item()
-                    total_tokens += mask.sum().item()
-                
-                batch_count += 1
-                
-                # 清理內存
-                del noisy_audio, clean_audio, noisy_tokens, clean_tokens
-                del input_tokens, decoder_input, target_tokens, logits
-                torch.cuda.empty_cache()
-                
-            except Exception as e:
-                print(f"驗證批次 {batch_count} 出錯，跳過: {e}")
-                batch_count += 1
-                continue
+                # 計算準確率
+                predictions = torch.argmax(logits_flat[mask], dim=-1)
+                total_correct += (predictions == target_flat[mask]).sum().item()
+                total_tokens += mask.sum().item()
     
-    avg_loss = total_loss / batch_count if batch_count > 0 else 0.0
+    avg_loss = total_loss / len(dataloader)
     accuracy = total_correct / total_tokens if total_tokens > 0 else 0.0
     
     return avg_loss, accuracy
@@ -685,12 +651,12 @@ def main():
                         default='models/wavtokenizer_large_speech_320_24k.ckpt',
                         help='WavTokenizer 預訓練模型路徑')
     
-    # 模型參數 - 使用適中的配置，利用GPU 2的完整內存
-    parser.add_argument('--d_model', type=int, default=256, help='Transformer 模型維度')
+    # 模型參數
+    parser.add_argument('--d_model', type=int, default=512, help='Transformer 模型維度')
     parser.add_argument('--nhead', type=int, default=8, help='注意力頭數')
-    parser.add_argument('--num_encoder_layers', type=int, default=3, help='編碼器層數')
-    parser.add_argument('--num_decoder_layers', type=int, default=3, help='解碼器層數')
-    parser.add_argument('--dim_feedforward', type=int, default=512, help='前饋網絡維度')
+    parser.add_argument('--num_encoder_layers', type=int, default=6, help='編碼器層數')
+    parser.add_argument('--num_decoder_layers', type=int, default=6, help='解碼器層數')
+    parser.add_argument('--dim_feedforward', type=int, default=2048, help='前饋網絡維度')
     parser.add_argument('--max_length', type=int, default=512, help='最大序列長度')
     parser.add_argument('--dropout', type=float, default=0.1, help='Dropout 率')
     
@@ -738,28 +704,20 @@ def main():
         ]
     )
     
-    # 設定設備 - 使用GPU 2以避免與其他模型衝突
-    if torch.cuda.is_available():
-        # 檢查GPU使用情況，優先使用空閒的GPU
-        gpu_id = 2  # 根據nvidia-smi，GPU 2是空閒的
-        device = torch.device(f"cuda:{gpu_id}")
-        torch.cuda.set_device(gpu_id)
-        
-        # 設置內存優化
-        torch.cuda.empty_cache()
-        torch.backends.cudnn.benchmark = False  # 節省內存
-        torch.cuda.set_per_process_memory_fraction(0.8, device=gpu_id)  # 可以使用更多內存
-        
-        logging.info(f"使用設備: {device} (GPU 2 完全空閒，可以使用更多內存)")
-    else:
-        device = torch.device("cpu")
-        logging.info(f"使用設備: {device}")
+    # 設定設備
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    logging.info(f"使用設備: {device}")
     
     # 準備數據集
     logging.info("準備音頻資料集...")
     
-    # 使用與 ttt2.py 相同的數據配置
-    input_dirs = [os.path.join(os.getcwd(), "data", "raw", "box")]
+    # 使用所有噪音條件的數據配置
+    input_dirs = [
+        os.path.join(os.getcwd(), "data", "raw", "box"),
+        os.path.join(os.getcwd(), "data", "raw", "mac"), 
+        os.path.join(os.getcwd(), "data", "raw", "papercup"),
+        os.path.join(os.getcwd(), "data", "raw", "plastic")
+    ]
     target_dir = os.path.join(os.getcwd(), "data", "clean", "box2")
     
     if not any(os.path.exists(d) for d in input_dirs) or not os.path.exists(target_dir):
@@ -772,6 +730,15 @@ def main():
     
     logging.info(f"數據集大小: {len(audio_dataset)} 個音頻對")
     
+    # 限制樣本數（用於快速測試）
+    if args.max_samples and args.max_samples < len(audio_dataset):
+        indices = list(range(args.max_samples))
+        audio_dataset = torch.utils.data.Subset(audio_dataset, indices)
+        logging.info(f"限制樣本數為: {args.max_samples}")
+    
+    # 創建音頻-token 數據集
+    dataset = AudioTokenDataset(audio_dataset)
+    
     # 按語者分割數據集（符合實驗設計：10人訓練、2人驗證）
     logging.info(f"按語者分割數據集，驗證集語者: {args.val_speakers}")
     
@@ -779,7 +746,7 @@ def main():
     val_indices = []
     
     # 遍歷每個樣本，根據語者分配到訓練或驗證集
-    for idx in range(len(audio_dataset)):
+    for idx in range(len(dataset)):
         audio_data = audio_dataset.paired_files[idx]  # 獲取原始音頻數據
         speaker = audio_data['speaker']
         
@@ -788,35 +755,60 @@ def main():
         else:
             train_indices.append(idx)
     
-    # 限制樣本數（用於快速測試）
-    if args.max_samples and args.max_samples < len(audio_dataset):
-        # 計算每個集合應該有多少樣本（保持相同比例）
-        total_samples = len(train_indices) + len(val_indices)
-        train_ratio = len(train_indices) / total_samples if total_samples > 0 else 0.8
-        val_ratio = len(val_indices) / total_samples if total_samples > 0 else 0.2
-        
-        max_train_samples = max(1, int(args.max_samples * train_ratio))
-        max_val_samples = max(1, args.max_samples - max_train_samples)
-        
-        # 限制每個集合的樣本數
-        train_indices = train_indices[:max_train_samples]
-        val_indices = val_indices[:max_val_samples]
-        
-        logging.info(f"限制樣本數為: {args.max_samples} (訓練集: {len(train_indices)}, 驗證集: {len(val_indices)})")
-    
-    # 創建音頻-token 數據集
-    dataset = AudioTokenDataset(audio_dataset)
-    
     # 創建按語者分割的數據集
     train_dataset = torch.utils.data.Subset(dataset, train_indices)
     val_dataset = torch.utils.data.Subset(dataset, val_indices)
     
-    # 創建數據載入器，使用 ttt2.py 的 collate_fn 處理不同長度的音訊
-    train_collate_fn = lambda batch: collate_fn(batch, trim_to_shortest=True)
-    val_collate_fn = lambda batch: collate_fn(batch, trim_to_shortest=True)
+    # 創建數據載入器，使用自定義的 collate_fn 處理不同長度的音訊
+    def custom_collate_fn(batch):
+        """自定義collate函數，參考ttt2.py實現，處理AudioDataset返回的tuple格式"""
+        try:
+            # 解包batch數據 - AudioDataset返回 (input_wav, target_wav, content_id)
+            input_wavs = [item[0] for item in batch]
+            target_wavs = [item[1] for item in batch]
+            content_ids = [item[2] for item in batch]
+            
+            # 數據驗證：確保都是張量
+            for i, (inp, tgt) in enumerate(zip(input_wavs, target_wavs)):
+                if not isinstance(inp, torch.Tensor):
+                    raise ValueError(f"Input wav {i} is not tensor: {type(inp)}")
+                if not isinstance(tgt, torch.Tensor):
+                    raise ValueError(f"Target wav {i} is not tensor: {type(tgt)}")
+
+            # 找出最長的音訊長度（參考ttt2.py實現）
+            max_len = max(
+                max(wav.size(-1) for wav in input_wavs),
+                max(wav.size(-1) for wav in target_wavs)
+            )
+
+            # 填充所有音訊到最長長度（使用ttt2.py的方法）
+            def pad_to_max(wav, max_len):
+                pad_len = max_len - wav.size(-1)
+                if pad_len > 0:
+                    return F.pad(wav, (0, pad_len))
+                return wav
+
+            input_wavs = [pad_to_max(wav, max_len) for wav in input_wavs]
+            target_wavs = [pad_to_max(wav, max_len) for wav in target_wavs]
+
+            # 返回堆疊的張量和內容ID（與ttt2.py保持一致）
+            return torch.stack(input_wavs), torch.stack(target_wavs), content_ids
+            
+        except Exception as e:
+            print(f"Collate function error: {e}")
+            print(f"Batch size: {len(batch)}")
+            for i, item in enumerate(batch[:2]):  # 只顯示前2個避免過多輸出
+                print(f"Item {i}: {type(item)}")
+                if hasattr(item, '__len__'):
+                    print(f"  Length: {len(item)}")
+                    if len(item) >= 3:
+                        print(f"  [0]: {type(item[0])}")  
+                        print(f"  [1]: {type(item[1])}")
+                        print(f"  [2]: {type(item[2])}")
+            raise
     
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0, collate_fn=train_collate_fn)
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0, collate_fn=val_collate_fn)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, collate_fn=custom_collate_fn)
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=2, collate_fn=custom_collate_fn)
     
     logging.info(f"訓練集大小: {len(train_dataset)}, 驗證集大小: {len(val_dataset)}")
     
@@ -842,8 +834,8 @@ def main():
     logging.info(f"可訓練參數數量: {trainable_params:,}")
     logging.info(f"WavTokenizer 參數數量 (凍結): {total_params - trainable_params:,}")
     
-    # 創建優化器和損失函數 - GPU 2有充足內存，可以使用Adam
-    optimizer = optim.Adam(
+    # 創建優化器和損失函數
+    optimizer = optim.AdamW(
         [p for p in model.parameters() if p.requires_grad], 
         lr=args.learning_rate, 
         weight_decay=args.weight_decay
@@ -919,9 +911,8 @@ def main():
                         if batch_idx >= 1:  # 只處理第一個批次
                             break
                             
-                        # batch 是 tuple 格式: (noisy_audio, clean_audio, content_id)
-                        noisy_audio = batch[0][:1].to(device)  # 只取第一個樣本
-                        clean_audio = batch[1][:1].to(device)
+                        noisy_audio = batch['noisy_audio'][:1].to(device)  # 只取第一個樣本
+                        clean_audio = batch['clean_audio'][:1].to(device)
                         
                         # 前向傳播獲取輸出
                         output = model(noisy_audio, clean_audio)

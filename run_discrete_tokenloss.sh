@@ -1,9 +1,13 @@
 #!/bin/bash
 
 # WavTokenizer-Transformer 降噪訓練 - Token Loss 系統模式
+echo "📊 參數配置："
 echo "   - 總參數: 89.3M (80.6M凍結 + 8.7M可訓練)"
-echo "   - Token Loss: 主導損失函數 (90%)"
-echo "   - CrossEntropy: 輔助損失 (10%)"
+echo "   - 訓練輪數: 600 epochs (與 ttt2.py 一致)"
+echo "   - Token Loss: L2(30%) + 一致性(40%) + Manifold(10%) + 正規化(10%) + 連貫性(10%)"
+echo "   - 儲存頻率: 每50epochs模型 + 每300epochs檢查點"
+echo "   - 樣本儲存: 每100epochs (含頻譜圖)"
+echo "   - 學習曲線: 每50epochs更新"
 echo "====================================================="
 
 # 設置環境變數 (與 ttt2.py 一致)
@@ -142,7 +146,7 @@ echo "⏰ 開始時間: $(date)"
 echo ""
 
 # 執行訓練 - Token Loss 模式（使用 --use_token_loss）
-# 參數設定與 ttt2.py 一致: batch_size=8, 語者分類, 每位語者100句話, 僅box材質
+# 參數設定與 ttt2.py 一致: batch_size=8, 語者分類, 每位語者100句話, 僅box材質, 600 epochs
 python wavtokenizer_transformer_denoising.py \
     --output_dir "$OUTPUT_DIR" \
     --use_token_loss \
@@ -152,12 +156,10 @@ python wavtokenizer_transformer_denoising.py \
     --normalization_weight 0.1 \
     --coherence_weight 0.1 \
     --batch_size 8 \
-    --num_epochs 50 \
+    --num_epochs 600 \
     --learning_rate 1e-4 \
     --max_length 200 \
-    --data_dir data \
-    --save_interval 10 \
-    --log_interval 5 \
+    --save_every 50 \
     --val_speakers girl9 boy7 \
     --max_sentences_per_speaker 100 \
     2>&1 | tee -a $LOG_FILE
