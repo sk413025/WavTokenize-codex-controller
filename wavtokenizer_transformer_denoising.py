@@ -440,8 +440,8 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch):
         logits = output['logits']  # [batch_size, seq_len, vocab_size]
         target_tokens = output['target_tokens']  # [batch_size, seq_len]
         
-        # 計算損失（忽略 padding tokens）
-        logits_flat = logits.view(-1, logits.size(-1))
+        # 計算損失（忽略 padding tokens）- 使用reshape確保tensor連續性
+        logits_flat = logits.reshape(-1, logits.size(-1))
         target_flat = target_tokens.reshape(-1)
         # 只對 codebook tokens 計算損失（忽略特殊 tokens）
         mask = target_flat < model.codebook_size
@@ -516,9 +516,9 @@ def train_epoch_with_token_loss(model, dataloader, optimizer, device, epoch,
             )
         except Exception as e:
             logging.warning(f"Token loss 計算失敗，回退到交叉熵: {e}")
-            # 回退到簡單交叉熵
-            logits_flat = logits.view(-1, logits.size(-1))
-            target_flat = target_tokens.view(-1)
+            # 回退到簡單交叉熵 - 使用reshape確保tensor連續性
+            logits_flat = logits.reshape(-1, logits.size(-1))
+            target_flat = target_tokens.reshape(-1)
             mask = target_flat < model.codebook_size
             if mask.sum() > 0:
                 total_loss = F.cross_entropy(logits_flat[mask], target_flat[mask])
@@ -661,9 +661,9 @@ def validate_epoch(model, dataloader, criterion, device):
                 
                 model.eval()  # 恢復驗證模式
                 
-                # 計算損失
-                logits_flat = logits.view(-1, logits.size(-1))
-                target_flat = target_tokens.view(-1)
+                # 計算損失 - 使用reshape而非view確保tensor連續性
+                logits_flat = logits.reshape(-1, logits.size(-1))
+                target_flat = target_tokens.reshape(-1)
                 
                 # 確保mask和target維度匹配
                 mask = target_flat < model.codebook_size
