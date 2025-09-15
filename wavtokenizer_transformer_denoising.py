@@ -28,6 +28,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import torchaudio
+import random
 
 # 添加模組路徑
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -248,24 +249,52 @@ class WavTokenizerTransformerDenoiser(nn.Module):
     def forward_transformer(self, src_tokens, tgt_tokens=None):
         """Transformer 前向傳播（僅處理 token 序列）"""
         batch_size, src_seq_len = src_tokens.size()
-        
-        # 源序列嵌入和位置編碼
+        max_pos_len = self.pos_encoding.shape[1]
         src_emb = self.src_embedding(src_tokens) * math.sqrt(self.d_model)
+        if src_seq_len < max_pos_len:
+            # 填充到最大長度
+            pad_size = max_pos_len - src_seq_len
+            pad = torch.zeros(batch_size, pad_size, src_emb.shape[2], device=src_emb.device, dtype=src_emb.dtype)
+            src_emb = torch.cat([src_emb, pad], dim=1)
+            src_seq_len = max_pos_len
+        elif src_seq_len > max_pos_len:
+            # 裁切到最大長度
+            src_emb = src_emb[:, :max_pos_len, :]
+            src_seq_len = max_pos_len
         src_emb = src_emb + self.pos_encoding[:, :src_seq_len, :]
         
         # 如果是訓練模式且提供了目標序列
         if tgt_tokens is not None and self.training:
             _, tgt_seq_len = tgt_tokens.size()
-            
-            # 目標序列嵌入和位置編碼
+            max_pos_len = self.pos_encoding.shape[1]
             tgt_emb = self.tgt_embedding(tgt_tokens) * math.sqrt(self.d_model)
+            if tgt_seq_len < max_pos_len:
+                pad_size = max_pos_len - tgt_seq_len
+                pad = torch.zeros(tgt_emb.shape[0], pad_size, tgt_emb.shape[2], device=tgt_emb.device, dtype=tgt_emb.dtype)
+                tgt_emb = torch.cat([tgt_emb, pad], dim=1)
+                tgt_seq_len = max_pos_len
+            elif tgt_seq_len > max_pos_len:
+                tgt_emb = tgt_emb[:, :max_pos_len, :]
+                tgt_seq_len = max_pos_len
             tgt_emb = tgt_emb + self.pos_encoding[:, :tgt_seq_len, :]
-            
             # 創建遮罩
             tgt_mask = self.generate_square_subsequent_mask(tgt_seq_len).to(src_tokens.device)
             src_padding_mask = self.create_padding_mask(src_tokens)
             tgt_padding_mask = self.create_padding_mask(tgt_tokens)
-            
+            # 填充或裁切 src_padding_mask 到 max_pos_len
+            if src_padding_mask.shape[1] < max_pos_len:
+                pad_size = max_pos_len - src_padding_mask.shape[1]
+                pad = torch.zeros(src_padding_mask.shape[0], pad_size, device=src_padding_mask.device, dtype=src_padding_mask.dtype)
+                src_padding_mask = torch.cat([src_padding_mask, pad], dim=1)
+            elif src_padding_mask.shape[1] > max_pos_len:
+                src_padding_mask = src_padding_mask[:, :max_pos_len]
+            # 填充或裁切 tgt_padding_mask 到 max_pos_len
+            if tgt_padding_mask.shape[1] < max_pos_len:
+                pad_size = max_pos_len - tgt_padding_mask.shape[1]
+                pad = torch.zeros(tgt_padding_mask.shape[0], pad_size, device=tgt_padding_mask.device, dtype=tgt_padding_mask.dtype)
+                tgt_padding_mask = torch.cat([tgt_padding_mask, pad], dim=1)
+            elif tgt_padding_mask.shape[1] > max_pos_len:
+                tgt_padding_mask = tgt_padding_mask[:, :max_pos_len]
             # Transformer 前向傳播
             output = self.transformer(
                 src_emb, tgt_emb,
@@ -328,7 +357,14 @@ class WavTokenizerTransformerDenoiser(nn.Module):
             
             # Step 2: Transformer 降噪 (在 token 空間)
             logits = self.forward_transformer(input_tokens, decoder_input)
-            
+            # 確保 target_tokens shape 與 logits 一致
+            max_pos_len = logits.shape[1]
+            if target_tokens.shape[1] < max_pos_len:
+                pad_size = max_pos_len - target_tokens.shape[1]
+                pad = torch.full((target_tokens.shape[0], pad_size), self.pad_token, device=target_tokens.device, dtype=target_tokens.dtype)
+                target_tokens = torch.cat([target_tokens, pad], dim=1)
+            elif target_tokens.shape[1] > max_pos_len:
+                target_tokens = target_tokens[:, :max_pos_len]
             return {
                 'logits': logits,
                 'target_tokens': target_tokens,
@@ -406,21 +442,17 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch):
         
         # 計算損失（忽略 padding tokens）
         logits_flat = logits.view(-1, logits.size(-1))
-        target_flat = target_tokens.view(-1)
-        
+        target_flat = target_tokens.reshape(-1)
         # 只對 codebook tokens 計算損失（忽略特殊 tokens）
         mask = target_flat < model.codebook_size
         if mask.sum() > 0:
             loss = criterion(logits_flat[mask], target_flat[mask])
         else:
             loss = torch.tensor(0.0, device=device, requires_grad=True)
-        
         # 反向傳播
         loss.backward()
-        
         # 梯度裁剪
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        
         optimizer.step()
         
         # 統計
@@ -597,6 +629,33 @@ def validate_epoch(model, dataloader, criterion, device):
                               device=clean_tokens.device, dtype=torch.long)
                 ], dim=1)
                 
+                # 添加 padding 以匹配模型期望的序列長度（與訓練階段一致）
+                max_pos_len = model.transformer.transformer.encoder.pos_embed.num_embeddings
+                current_seq_len = input_tokens.size(1)
+                
+                if current_seq_len < max_pos_len:
+                    pad_len = max_pos_len - current_seq_len
+                    
+                    # 對 input_tokens 進行 padding
+                    input_padding = torch.full((input_tokens.size(0), pad_len), model.pad_token,
+                                             device=input_tokens.device, dtype=torch.long)
+                    input_tokens = torch.cat([input_tokens, input_padding], dim=1)
+                    
+                    # 對 decoder_input 進行 padding
+                    decoder_padding = torch.full((decoder_input.size(0), pad_len), model.pad_token,
+                                                device=decoder_input.device, dtype=torch.long)
+                    decoder_input = torch.cat([decoder_input, decoder_padding], dim=1)
+                    
+                    # 對 target_tokens 進行 padding
+                    target_padding = torch.full((target_tokens.size(0), pad_len), model.pad_token,
+                                               device=target_tokens.device, dtype=torch.long)
+                    target_tokens = torch.cat([target_tokens, target_padding], dim=1)
+                elif current_seq_len > max_pos_len:
+                    # 如果序列太長，截斷到最大長度
+                    input_tokens = input_tokens[:, :max_pos_len]
+                    decoder_input = decoder_input[:, :max_pos_len]
+                    target_tokens = target_tokens[:, :max_pos_len]
+                
                 # 使用transformer前向傳播
                 logits = model.forward_transformer(input_tokens, decoder_input)
                 
@@ -606,7 +665,16 @@ def validate_epoch(model, dataloader, criterion, device):
                 logits_flat = logits.view(-1, logits.size(-1))
                 target_flat = target_tokens.view(-1)
                 
+                # 確保mask和target維度匹配
                 mask = target_flat < model.codebook_size
+                if mask.size(0) != logits_flat.size(0):
+                    # 如果維度不匹配，截斷到較小的維度
+                    min_size = min(mask.size(0), logits_flat.size(0))
+                    mask = mask[:min_size]
+                    logits_flat = logits_flat[:min_size]
+                    target_flat = target_flat[:min_size]
+                    logging.warning(f"驗證批次 {batch_idx}: 維度不匹配，已截斷到 {min_size}")
+                
                 if mask.sum() > 0:
                     loss = criterion(logits_flat[mask], target_flat[mask])
                     total_loss += loss.item()
@@ -632,6 +700,322 @@ def validate_epoch(model, dataloader, criterion, device):
     accuracy = total_correct / total_tokens if total_tokens > 0 else 0.0
     
     return avg_loss, accuracy
+
+def save_sample_ttt2_style(input_audio, output_audio, target_audio, epoch, batch_idx, save_dir, device):
+    """保存音頻樣本和頻譜圖，完全比照 ttt2.py 的 save_sample 函數
+    
+    Args:
+        input_audio: 輸入音頻 (噪聲音頻)
+        output_audio: 模型輸出音頻 (降噪音頻)
+        target_audio: 目標音頻 (清潔音頻)
+        epoch: 當前訓練週期
+        batch_idx: 批次索引
+        save_dir: 保存目錄
+        device: 計算設備
+    """
+    import random
+    
+    try:
+        # 建立音頻保存目錄 (使用固定的audio_samples目錄，與 ttt2.py 一致)
+        audio_dir = os.path.join(save_dir, "audio_samples", f'epoch_{epoch+1}')
+        os.makedirs(audio_dir, exist_ok=True)
+        
+        # 處理每個樣本 (與 ttt2.py 一致，最多處理3個樣本)
+        for j in range(min(input_audio.size(0), 3)):  
+            try:
+                base_name = f"batch_{batch_idx}_sample_{j+1}"
+                logging.info(f"處理樣本: {base_name}")
+                
+                with torch.no_grad():
+                    # 處理輸入音頻 (與 ttt2.py 一致)
+                    input_sample = input_audio[j].reshape(1, -1)
+                    input_sample = input_sample / (torch.max(torch.abs(input_sample)) + 1e-8)
+                    
+                    # 處理目標音頻 (與 ttt2.py 一致)
+                    target_sample = target_audio[j].reshape(1, -1)
+                    target_sample = target_sample / (torch.max(torch.abs(target_sample)) + 1e-8)
+                    
+                    # 處理輸出音頻 (與 ttt2.py 一致)
+                    output_sample = output_audio[j].reshape(1, -1)
+                    output_sample = output_sample / (torch.max(torch.abs(output_sample)) + 1e-8)
+                    
+                    # 保存每個音頻樣本和頻譜圖 (與 ttt2.py 一致)
+                    for audio, prefix in [
+                        (output_sample, "enhanced"),  # 對應 ttt2.py 的 enhanced
+                        (input_sample, "input"),      # 對應 ttt2.py 的 input
+                        (target_sample, "target")     # 對應 ttt2.py 的 target
+                    ]:
+                        # 保存音頻文件 (與 ttt2.py 一致)
+                        audio_path = os.path.join(audio_dir, f"{base_name}_{prefix}.wav")
+                        try:
+                            # 嘗試使用與 ttt2.py 相同的 save_audio 函數
+                            try:
+                                from encoder.utils import save_audio
+                                save_audio(audio.cpu(), audio_path, sample_rate=24000, rescale=True)
+                                logging.info(f"🔊 保存{prefix}音頻到: {audio_path}")
+                            except ImportError:
+                                # 備用方案：使用torchaudio直接保存 (與 ttt2.py 的備用方案一致)
+                                # 確保音頻是2D tensor [channels, time]
+                                if audio.dim() == 1:
+                                    audio = audio.unsqueeze(0)
+                                torchaudio.save(audio_path, audio.cpu(), 24000)
+                                logging.info(f"🔊 使用torchaudio保存{prefix}音頻到: {audio_path}")
+                        except Exception as save_err:
+                            logging.warning(f"❌ 保存音頻失敗: {str(save_err)}")
+                            # 最終備用方案
+                            if audio.dim() == 1:
+                                audio = audio.unsqueeze(0)
+                            torchaudio.save(audio_path, audio.cpu(), 24000)
+                            logging.info(f"🔊 使用備用方案保存{prefix}音頻到: {audio_path}")
+                        
+                        # 生成頻譜圖 (完全比照 ttt2.py)
+                        spec_path = audio_path.replace(".wav", "_spec.png")
+                        try:
+                            plt.figure(figsize=(10, 4))
+                            audio_np = audio.cpu().numpy().flatten()
+                            
+                            # 使用librosa生成頻譜圖 (與 ttt2.py 一致)
+                            import librosa
+                            import librosa.display
+                            D = librosa.amplitude_to_db(np.abs(librosa.stft(audio_np)), ref=np.max)
+                            librosa.display.specshow(D, sr=24000, x_axis="time", y_axis="log")
+                            plt.colorbar(format="%+2.0f dB")
+                            plt.title(f"Epoch {epoch+1} {prefix.capitalize()} Spectrogram")                            
+                            plt.tight_layout()
+                            plt.savefig(spec_path)
+                            plt.close()
+                            logging.info(f"📊 保存{prefix}頻譜圖到: {spec_path}")
+                        except Exception as spec_err:
+                            logging.warning(f"❌ 生成頻譜圖時出錯: {str(spec_err)}")
+                        
+            except Exception as e:
+                logging.warning(f"❌ 處理樣本 {j+1} 時出錯: {str(e)}")
+                continue
+                
+    except Exception as e:
+        logging.error(f"❌ save_sample_ttt2_style函數錯誤: {str(e)}")
+        return False
+    
+    return True
+
+
+def save_audio_samples(model, dataloader, epoch, output_dir, device, num_samples=3):
+    """保存音頻樣本用於質量檢查（與 ttt2.py 一致的音頻保存邏輯）
+    
+    Args:
+        model: 模型實例
+        dataloader: 資料載入器
+        epoch: 當前epoch
+        output_dir: 輸出目錄
+        device: 計算設備
+        num_samples: 保存樣本數量
+    """
+    import torchaudio
+    
+    model.eval()
+    
+    # 建立音頻保存目錄
+    audio_dir = os.path.join(output_dir, "audio_samples", f'epoch_{epoch+1}')
+    os.makedirs(audio_dir, exist_ok=True)
+    
+    saved_count = 0
+    
+    with torch.no_grad():
+        for batch_idx, batch in enumerate(dataloader):
+            if saved_count >= num_samples:
+                break
+                
+            try:
+                # batch 是 tuple 格式: (noisy_audio, clean_audio, content_id)
+                noisy_audio = batch[0].to(device)
+                clean_audio = batch[1].to(device)
+                
+                # 確保音頻張量是正確的形狀 [B, 1, T]
+                while noisy_audio.dim() > 3:
+                    noisy_audio = noisy_audio.squeeze()
+                while clean_audio.dim() > 3:
+                    clean_audio = clean_audio.squeeze()
+                
+                # 確保是3D張量
+                if noisy_audio.dim() == 2:
+                    noisy_audio = noisy_audio.unsqueeze(1)
+                if clean_audio.dim() == 2:
+                    clean_audio = clean_audio.unsqueeze(1)
+                
+                # 使用模型進行推理（inference mode）
+                denoised_audio = model(noisy_audio)  # 使用單參數推理模式
+                
+                # 處理每個樣本
+                for j in range(min(noisy_audio.size(0), num_samples - saved_count)):
+                    try:
+                        base_name = f"epoch_{epoch+1}_sample_{saved_count+1}"
+                        
+                        # 提取單個樣本
+                        noisy_sample = noisy_audio[j].squeeze().cpu()
+                        clean_sample = clean_audio[j].squeeze().cpu() 
+                        denoised_sample = denoised_audio[j].squeeze().cpu()
+                        
+                        # 正規化音頻
+                        noisy_sample = noisy_sample / (torch.max(torch.abs(noisy_sample)) + 1e-8)
+                        clean_sample = clean_sample / (torch.max(torch.abs(clean_sample)) + 1e-8)
+                        denoised_sample = denoised_sample / (torch.max(torch.abs(denoised_sample)) + 1e-8)
+                        
+                        # 保存音頻檔案
+                        torchaudio.save(
+                            os.path.join(audio_dir, f"{base_name}_noisy.wav"),
+                            noisy_sample.unsqueeze(0), 24000
+                        )
+                        torchaudio.save(
+                            os.path.join(audio_dir, f"{base_name}_clean.wav"),
+                            clean_sample.unsqueeze(0), 24000
+                        )
+                        torchaudio.save(
+                            os.path.join(audio_dir, f"{base_name}_denoised.wav"),
+                            denoised_sample.unsqueeze(0), 24000
+                        )
+                        
+                        saved_count += 1
+                        logging.info(f"保存音頻樣本: {base_name}")
+                        
+                        if saved_count >= num_samples:
+                            break
+                            
+                    except Exception as e:
+                        logging.warning(f"保存樣本 {j} 失敗: {e}")
+                        continue
+                        
+                if saved_count >= num_samples:
+                    break
+                    
+            except Exception as e:
+                logging.warning(f"處理批次 {batch_idx} 失敗: {e}")
+                continue
+    
+    model.train()
+    logging.info(f"完成音頻樣本保存，共保存 {saved_count} 個樣本")
+
+
+def save_spectrograms(model, dataloader, epoch, output_dir, device, num_samples=3):
+    """保存頻譜圖用於視覺化分析
+    
+    Args:
+        model: 模型實例
+        dataloader: 資料載入器
+        epoch: 當前epoch
+        output_dir: 輸出目錄
+        device: 計算設備
+        num_samples: 保存樣本數量
+    """
+    import matplotlib.pyplot as plt
+    import torchaudio.transforms as T
+    
+    model.eval()
+    
+    # 建立頻譜圖保存目錄
+    spec_dir = os.path.join(output_dir, "spectrograms", f'epoch_{epoch+1}')
+    os.makedirs(spec_dir, exist_ok=True)
+    
+    # 設置頻譜圖轉換
+    n_fft = 2048
+    hop_length = 512
+    spec_transform = T.Spectrogram(n_fft=n_fft, hop_length=hop_length, power=2.0)
+    
+    saved_count = 0
+    
+    with torch.no_grad():
+        for batch_idx, batch in enumerate(dataloader):
+            if saved_count >= num_samples:
+                break
+                
+            try:
+                # batch 是 tuple 格式: (noisy_audio, clean_audio, content_id)
+                noisy_audio = batch[0].to(device)
+                clean_audio = batch[1].to(device)
+                
+                # 確保音頻張量是正確的形狀 [B, 1, T]
+                while noisy_audio.dim() > 3:
+                    noisy_audio = noisy_audio.squeeze()
+                while clean_audio.dim() > 3:
+                    clean_audio = clean_audio.squeeze()
+                
+                # 確保是3D張量
+                if noisy_audio.dim() == 2:
+                    noisy_audio = noisy_audio.unsqueeze(1)
+                if clean_audio.dim() == 2:
+                    clean_audio = clean_audio.unsqueeze(1)
+                
+                # 使用模型進行推理（inference mode）
+                denoised_audio = model(noisy_audio)  # 使用單參數推理模式
+                
+                # 處理每個樣本
+                for j in range(min(noisy_audio.size(0), num_samples - saved_count)):
+                    try:
+                        base_name = f"epoch_{epoch+1}_sample_{saved_count+1}"
+                        
+                        # 提取單個樣本並轉移到CPU
+                        noisy_sample = noisy_audio[j].squeeze().cpu()
+                        clean_sample = clean_audio[j].squeeze().cpu() 
+                        denoised_sample = denoised_audio[j].squeeze().cpu()
+                        
+                        # 計算頻譜圖
+                        noisy_spec = spec_transform(noisy_sample)
+                        clean_spec = spec_transform(clean_sample)
+                        denoised_spec = spec_transform(denoised_sample)
+                        
+                        # 轉換為dB尺度
+                        noisy_spec_db = 10 * torch.log10(noisy_spec + 1e-8)
+                        clean_spec_db = 10 * torch.log10(clean_spec + 1e-8)
+                        denoised_spec_db = 10 * torch.log10(denoised_spec + 1e-8)
+                        
+                        # 創建對比圖
+                        fig, axes = plt.subplots(3, 1, figsize=(12, 10))
+                        
+                        # 噪聲音頻頻譜圖
+                        im1 = axes[0].imshow(noisy_spec_db.numpy(), aspect='auto', origin='lower', cmap='viridis')
+                        axes[0].set_title(f'EXP-WAVTOK-CE-{epoch+1:04d} - 噪聲音頻頻譜圖 - 樣本 {saved_count+1}')
+                        axes[0].set_ylabel('頻率 (bins)')
+                        plt.colorbar(im1, ax=axes[0], label='功率 (dB)')
+                        
+                        # 清潔音頻頻譜圖
+                        im2 = axes[1].imshow(clean_spec_db.numpy(), aspect='auto', origin='lower', cmap='viridis')
+                        axes[1].set_title(f'EXP-WAVTOK-CE-{epoch+1:04d} - 清潔音頻頻譜圖 - 樣本 {saved_count+1}')
+                        axes[1].set_ylabel('頻率 (bins)')
+                        plt.colorbar(im2, ax=axes[1], label='功率 (dB)')
+                        
+                        # 降噪音頻頻譜圖
+                        im3 = axes[2].imshow(denoised_spec_db.numpy(), aspect='auto', origin='lower', cmap='viridis')
+                        axes[2].set_title(f'EXP-WAVTOK-CE-{epoch+1:04d} - 降噪音頻頻譜圖 - 樣本 {saved_count+1}')
+                        axes[2].set_xlabel('時間 (frames)')
+                        axes[2].set_ylabel('頻率 (bins)')
+                        plt.colorbar(im3, ax=axes[2], label='功率 (dB)')
+                        
+                        plt.tight_layout()
+                        
+                        # 保存頻譜圖
+                        spec_path = os.path.join(spec_dir, f"{base_name}_spectrograms.png")
+                        plt.savefig(spec_path, dpi=150, bbox_inches='tight')
+                        plt.close()
+                        
+                        saved_count += 1
+                        logging.info(f"保存頻譜圖: {base_name}")
+                        
+                        if saved_count >= num_samples:
+                            break
+                            
+                    except Exception as e:
+                        logging.warning(f"保存頻譜圖樣本 {j} 失敗: {e}")
+                        continue
+                        
+                if saved_count >= num_samples:
+                    break
+                    
+            except Exception as e:
+                logging.warning(f"處理頻譜圖批次 {batch_idx} 失敗: {e}")
+                continue
+    
+    model.train()
+    logging.info(f"完成頻譜圖保存，共保存 {saved_count} 個樣本")
+
 
 def save_checkpoint(model, optimizer, epoch, loss, save_path, config=None):
     """保存模型檢查點"""
@@ -738,13 +1122,17 @@ def main():
         ]
     )
     
-    # 設定設備 - 使用GPU 2以避免與其他模型衝突
+    # 設定設備 - 若已設 CUDA_VISIBLE_DEVICES，則只會看到一張 GPU，gpu_id 應為 0
     if torch.cuda.is_available():
-        # 檢查GPU使用情況，優先使用空閒的GPU
-        gpu_id = 2  # 根據nvidia-smi，GPU 2是空閒的
+        # 若只看到一張 GPU（如 CUDA_VISIBLE_DEVICES=2），gpu_id 必須設為 0
+        visible_gpus = torch.cuda.device_count()
+        if visible_gpus == 1:
+            gpu_id = 0
+        else:
+            # 預設仍選空閒的 GPU 2（僅在未設 CUDA_VISIBLE_DEVICES 時有效）
+            gpu_id = 2
         device = torch.device(f"cuda:{gpu_id}")
         torch.cuda.set_device(gpu_id)
-        
         # 設置內存優化
         torch.cuda.empty_cache()
         torch.backends.cudnn.benchmark = False  # 節省內存
@@ -876,78 +1264,136 @@ def main():
     best_val_loss = float('inf')
     
     for epoch in range(1, args.num_epochs + 1):
-        # 選擇訓練函數
-        if args.use_token_loss:
-            # 使用 Token Loss 系統（ttt2.py 邏輯移植到離散空間）
-            train_loss_dict = train_epoch_with_token_loss(
-                model, train_loader, optimizer, device, epoch, loss_weights
-            )
-            train_loss = train_loss_dict.get('total_loss', 0.0)
+        try:
+            # 選擇訓練函數
+            if args.use_token_loss:
+                # 使用 Token Loss 系統（ttt2.py 邏輯移植到離散空間）
+                train_loss_dict = train_epoch_with_token_loss(
+                    model, train_loader, optimizer, device, epoch, loss_weights
+                )
+                train_loss = train_loss_dict.get('total_loss', 0.0)
+                
+                # 記錄詳細的損失信息
+                loss_info = " | ".join([f"{k}: {v:.4f}" for k, v in train_loss_dict.items() 
+                                       if k != 'total_loss'])
+                logging.info(f"Epoch {epoch} Train Loss Components: {loss_info}")
+            else:
+                # 使用原始交叉熵
+                train_loss = train_epoch(model, train_loader, optimizer, criterion, device, epoch)
             
-            # 記錄詳細的損失信息
-            loss_info = " | ".join([f"{k}: {v:.4f}" for k, v in train_loss_dict.items() 
-                                   if k != 'total_loss'])
-            logging.info(f"Epoch {epoch} Train Loss Components: {loss_info}")
-        else:
-            # 使用原始交叉熵
-            train_loss = train_epoch(model, train_loader, optimizer, criterion, device, epoch)
-        
-        train_losses.append(train_loss)
-        
-        # 驗證
-        val_loss, val_accuracy = validate_epoch(model, val_loader, criterion, device)
-        val_losses.append(val_loss)
-        val_accuracies.append(val_accuracy)
-        
-        # 學習率調度
-        scheduler.step()
-        
-        # 記錄
-        logging.info(f"Epoch {epoch}/{args.num_epochs}")
-        logging.info(f"Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.4f}")
-        logging.info(f"Learning Rate: {scheduler.get_last_lr()[0]:.6f}")
-        logging.info(f"Loss System: {'Token Loss (ttt2.py style)' if args.use_token_loss else 'Cross Entropy'}")
+            train_losses.append(train_loss)
+            
+            # 驗證
+            val_loss, val_accuracy = validate_epoch(model, val_loader, criterion, device)
+            val_losses.append(val_loss)
+            val_accuracies.append(val_accuracy)
+            
+            # 學習率調度
+            scheduler.step()
+            
+            # 記錄
+            logging.info(f"Epoch {epoch}/{args.num_epochs}")
+            logging.info(f"Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.4f}")
+            logging.info(f"Learning Rate: {scheduler.get_last_lr()[0]:.6f}")
+            logging.info(f"Loss System: {'Token Loss (ttt2.py style)' if args.use_token_loss else 'Cross Entropy'}")
+            
+        except Exception as epoch_error:
+            logging.error(f"Epoch {epoch} 出現錯誤: {epoch_error}")
+            logging.error(f"錯誤類型: {type(epoch_error).__name__}")
+            
+            # 如果是關鍵錯誤，保存當前模型並繼續
+            try:
+                emergency_save_path = os.path.join(args.output_dir, f'emergency_checkpoint_epoch_{epoch}.pth')
+                config = {
+                    'd_model': args.d_model,
+                    'nhead': args.nhead,
+                    'num_encoder_layers': args.num_encoder_layers,
+                    'num_decoder_layers': args.num_decoder_layers,
+                    'dim_feedforward': args.dim_feedforward,
+                    'max_length': args.max_length,
+                    'dropout': args.dropout,
+                    'config_path': args.config,
+                    'model_path': args.model_path
+                }
+                save_checkpoint(model, optimizer, epoch-1, float('inf'), emergency_save_path, config)
+                logging.info(f"緊急檢查點已保存到: {emergency_save_path}")
+            except Exception as save_error:
+                logging.error(f"緊急保存失敗: {save_error}")
+            
+            # 添加假值以保持列表一致性
+            if len(train_losses) < epoch:
+                train_losses.append(float('inf'))
+            if len(val_losses) < epoch:
+                val_losses.append(float('inf'))
+                val_accuracies.append(0.0)
+                
+            continue  # 繼續下一個epoch
         
         # 保存樣本和頻譜圖 (與 ttt2.py 一致：每 100 epochs)
-        if epoch % 100 == 0 or epoch == args.num_epochs:
-            logging.info(f"Saving audio samples and spectrograms for epoch {epoch}...")
+        if (epoch + 1) % 100 == 0 or epoch == args.num_epochs - 1:
+            logging.info(f"Saving samples for epoch {epoch+1}...")
             try:
                 model.eval()
                 with torch.no_grad():
-                    # 從驗證集取一個批次進行示例
-                    for batch_idx, batch in enumerate(val_loader):
-                        if batch_idx >= 1:  # 只處理第一個批次
+                    # 基於當前 epoch 計算偏移量，確保每次採樣到不同的批次 (與 ttt2.py 一致)
+                    epoch_offset = (epoch // 100) % 10  # 每10次採樣循環一次
+                    
+                    # 創建一個臨時數據載入器，使用原始的train_dataloader的dataset (與 ttt2.py 一致)
+                    dataset_to_use = train_dataloader.dataset
+                    temp_loader = DataLoader(
+                        dataset_to_use,
+                        batch_size=args.batch_size,
+                        shuffle=True,  # 強制隨機打亂
+                        num_workers=1,
+                        collate_fn=train_dataloader.collate_fn if hasattr(train_dataloader, 'collate_fn') else None,
+                        worker_init_fn=lambda _: random.seed(42 + epoch)  # 基於 epoch 設置隨機種子
+                    )
+                    
+                    # 跳過前面的批次，實現每次採樣不同的數據 (與 ttt2.py 一致)
+                    for _ in range(epoch_offset):
+                        try:
+                            next(iter(temp_loader))
+                        except StopIteration:
                             break
-                            
-                        # batch 是 tuple 格式: (noisy_audio, clean_audio, content_id)
-                        noisy_audio = batch[0][:1].to(device)  # 只取第一個樣本
-                        clean_audio = batch[1][:1].to(device)
+                    
+                    # 採樣並保存 (與 ttt2.py 一致)
+                    for batch_idx, batch_data in enumerate(temp_loader):
+                        # 解包數據，同時兼容包含content_id的數據格式 (與 ttt2.py 一致)
+                        if len(batch_data) == 3:  # 包含content_id
+                            input_wav, target_wav, _ = batch_data
+                        else:  # 不包含content_id
+                            input_wav, target_wav = batch_data
                         
-                        # 前向傳播獲取輸出
-                        output = model(noisy_audio, clean_audio)
-                        denoised_audio = output['output_audio']
+                        input_wav = input_wav.to(device)
+                        target_wav = target_wav.to(device)
                         
-                        # 保存樣本和頻譜圖
-                        save_sample_with_spectrograms(
-                            input_audio=noisy_audio[0],
-                            output_audio=denoised_audio[0], 
-                            target_audio=clean_audio[0],
+                        # 推理模式：使用模型生成降噪音頻 (比照 ttt2.py 的 output_tuple)
+                        output_audio = model(input_wav)  # 這會返回降噪音頻
+                        
+                        # 使用與 ttt2.py 完全相同的 save_sample 邏輯
+                        save_sample_ttt2_style(
+                            input_audio=input_wav,
+                            output_audio=output_audio, 
+                            target_audio=target_wav,
                             epoch=epoch,
-                            batch_idx=0,
+                            batch_idx=batch_idx,
                             save_dir=args.output_dir,
-                            prefix="validation"
+                            device=device
                         )
-                        break
+                        
+                        # 只保存前幾個 batch 的樣本 (與 ttt2.py 一致)
+                        if batch_idx >= 2:  # 只保存前2個batch
+                            break
                         
                 model.train()
             except Exception as e:
-                logging.warning(f"Failed to save sample for epoch {epoch}: {e}")
+                logging.warning(f"Failed to save sample for epoch {epoch+1}: {e}")
         
         # 繪製學習曲線 (與 ttt2.py 一致：每 50 epochs)
-        if epoch % 50 == 0:
+        if (epoch + 1) % 50 == 0:
             plot_training_history(
                 train_losses, val_losses, val_accuracies,
-                os.path.join(args.output_dir, f'training_history_epoch_{epoch}.png')
+                os.path.join(args.output_dir, f'training_history_epoch_{epoch+1}.png')
             )
         
         # 保存最佳模型
@@ -971,8 +1417,8 @@ def main():
             )
             logging.info(f"新的最佳模型已保存 (Val Loss: {val_loss:.4f})")
         
-        # 定期保存檢查點 (與 ttt2.py 一致：每 300 epochs 或最後一個 epoch)
-        if epoch % 300 == 0 or epoch == args.num_epochs:
+        # 定期保存檢查點和音頻樣本 (每 100 epochs 或最後一個 epoch)
+        if (epoch + 1) % 100 == 0 or epoch == args.num_epochs - 1:
             config = {
                 'd_model': args.d_model,
                 'nhead': args.nhead,
@@ -986,13 +1432,16 @@ def main():
             }
             save_checkpoint(
                 model, optimizer, epoch, val_loss,
-                os.path.join(args.output_dir, f'checkpoint_epoch_{epoch}.pth'),
+                os.path.join(args.output_dir, f'checkpoint_epoch_{epoch+1}.pth'),
                 config
             )
-            logging.info(f"定期檢查點已保存 (Epoch {epoch})")
+            logging.info(f"定期檢查點已保存 (Epoch {epoch+1})")
+            
+            # 注意：音頻樣本和頻譜圖保存已經在上面的 ttt2.py 風格保存中處理了
+            # 舊的保存方式已移除，現在使用與 ttt2.py 完全一致的保存邏輯
         
         # 每 50 epochs 保存模型檢查點 (與 ttt2.py save_every 邏輯一致)
-        if epoch % args.save_every == 0:
+        if (epoch + 1) % args.save_every == 0:
             config = {
                 'd_model': args.d_model,
                 'nhead': args.nhead,
@@ -1006,7 +1455,7 @@ def main():
             }
             save_checkpoint(
                 model, optimizer, epoch, val_loss,
-                os.path.join(args.output_dir, f'model_epoch_{epoch}.pth'),
+                os.path.join(args.output_dir, f'model_epoch_{epoch+1}.pth'),
                 config
             )
     

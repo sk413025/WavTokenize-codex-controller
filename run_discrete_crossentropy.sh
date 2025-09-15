@@ -40,6 +40,7 @@ export PYTHONUNBUFFERED=1             # 即時輸出日誌
 export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128  # CUDA記憶體配置
 export TTT_BATCH_SIZE=8               # 批次大小 (與 run_fixed_ttt2_branch.sh 一致)
 export TTT_NUM_WORKERS=4              # 資料載入工作線程數
+export CUDA_VISIBLE_DEVICES=2
 export CONTENT_BATCHING=true          # 啟用內容感知批次採樣
 
 echo ""

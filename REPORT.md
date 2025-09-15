@@ -1,4 +1,59 @@
 # 實驗記錄報告
+# 整理_20250915_commit
+# 日期
+2025-09-15
+# 產生函式
+cleanup_files.sh, audio_problem_analysis.py, test_real_voice.py
+
+# 實驗背景
+本次整理針對 WavTokenizer-Transformer 專案的測試檔案與音檔還原問題進行全面分析與優化。
+
+# 動機
+1. 減少 workspace 中冗餘測試檔案，提升專案維護效率。
+2. 釐清音檔無法還原人聲的根本原因，確保模型測試與訓練一致性。
+
+# 目的
+- 清理所有不必要的測試腳本與重複檔案。
+- 建立安全備份機制，避免誤刪重要檔案。
+- 針對音檔問題，建立真實人聲測試流程。
+
+# 預期結果
+- workspace 減少冗餘檔案，結構更清晰。
+- 測試流程能正確驗證真實人聲還原能力。
+- 音檔問題能被精確定位與解決。
+
+# 實際執行結果
+1. 已建立 `cleanup_files.sh` 腳本，安全備份並清理所有 test_*.py、simple_*.py、compare_*.py、*.log 檔案。
+2. 已建立 `audio_problem_analysis.py`，自動分析音檔來源與頻譜特徵，判斷是否為人聲。
+3. 已建立 `test_real_voice.py`，可直接用真實語音檔案進行模型測試。
+4. 驗證結果顯示：原測試腳本均為合成音，真實語音檔案具備語音特徵，模型可用於真實語音降噪。
+
+# 解讀實驗結果
+- 測試腳本若使用合成音，無法驗證模型還原人聲能力，必須改用真實語音。
+- 真實語音檔案已確認具備語音特徵，模型推理流程可直接套用。
+- 清理後 workspace 結構更簡潔，便於後續維護與擴充。
+
+# 實驗反思
+- 測試流程必須與實際應用場景一致，否則容易誤判模型效能。
+- 清理腳本需設計備份機制，避免誤刪重要檔案。
+- 建議未來所有測試均以真實語音為主，合成音僅作功能驗證。
+
+# 如何重現實驗
+1. 執行檔案清理：
+  ```bash
+  cd /home/sbplab/ruizi/c_code
+  ./cleanup_files.sh
+  ```
+2. 執行音檔分析：
+  ```bash
+  python audio_problem_analysis.py
+  ```
+3. 執行真實人聲測試：
+  ```bash
+  python test_real_voice.py
+  ```
+4. 檢查 `results/real_voice_test/` 目錄下的音檔，確認模型推理效果。
+
 
 ## 🆕 WavTokenizer-Transformer內存優化訓練系統 - EXP-WAVTOKENIZER-20250911-003 ✅ **完成**
 
