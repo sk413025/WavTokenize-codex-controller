@@ -630,7 +630,7 @@ def validate_epoch(model, dataloader, criterion, device):
                 ], dim=1)
                 
                 # 添加 padding 以匹配模型期望的序列長度（與訓練階段一致）
-                max_pos_len = model.transformer.transformer.encoder.pos_embed.num_embeddings
+                max_pos_len = model.max_length  # 使用模型定義的最大長度
                 current_seq_len = input_tokens.size(1)
                 
                 if current_seq_len < max_pos_len:
