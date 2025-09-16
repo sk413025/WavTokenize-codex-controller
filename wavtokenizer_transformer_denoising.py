@@ -1344,14 +1344,14 @@ def main():
                     # 基於當前 epoch 計算偏移量，確保每次採樣到不同的批次 (與 ttt2.py 一致)
                     epoch_offset = (epoch // 100) % 10  # 每10次採樣循環一次
                     
-                    # 創建一個臨時數據載入器，使用原始的train_dataloader的dataset (與 ttt2.py 一致)
-                    dataset_to_use = train_dataloader.dataset
+                    # 創建一個臨時數據載入器，使用原始的train_loader的dataset (與 ttt2.py 一致)
+                    dataset_to_use = train_loader.dataset
                     temp_loader = DataLoader(
                         dataset_to_use,
                         batch_size=args.batch_size,
                         shuffle=True,  # 強制隨機打亂
                         num_workers=1,
-                        collate_fn=train_dataloader.collate_fn if hasattr(train_dataloader, 'collate_fn') else None,
+                        collate_fn=train_loader.collate_fn if hasattr(train_loader, 'collate_fn') else None,
                         worker_init_fn=lambda _: random.seed(42 + epoch)  # 基於 epoch 設置隨機種子
                     )
                     
