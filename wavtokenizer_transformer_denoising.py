@@ -1335,8 +1335,8 @@ def main():
                 
             continue  # 繼續下一個epoch
         
-        # 保存樣本和頻譜圖 (修改為每 10 epochs 保存一次，便於調試)
-        if (epoch + 1) % 10 == 0 or epoch == args.num_epochs - 1:
+        # 保存樣本和頻譜圖 (使用 save_every 參數控制頻率)
+        if (epoch + 1) % args.save_every == 0 or epoch == args.num_epochs - 1:
             logging.info(f"Saving samples for epoch {epoch+1}...")
             try:
                 model.eval()

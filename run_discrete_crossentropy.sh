@@ -127,7 +127,7 @@ python wavtokenizer_transformer_denoising.py \
     --num_epochs 600 \
     --learning_rate 1e-4 \
     --max_length 200 \
-    --save_every 50 \
+    --save_every 10 \
     --val_speakers girl9 boy7 \
     --max_sentences_per_speaker 100 \
     2>&1 | tee -a $LOG_FILE
