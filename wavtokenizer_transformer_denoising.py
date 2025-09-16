@@ -233,6 +233,12 @@ class WavTokenizerTransformerDenoiser(nn.Module):
             bandwidth_id = torch.tensor([0], device=tokens.device)
             audio = self.wavtokenizer.decode(features, bandwidth_id=bandwidth_id)
             
+            # 確保輸出是3D張量 [batch, channels, time]，如果是4D則去除額外維度
+            if audio.dim() == 4 and audio.size(1) == 1:
+                audio = audio.squeeze(1)  # [batch, 1, 1, time] -> [batch, 1, time]
+            elif audio.dim() == 4:
+                audio = audio.squeeze(2)  # [batch, channels, 1, time] -> [batch, channels, time]
+            
             return audio
     
     def generate_square_subsequent_mask(self, sz):
@@ -1329,8 +1335,8 @@ def main():
                 
             continue  # 繼續下一個epoch
         
-        # 保存樣本和頻譜圖 (與 ttt2.py 一致：每 100 epochs)
-        if (epoch + 1) % 100 == 0 or epoch == args.num_epochs - 1:
+        # 保存樣本和頻譜圖 (修改為每 10 epochs 保存一次，便於調試)
+        if (epoch + 1) % 10 == 0 or epoch == args.num_epochs - 1:
             logging.info(f"Saving samples for epoch {epoch+1}...")
             try:
                 model.eval()
@@ -1368,7 +1374,12 @@ def main():
                         target_wav = target_wav.to(device)
                         
                         # 推理模式：使用模型生成降噪音頻 (比照 ttt2.py 的 output_tuple)
-                        output_audio = model(input_wav)  # 這會返回降噪音頻
+                        with torch.no_grad():
+                            model_output = model(input_wav)  # 這會返回字典
+                            if isinstance(model_output, dict) and 'denoised_audio' in model_output:
+                                output_audio = model_output['denoised_audio']
+                            else:
+                                output_audio = model_output  # 備用方案
                         
                         # 使用與 ttt2.py 完全相同的 save_sample 邏輯
                         save_sample_ttt2_style(
