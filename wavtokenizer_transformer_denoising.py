@@ -1351,7 +1351,7 @@ def main():
                         batch_size=args.batch_size,
                         shuffle=True,  # 強制隨機打亂
                         num_workers=1,
-                        collate_fn=train_loader.collate_fn if hasattr(train_loader, 'collate_fn') else None,
+                        collate_fn=train_collate_fn,  # 使用原始的collate_fn函數
                         worker_init_fn=lambda _: random.seed(42 + epoch)  # 基於 epoch 設置隨機種子
                     )
                     
