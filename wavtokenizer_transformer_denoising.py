@@ -722,28 +722,56 @@ def save_sample_ttt2_style(input_audio, output_audio, target_audio, epoch, batch
     import random
     
     try:
+        # 調試：打印張量形狀
+        logging.info(f"張量形狀 - input_audio: {input_audio.shape}, output_audio: {output_audio.shape}, target_audio: {target_audio.shape}")
+        
+        # 確保所有張量形狀一致 (處理4D -> 3D問題)
+        if input_audio.dim() == 4:  # [B, C, 1, T] -> [B, C, T]
+            input_audio = input_audio.squeeze(2)
+            logging.info(f"調整input_audio形狀為: {input_audio.shape}")
+            
+        if output_audio.dim() == 4:  # [B, C, 1, T] -> [B, C, T]  
+            output_audio = output_audio.squeeze(2)
+            logging.info(f"調整output_audio形狀為: {output_audio.shape}")
+            
+        if target_audio.dim() == 4:  # [B, C, 1, T] -> [B, C, T]
+            target_audio = target_audio.squeeze(2)
+            logging.info(f"調整target_audio形狀為: {target_audio.shape}")
+        
         # 建立音頻保存目錄 (使用固定的audio_samples目錄，與 ttt2.py 一致)
         audio_dir = os.path.join(save_dir, "audio_samples", f'epoch_{epoch+1}')
         os.makedirs(audio_dir, exist_ok=True)
         
         # 處理每個樣本 (與 ttt2.py 一致，最多處理3個樣本)
-        for j in range(min(input_audio.size(0), 3)):  
+        batch_size = min(input_audio.size(0), 3)
+        logging.info(f"將處理 {batch_size} 個樣本")
+        
+        for j in range(batch_size):  
             try:
                 base_name = f"batch_{batch_idx}_sample_{j+1}"
                 logging.info(f"處理樣本: {base_name}")
                 
                 with torch.no_grad():
-                    # 處理輸入音頻 (與 ttt2.py 一致)
-                    input_sample = input_audio[j].reshape(1, -1)
+                    # 按照 ttt2.py 的方式處理音頻：不做額外的flatten和reshape
+                    # 只進行與 ttt2.py 相同的正規化
+                    input_sample = input_audio[j:j+1]  # 保持 [1, C, T] 或 [1, T] 形狀
+                    target_sample = target_audio[j:j+1]  # 保持原始形狀
+                    output_sample = output_audio[j:j+1]  # 保持原始形狀
+                    
+                    # 使用與 ttt2.py 完全相同的正規化方式
                     input_sample = input_sample / (torch.max(torch.abs(input_sample)) + 1e-8)
-                    
-                    # 處理目標音頻 (與 ttt2.py 一致)
-                    target_sample = target_audio[j].reshape(1, -1)
                     target_sample = target_sample / (torch.max(torch.abs(target_sample)) + 1e-8)
-                    
-                    # 處理輸出音頻 (與 ttt2.py 一致)
-                    output_sample = output_audio[j].reshape(1, -1)
                     output_sample = output_sample / (torch.max(torch.abs(output_sample)) + 1e-8)
+                    
+                    # 確保音頻是正確的2D形狀 [channels, time] 以便保存
+                    if input_sample.dim() == 3:  # [1, 1, T] -> [1, T]
+                        input_sample = input_sample.squeeze(1)
+                    if target_sample.dim() == 3:  # [1, 1, T] -> [1, T]  
+                        target_sample = target_sample.squeeze(1)
+                    if output_sample.dim() == 3:  # [1, 1, T] -> [1, T]
+                        output_sample = output_sample.squeeze(1)
+                    
+                    logging.info(f"樣本形狀 - input: {input_sample.shape}, output: {output_sample.shape}, target: {target_sample.shape}")
                     
                     # 保存每個音頻樣本和頻譜圖 (與 ttt2.py 一致)
                     for audio, prefix in [
@@ -761,16 +789,11 @@ def save_sample_ttt2_style(input_audio, output_audio, target_audio, epoch, batch
                                 logging.info(f"🔊 保存{prefix}音頻到: {audio_path}")
                             except ImportError:
                                 # 備用方案：使用torchaudio直接保存 (與 ttt2.py 的備用方案一致)
-                                # 確保音頻是2D tensor [channels, time]
-                                if audio.dim() == 1:
-                                    audio = audio.unsqueeze(0)
                                 torchaudio.save(audio_path, audio.cpu(), 24000)
                                 logging.info(f"🔊 使用torchaudio保存{prefix}音頻到: {audio_path}")
                         except Exception as save_err:
                             logging.warning(f"❌ 保存音頻失敗: {str(save_err)}")
-                            # 最終備用方案
-                            if audio.dim() == 1:
-                                audio = audio.unsqueeze(0)
+                            # 最終備用方案：與 ttt2.py 的 except 分支一致
                             torchaudio.save(audio_path, audio.cpu(), 24000)
                             logging.info(f"🔊 使用備用方案保存{prefix}音頻到: {audio_path}")
                         
