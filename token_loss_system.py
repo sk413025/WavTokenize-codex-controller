@@ -56,8 +56,8 @@ def compute_token_content_consistency_loss(predicted_logits, target_tokens,
         torch.Tensor: 內容一致性損失
     """
     # 主要一致性損失：交叉熵（確保預測正確的 token）
-    predicted_logits_flat = predicted_logits.view(-1, predicted_logits.size(-1))
-    target_tokens_flat = target_tokens.view(-1)
+    predicted_logits_flat = predicted_logits.reshape(-1, predicted_logits.size(-1))
+    target_tokens_flat = target_tokens.reshape(-1)
     
     # 過濾無效 token（pad token = 0）
     valid_mask = target_tokens_flat != 0

@@ -17,13 +17,15 @@ export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128  # CUDA記憶體配置
 export TTT_BATCH_SIZE=8               # 批次大小 (與 run_fixed_ttt2_branch.sh 一致)
 export TTT_NUM_WORKERS=4              # 資料載入工作線程數
 export CONTENT_BATCHING=true          # 啟用內容感知批次採樣
+export CUDA_LAUNCH_BLOCKING=1         # 啟用CUDA同步調試，獲得更詳細的錯誤信息
 
 echo ""
 echo "🔧 環境變數設定:"
 echo "   ONLY_USE_BOX_MATERIAL: $ONLY_USE_BOX_MATERIAL"
 echo "   TTT_BATCH_SIZE: $TTT_BATCH_SIZE"
 echo "   TTT_NUM_WORKERS: $TTT_NUM_WORKERS"
-echo "   CONTENT_BATCHING: $CONTENT_BATCHING"ormer 降噪訓練 - Token Loss 系統模式
+echo "   CONTENT_BATCHING: $CONTENT_BATCHING"
+echo "   CUDA_LAUNCH_BLOCKING: $CUDA_LAUNCH_BLOCKING (調試CUDA錯誤)"ormer 降噪訓練 - Token Loss 系統模式
 # 實驗編號：EXP-WAVTOK-TL-$(date +%Y%m%d%H%M)
 
 set -e  # 腳本遇到錯誤時停止運行

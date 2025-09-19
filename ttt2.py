@@ -360,8 +360,8 @@ def compute_codebook_consistency_loss(enhanced_features, target_discrete_code, w
             
             # 計算離散碼的交叉熵損失
             # 重塑為適合交叉熵的形狀
-            enhanced_discrete_flat = enhanced_discrete_indices.view(-1)
-            target_discrete_flat = target_discrete_code.view(-1)
+            enhanced_discrete_flat = enhanced_discrete_indices.reshape(-1)
+            target_discrete_flat = target_discrete_code.reshape(-1)
             
             # 獲取量化器參數（安全訪問）
             n_q = getattr(quantizer, 'n_q', 8)  # 默認8個量化級別
