@@ -2301,6 +2301,8 @@ def main():
     parser.add_argument("--hierarchy_alpha", type=float, default=0.7, help="階層式損失中連續特徵權重（0-1）")
     parser.add_argument("--content_alpha", type=float, default=0.01, help="內容一致性損失權重")
     parser.add_argument("--max_sentences_per_speaker", type=int, default=None, help="限制每位語者最多使用的句子數量")
+    parser.add_argument("--val_speakers", nargs='+', default=['girl9', 'boy7'], help="驗證集語者")
+    parser.add_argument("--train_speakers", nargs='+', default=['boy1', 'boy3', 'boy4', 'boy5', 'boy6', 'girl2', 'girl3', 'girl4', 'girl6', 'girl7'], help="訓練集語者")
     
     args = parser.parse_args()
 
@@ -2383,7 +2385,8 @@ def main():
         'val_split': 0.2,
         'validation_strategy': 'speaker_only',
         'custom_val_split': True,    # 啟用自定義驗證集分割
-        'val_speakers': ['girl9', 'boy7'],  # 指定驗證集說話者為girl9和boy7
+        'val_speakers': args.val_speakers,  # 指定驗證集說話者
+        'train_speakers': args.train_speakers,  # 指定訓練集說話者
         
         # 內容感知批次採樣相關參數
         'content_aware_batching': True,      # 是否啟用內容感知批次採樣
@@ -2653,12 +2656,10 @@ def main():
                             val_indices.append(i)
                         else:
                             train_indices.append(i)
-                else:
-                    # 對於非指定驗證說話者，有10%的機率進入驗證集以增加多樣性
-                    if random.random() < 0.1:
-                        val_indices.append(i)
-                    else:
-                        train_indices.append(i)
+                elif 'train_speakers' not in config or speaker in config['train_speakers']:
+                    # 如果沒有指定訓練語者，或者語者在指定的訓練語者列表中
+                    train_indices.append(i)
+                # 如果語者既不在驗證集也不在指定的訓練集中，則跳過這個樣本
                         
         elif validation_strategy == 'balanced':
             # 平衡驗證集：確保各種材質和說話者的組合都有足夠的代表性
