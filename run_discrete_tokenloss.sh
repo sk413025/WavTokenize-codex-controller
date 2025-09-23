@@ -1,212 +1,126 @@
 #!/bin/bash
 
-# WavTokenizer-Transformer 降噪訓練 - Token Loss 系統模式
-echo "📊 參數配置："
-echo "   - 總參數: 89.3M (80.6M凍結 + 8.7M可訓練)"
-echo "   - 訓練輪數: 600 epochs (與 ttt2.py 一致)"
-echo "   - Token Loss: L2(30%) + 一致性(40%) + Manifold(10%) + 正規化(10%) + 連貫性(10%)"
-echo "   - 儲存頻率: 每50epochs模型 + 每300epochs檢查點"
-echo "   - 樣本儲存: 每100epochs (含頻譜圖)"
-echo "   - 學習曲線: 每50epochs更新"
+# 確保腳本在錯誤時會停止運行
+set -e
+
+# 獲取當前日期時間作為實驗編號
+EXP_ID=$(date +%Y%m%d%H%M)
+REPORT_FILE="REPORT.md"
+TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
+
+# 顯示腳本運行訊息
+echo "====================================================="
+echo "開始執行 WavTokenizer-Transformer 離散Token訓練 - $EXP_ID"
+echo "====================================================="
+echo "模型: WavTokenizer-Transformer (離散Token空間降噪)"
+echo "輸出目錄: results/wavtokenizer_tokenloss_${EXP_ID}"
+echo ""
+echo "🔧 架構特點:"
+echo "1. ✅ 離散Token空間降噪 (vs ttt2.py 連續特徵)"
+echo "2. ✅ Transformer架構 (vs ttt2.py ResidualBlock)"
+echo "3. ✅ Token Loss系統: 移植ttt2.py損失邏輯到離散空間"
+echo "4. ✅ 輕量化設計: 減少記憶體使用"
+echo "5. ✅ 僅使用 box 材質數據進行訓練"
+echo ""
+echo "🎯 訓練參數 (參考 run_fixed_ttt2_branch.sh):"
+echo "1. --use_token_loss: 使用Token Loss系統而非純CrossEntropy"
+echo "2. 輕量化Transformer: d_model=256, 3層encoder/decoder"
+echo "3. ONLY_USE_BOX_MATERIAL=true: 僅使用 box 材質數據"
+echo "4. batch_size=8: 確保內容一致性損失計算 (與ttt2.py一致)"
 echo "====================================================="
 
-# 設置環境變數 (與 ttt2.py 一致)
+# 設置環境變數 (完全參考 run_fixed_ttt2_branch.sh)
 export ONLY_USE_BOX_MATERIAL=true     # 僅處理 box 材質
-export PYTHONUNBUFFERED=1             # 即時輸出日誌
-export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128  # CUDA記憶體配置
-export TTT_BATCH_SIZE=8               # 批次大小 (與 run_fixed_ttt2_branch.sh 一致)
-export TTT_NUM_WORKERS=4              # 資料載入工作線程數
-export CONTENT_BATCHING=true          # 啟用內容感知批次採樣
-export CUDA_LAUNCH_BLOCKING=1         # 啟用CUDA同步調試，獲得更詳細的錯誤信息
+export PYTHONUNBUFFERED=1           # 即時輸出日誌，不進行緩衝
+export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128  # 限制CUDA記憶體分配塊大小
+export TTT_BATCH_SIZE=8             # 增大批次大小以確保每個批次有相同內容ID的多個樣本
+export TTT_NUM_WORKERS=4            # 資料載入工作線程數
+export TTT_EXPERIMENT_ID="${EXP_ID}" # 設置實驗ID
+export INPUT_SAMPLE_RATE=16000      # 設置輸入音頻採樣率
+export CONTENT_BATCHING=true        # 啟用內容感知批次採樣，確保相同內容的樣本在同一批次
 
-echo ""
-echo "🔧 環境變數設定:"
-echo "   ONLY_USE_BOX_MATERIAL: $ONLY_USE_BOX_MATERIAL"
-echo "   TTT_BATCH_SIZE: $TTT_BATCH_SIZE"
-echo "   TTT_NUM_WORKERS: $TTT_NUM_WORKERS"
-echo "   CONTENT_BATCHING: $CONTENT_BATCHING"
-echo "   CUDA_LAUNCH_BLOCKING: $CUDA_LAUNCH_BLOCKING (調試CUDA錯誤)"ormer 降噪訓練 - Token Loss 系統模式
-# 實驗編號：EXP-WAVTOK-TL-$(date +%Y%m%d%H%M)
-
-set -e  # 腳本遇到錯誤時停止運行
-
-# 獲取實驗編號和時間戳
-EXP_ID="wavtok_tokenloss_$(date +%Y%m%d%H%M)"
-TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
-LOG_FILE="logs/${EXP_ID}.log"
+# 設置運行參數
+LOG_FILE="logs/wavtokenizer_transformer_training_${EXP_ID}.log"  # 日誌文件路徑
 OUTPUT_DIR="results/wavtokenizer_tokenloss_${EXP_ID}"
 
-echo "====================================================="
-echo "🚀 WavTokenizer-Transformer - Advanced Token Loss"
-echo "====================================================="
-echo "實驗編號: $EXP_ID"
-echo "開始時間: $TIMESTAMP"
-echo "輸出目錄: $OUTPUT_DIR"
-echo "日誌文件: $LOG_FILE"
-echo ""
-echo "🎯 系統架構："
-echo "1. ✅ Audio → WavTokenizer Encoder (凍結)"
-echo "2. ✅ Token → Transformer Denoiser (可訓練)"
-echo "3. ✅ Token → WavTokenizer Decoder (凍結)"
-echo "4. ✅ 高級 Token Loss 系統 (基於 ttt2.py)"
-echo ""
-echo "� Token Loss 系統組件："
-echo "   - L2 距離損失 (30%): Token 嵌入空間對齊"
-echo "   - 內容一致性損失 (40%): 相同內容 ID 的 token 一致性"
-echo "   - Manifold 正則化 (10%): Token 流形約束"
-echo "   - 正則化損失 (10%): Token 分佈正則化" 
-echo "   - 連貫性損失 (10%): Token 序列連貫性"
-echo "====================================================="
-
-# 設置環境變數
-export ONLY_USE_BOX_MATERIAL=true     # 僅處理 box 材質
-export PYTHONUNBUFFERED=1             # 即時輸出日誌
-export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128  # CUDA記憶體配置
-export TTT_BATCH_SIZE=8               # 批次大小
-export TTT_NUM_WORKERS=4              # 資料載入工作線程數
-export CONTENT_BATCHING=true          # 啟用內容感知批次採樣
-
-echo ""
-echo "🔧 環境變數設定:"
-echo "   ONLY_USE_BOX_MATERIAL: $ONLY_USE_BOX_MATERIAL"
-echo "   TTT_BATCH_SIZE: $TTT_BATCH_SIZE" 
-echo "   TTT_NUM_WORKERS: $TTT_NUM_WORKERS"
-echo "   CONTENT_BATCHING: $CONTENT_BATCHING"
-
-# 創建必要目錄
+# 創建日誌目錄
 mkdir -p logs
-mkdir -p results
-mkdir -p $OUTPUT_DIR
 
-echo ""
-echo "📁 目錄設定完成"
+echo "運行環境設定:"
+echo "- 批次大小: $TTT_BATCH_SIZE (內容一致性損失需要)"
+echo "- 資料載入線程數: $TTT_NUM_WORKERS"
+echo "- 日誌文件: $LOG_FILE"
+echo "- 輸出目錄: $OUTPUT_DIR"
+echo "- 僅使用BOX材質: $ONLY_USE_BOX_MATERIAL"
+echo "====================================================="
 
-# 檢查必要文件
-CONFIG_FILE="config/wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
-MODEL_FILE="models/wavtokenizer_large_speech_320_24k.ckpt"
+# 激活 conda 環境
+echo "激活 conda test 環境..."
+source /home/sbplab/miniconda3/etc/profile.d/conda.sh
+conda activate test
 
-echo ""
-echo "🔍 檢查必要文件..."
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "❌ 錯誤: 找不到配置文件 $CONFIG_FILE"
-    exit 1
-fi
+# 運行前清理CUDA緩存
+echo "清理 CUDA 緩存..."
+python -c "import torch; torch.cuda.empty_cache()" || echo "無法清空CUDA緩存"
 
-if [ ! -f "$MODEL_FILE" ]; then
-    echo "❌ 錯誤: 找不到模型文件 $MODEL_FILE"
-    exit 1
-fi
-
-if [ ! -f "wavtokenizer_transformer_denoising.py" ]; then
-    echo "❌ 錯誤: 找不到訓練腳本 wavtokenizer_transformer_denoising.py"
-    exit 1
-fi
-
-if [ ! -f "token_loss_system.py" ]; then
-    echo "❌ 錯誤: 找不到 Token Loss 系統 token_loss_system.py"
-    exit 1
-fi
-
-echo "✅ 所有必要文件檢查完成"
-
-# 激活 conda 環境（如果存在）
-echo ""
-echo "🐍 激活 conda 環境..."
-if command -v conda &> /dev/null; then
-    source /home/sbplab/miniconda3/etc/profile.d/conda.sh
-    if conda env list | grep -q "test"; then
-        conda activate test
-        echo "✅ 已激活 conda test 環境"
-    else
-        echo "⚠️  使用當前環境（test 環境未找到）"
-    fi
-else
-    echo "⚠️  Conda 不可用，使用當前 Python 環境"
-fi
-
-# 檢查 GPU
-echo ""
-echo "🚀 檢查 GPU 可用性..."
-python -c "
-import torch
-if torch.cuda.is_available():
-    print(f'✅ CUDA 可用: {torch.cuda.device_count()} 個 GPU')
-    for i in range(torch.cuda.device_count()):
-        print(f'   GPU {i}: {torch.cuda.get_device_name(i)}')
-else:
-    print('❌ CUDA 不可用，將使用 CPU')
-"
-
-# 清理 CUDA 緩存
-echo ""
-echo "🧹 清理 CUDA 緩存..."
-python -c "import torch; torch.cuda.empty_cache()" 2>/dev/null || echo "無法清空 CUDA 緩存"
-
-echo ""
-echo "🚀 開始訓練 - Token Loss 系統模式"
-echo "⏰ 開始時間: $(date)"
-echo ""
-
-# 執行訓練 - Token Loss 模式（使用 --use_token_loss）
-# 參數設定與 ttt2.py 一致: batch_size=8, 語者分類, 每位語者100句話, 僅box材質, 600 epochs
+# 運行模型，同時將輸出導向至終端和日誌文件
+echo "🚀 開始 WavTokenizer-Transformer 訓練，時間: $(date)"
+echo "使用輕量化 Transformer + Token Loss 系統..."
 python wavtokenizer_transformer_denoising.py \
-    --output_dir "$OUTPUT_DIR" \
-    --use_token_loss \
-    --l2_weight 0.3 \
-    --consistency_weight 0.4 \
-    --manifold_weight 0.1 \
-    --normalization_weight 0.1 \
-    --coherence_weight 0.1 \
+    --d_model 256 \
+    --nhead 4 \
+    --num_encoder_layers 3 \
+    --num_decoder_layers 3 \
+    --dim_feedforward 1024 \
+    --max_length 256 \
     --batch_size 8 \
-    --num_epochs 600 \
+    --use_token_loss \
+    --gradient_accumulation_steps 2 \
+    --num_epochs 100 \
     --learning_rate 1e-4 \
-    --max_length 200 \
-    --save_every 50 \
+    --output_dir "$OUTPUT_DIR" \
+    --save_every 25 \
     --val_speakers girl9 boy7 \
     --max_sentences_per_speaker 100 \
     2>&1 | tee -a $LOG_FILE
 
-# 檢查訓練結果
-TRAIN_EXIT_CODE=$?
+# 顯示完成訊息
 echo ""
 echo "====================================================="
-if [ $TRAIN_EXIT_CODE -eq 0 ]; then
-    echo "🎉 WavTokenizer-Transformer Token Loss 訓練完成！"
-    echo "📊 訓練成功結束時間: $(date)"
-    echo "📁 結果保存位置: $OUTPUT_DIR"
-    echo "📊 訓練日誌: $LOG_FILE"
-    
-    # 檢查輸出文件
-    echo ""
-    echo "📂 檢查訓練輸出："
-    if [ -f "$OUTPUT_DIR/best_model.pth" ]; then
-        echo "✅ 最佳模型: $OUTPUT_DIR/best_model.pth"
-    fi
-    if [ -f "$OUTPUT_DIR/final_model.pth" ]; then
-        echo "✅ 最終模型: $OUTPUT_DIR/final_model.pth"
-    fi
-    if [ -f "$OUTPUT_DIR/training_history.png" ]; then
-        echo "✅ 訓練曲線: $OUTPUT_DIR/training_history.png"
-    fi
-    if [ -f "$OUTPUT_DIR/training.log" ]; then
-        echo "✅ 詳細日誌: $OUTPUT_DIR/training.log"
-    fi
-    
-    echo ""
-    echo "🎯 實驗總結："
-    echo "   架構: Audio → WavTokenizer → Transformer → Audio"
-    echo "   損失: Advanced Token Loss System (基於 ttt2.py)"
-    echo "   參數: 89.3M總參數 (80.6M凍結 + 8.7M可訓練)"
-    echo "   組件: L2(30%) + 一致性(40%) + Manifold(10%) + 正規化(10%) + 連貫性(10%)"
-    echo "   特點: 端到端音頻降噪 + 高級損失約束"
-    
-else
-    echo "❌ 訓練失敗！退出碼: $TRAIN_EXIT_CODE"
-    echo "📊 錯誤時間: $(date)"
-    echo "📋 請檢查日誌文件: $LOG_FILE"
-fi
+echo "WavTokenizer-Transformer 訓練完成，時間: $(date)"
+echo "結果日誌保存在: $LOG_FILE"
+echo "實驗結果保存在: $OUTPUT_DIR"
 
-echo "====================================================="
-echo "實驗編號: $EXP_ID"
-echo "結束時間: $(date)"
-echo "====================================================="
+# 自動更新實驗報告 (參考 run_fixed_ttt2_branch.sh 格式)
+echo "" >> $REPORT_FILE
+echo "## WavTokenizer-Transformer 離散Token訓練 - TOKEN_$EXP_ID" >> $REPORT_FILE
+echo "**執行時間:** $TIMESTAMP" >> $REPORT_FILE
+echo "**模式:** 輕量化Transformer + Token Loss" >> $REPORT_FILE
+echo "**輸出目錄:** $OUTPUT_DIR" >> $REPORT_FILE
+echo "" >> $REPORT_FILE
+echo "### 🔧 關鍵特色" >> $REPORT_FILE
+echo "1. **離散Token空間:** vs ttt2.py連續特徵空間" >> $REPORT_FILE
+echo "2. **Transformer架構:** vs ttt2.py ResidualBlock架構" >> $REPORT_FILE
+echo "3. **Token Loss系統:** 移植ttt2.py損失邏輯到離散空間" >> $REPORT_FILE
+echo "4. **內容一致性損失:** batch_size=8 確保相同內容ID樣本" >> $REPORT_FILE
+echo "5. **數據一致性:** 與ttt2.py相同的BOX材質、語者分組" >> $REPORT_FILE
+echo "" >> $REPORT_FILE
+echo "### 🎯 訓練設定" >> $REPORT_FILE
+echo "- **模型:** WavTokenizer-Transformer (輕量化)" >> $REPORT_FILE
+echo "- **架構:** d_model=256, 3+3層, nhead=4" >> $REPORT_FILE
+echo "- **損失函數:** Token Loss系統 (ttt2.py移植版)" >> $REPORT_FILE
+echo "- **材質:** 僅 box 材質 (與ttt2.py一致)" >> $REPORT_FILE
+echo "- **批次大小:** $TTT_BATCH_SIZE (內容一致性損失需要)" >> $REPORT_FILE
+echo "- **日誌檔案:** \`$LOG_FILE\`" >> $REPORT_FILE
+echo "" >> $REPORT_FILE
+echo "### 📊 預期對比" >> $REPORT_FILE
+echo "- 對比ttt2.py: 離散 vs 連續特徵空間處理效果" >> $REPORT_FILE
+echo "- 對比架構: Transformer vs ResidualBlock 降噪能力" >> $REPORT_FILE
+echo "- 對比損失: Token Loss在離散空間的適應性" >> $REPORT_FILE
+echo "- 對比記憶體: 輕量化設計的效率提升" >> $REPORT_FILE
+echo "" >> $REPORT_FILE
+echo "----" >> $REPORT_FILE
+
+echo "已更新實驗報告: $REPORT_FILE"
+echo "🎉 WavTokenizer-Transformer 訓練啟動完成！"
+echo "======================================================"

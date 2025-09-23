@@ -136,8 +136,8 @@ class WavTokenizerTransformerDenoiser(nn.Module):
     """基於 WavTokenizer 的端到端音頻降噪系統"""
     
     def __init__(self, config_path, model_path, 
-                 d_model=512, nhead=8, num_encoder_layers=6, num_decoder_layers=6,
-                 dim_feedforward=2048, max_length=512, dropout=0.1):
+                 d_model=256, nhead=4, num_encoder_layers=3, num_decoder_layers=3,
+                 dim_feedforward=1024, max_length=256, dropout=0.1):
         super(WavTokenizerTransformerDenoiser, self).__init__()
         
         # 載入預訓練的 WavTokenizer
@@ -518,7 +518,7 @@ def train_epoch_with_token_loss(model, dataloader, optimizer, device, epoch,
                 target_tokens=target_tokens,
                 input_tokens=noisy_tokens,
                 embedding_layer=embedding_layer,
-                weights=loss_weights
+                loss_weights=loss_weights
             )
         except Exception as e:
             logging.warning(f"Token loss 計算失敗，回退到交叉熵: {e}")
@@ -1098,21 +1098,35 @@ def main():
                         default='models/wavtokenizer_large_speech_320_24k.ckpt',
                         help='WavTokenizer 預訓練模型路徑')
     
-    # 模型參數 - 使用適中的配置，利用GPU 2的完整內存
+    # 模型參數 - 輕量化配置以減少記憶體使用
     parser.add_argument('--d_model', type=int, default=256, help='Transformer 模型維度')
-    parser.add_argument('--nhead', type=int, default=8, help='注意力頭數')
+    parser.add_argument('--nhead', type=int, default=4, help='注意力頭數')
     parser.add_argument('--num_encoder_layers', type=int, default=3, help='編碼器層數')
     parser.add_argument('--num_decoder_layers', type=int, default=3, help='解碼器層數')
-    parser.add_argument('--dim_feedforward', type=int, default=512, help='前饋網絡維度')
-    parser.add_argument('--max_length', type=int, default=512, help='最大序列長度')
+    parser.add_argument('--dim_feedforward', type=int, default=1024, help='前饋網絡維度')
+    parser.add_argument('--max_length', type=int, default=256, help='最大序列長度')
     parser.add_argument('--dropout', type=float, default=0.1, help='Dropout 率')
     
-    # 訓練參數
-    parser.add_argument('--batch_size', type=int, default=4, help='批次大小')
+    # 訓練參數 - 記憶體友好設定
+    parser.add_argument('--batch_size', type=int, default=2, help='批次大小')
     parser.add_argument('--num_epochs', type=int, default=100, help='訓練輪數')
     parser.add_argument('--learning_rate', type=float, default=1e-4, help='學習率')
     parser.add_argument('--weight_decay', type=float, default=1e-5, help='權重衰減')
     parser.add_argument('--save_every', type=int, default=10, help='每幾個 epoch 保存一次')
+    
+    # 記憶體優化參數
+    parser.add_argument('--gradient_accumulation_steps', type=int, default=4, help='梯度累積步數')
+    parser.add_argument('--mixed_precision', action='store_true', help='啟用混合精度訓練')
+    parser.add_argument('--device', type=str, default='cuda', help='訓練設備')
+    parser.add_argument('--workers', type=int, default=4, help='DataLoader 工作線程數')
+    parser.add_argument('--pin_memory', action='store_true', help='啟用pin_memory')
+    parser.add_argument('--prefetch_factor', type=int, default=2, help='預取因子')
+    parser.add_argument('--max_audio_length', type=float, default=3.0, help='最大音頻長度(秒)')
+    parser.add_argument('--save_interval', type=int, default=50, help='保存間隔')
+    parser.add_argument('--log_interval', type=int, default=10, help='日誌間隔')
+    parser.add_argument('--warmup_steps', type=int, default=1000, help='預熱步數')
+    parser.add_argument('--use_scheduler', action='store_true', help='使用學習率調度器')
+    parser.add_argument('--token_loss_weight', type=float, default=1.0, help='Token Loss權重')
     
     # 損失函數選擇
     parser.add_argument('--use_token_loss', action='store_true', 
