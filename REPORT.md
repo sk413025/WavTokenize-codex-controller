@@ -1,5 +1,52 @@
 # 實驗記錄報告
 
+## 語者配置同步實驗 - SPEAKER_SYNC_20250923_035915
+**執行時間:** 2025-09-23 03:59:15  
+**實驗類型:** 系統配置同步  
+**實驗編號:** SPEAKER_SYNC_20250923  
+
+### 🎯 實驗背景與動機
+用戶要求兩個訓練系統使用相同的語者分割配置以便進行公平比較：
+- **ttt2.py系統**: 連續特徵空間處理，使用ResidualBlock CNN架構
+- **WavTokenizer-Transformer系統**: 離散token空間處理，使用輕量化Transformer架構
+
+### 📋 實驗目的
+1. 確保實驗控制變量：相同的訓練/驗證語者分割
+2. 提供可重現的實驗環境和公平的模型比較基礎  
+3. 實現完整的參數化配置，支援靈活的語者指定
+
+### 🔧 實際執行結果
+#### 1. ttt2.py 參數解析更新
+- ✅ 添加 `--val_speakers` 和 `--train_speakers` 命令行參數
+- ✅ 設置與 WavTokenizer-Transformer 相同的預設值
+- ✅ 將硬編碼配置改為使用 `args.val_speakers` 和 `args.train_speakers`
+
+#### 2. run_fixed_ttt2_branch.sh 腳本更新  
+- ✅ 添加語者參數到 Python 命令中
+- ✅ 指定訓練語者：`boy1 boy3 boy4 boy5 boy6 girl2 girl3 girl4 girl6 girl7`
+- ✅ 指定驗證語者：`girl9 boy7`
+
+#### 3. 系統驗證測試
+- ✅ 參數解析測試通過
+- ✅ bash 腳本語法檢查通過
+
+### 📊 實驗結果解讀
+- **語者分割統一**: 兩個系統現在使用完全相同的語者分割配置
+- **數據規模**: 訓練集10位語者，驗證集2位語者  
+- **系統靈活性**: 支援命令行參數動態配置，增強實驗靈活性
+
+### 🔍 實驗反思
+- 統一的語者配置是公平比較的基礎，消除了系統間的配置差異
+- 參數化設計提高了系統的可重用性和實驗靈活性
+- 需要在後續實驗中驗證兩系統在相同條件下的性能差異
+
+### 🚀 重現實驗步驟
+1. 使用 `run_fixed_ttt2_branch.sh` 執行 ttt2.py 系統
+2. 使用 `run_discrete_tokenloss.sh` 執行 WavTokenizer-Transformer 系統  
+3. 兩系統現在使用相同的語者分割進行訓練和驗證
+
+---
+
 # TTT2模型架構視覺化分析_20250919_EXP-ARCHITECTURE-ANALYSIS
 # 日期
 2025-09-19
@@ -2086,3 +2133,63 @@ print(f"選擇內容ID範圍：{selected_pairs[0]['content_id']} 到 {selected_p
 2. **可重現性**：消除隨機因素，確保實驗可重現
 3. **比較公平性**：不同實驗使用相同的句子集合
 
+
+## WavTokenizer-Transformer 離散Token訓練 - TOKEN_202509230351
+**執行時間:** 2025-09-23 03:51:22
+**模式:** 輕量化Transformer + Token Loss
+**輸出目錄:** results/wavtokenizer_tokenloss_202509230351
+
+### 🔧 關鍵特色
+1. **離散Token空間:** vs ttt2.py連續特徵空間
+2. **Transformer架構:** vs ttt2.py ResidualBlock架構
+3. **Token Loss系統:** 移植ttt2.py損失邏輯到離散空間
+4. **內容一致性損失:** batch_size=8 確保相同內容ID樣本
+5. **指定語者分割:** 訓練集10位語者 vs 驗證集2位語者
+
+### 🎯 訓練設定
+- **模型:** WavTokenizer-Transformer (輕量化)
+- **架構:** d_model=256, 3+3層, nhead=4
+- **損失函數:** Token Loss系統 (ttt2.py移植版)
+- **材質:** 僅 box 材質
+- **訓練語者:** boy1,boy3,boy4,boy5,boy6,girl2,girl3,girl4,girl6,girl7
+- **驗證語者:** girl9,boy7
+- **批次大小:** 8 (內容一致性損失需要)
+- **日誌檔案:** `logs/wavtokenizer_transformer_training_202509230351.log`
+
+### 📊 預期對比
+- 對比ttt2.py: 離散 vs 連續特徵空間處理效果
+- 對比架構: Transformer vs ResidualBlock 降噪能力
+- 對比損失: Token Loss在離散空間的適應性
+- 對比記憶體: 輕量化設計的效率提升
+
+----
+
+## WavTokenizer-Transformer 離散Token訓練 - TOKEN_202509230516
+**執行時間:** 2025-09-23 05:16:42
+**模式:** 輕量化Transformer + Token Loss
+**輸出目錄:** results/wavtokenizer_tokenloss_202509230516
+
+### 🔧 關鍵特色
+1. **離散Token空間:** vs ttt2.py連續特徵空間
+2. **Transformer架構:** vs ttt2.py ResidualBlock架構
+3. **Token Loss系統:** 移植ttt2.py損失邏輯到離散空間
+4. **內容一致性損失:** batch_size=8 確保相同內容ID樣本
+5. **指定語者分割:** 訓練集10位語者 vs 驗證集2位語者
+
+### 🎯 訓練設定
+- **模型:** WavTokenizer-Transformer (輕量化)
+- **架構:** d_model=256, 3+3層, nhead=4
+- **損失函數:** Token Loss系統 (ttt2.py移植版)
+- **材質:** 僅 box 材質
+- **訓練語者:** boy1,boy3,boy4,boy5,boy6,girl2,girl3,girl4,girl6,girl7
+- **驗證語者:** girl9,boy7
+- **批次大小:** 8 (內容一致性損失需要)
+- **日誌檔案:** `logs/wavtokenizer_transformer_training_202509230516.log`
+
+### 📊 預期對比
+- 對比ttt2.py: 離散 vs 連續特徵空間處理效果
+- 對比架構: Transformer vs ResidualBlock 降噪能力
+- 對比損失: Token Loss在離散空間的適應性
+- 對比記憶體: 輕量化設計的效率提升
+
+----

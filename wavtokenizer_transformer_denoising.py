@@ -136,8 +136,8 @@ class WavTokenizerTransformerDenoiser(nn.Module):
     """基於 WavTokenizer 的端到端音頻降噪系統"""
     
     def __init__(self, config_path, model_path, 
-                 d_model=256, nhead=4, num_encoder_layers=3, num_decoder_layers=3,
-                 dim_feedforward=1024, max_length=256, dropout=0.1):
+                 d_model=128, nhead=2, num_encoder_layers=2, num_decoder_layers=2,
+                 dim_feedforward=256, max_length=256, dropout=0.1):
         super(WavTokenizerTransformerDenoiser, self).__init__()
         
         # 載入預訓練的 WavTokenizer
@@ -1098,12 +1098,12 @@ def main():
                         default='models/wavtokenizer_large_speech_320_24k.ckpt',
                         help='WavTokenizer 預訓練模型路徑')
     
-    # 模型參數 - 輕量化配置以減少記憶體使用
-    parser.add_argument('--d_model', type=int, default=256, help='Transformer 模型維度')
-    parser.add_argument('--nhead', type=int, default=4, help='注意力頭數')
-    parser.add_argument('--num_encoder_layers', type=int, default=3, help='編碼器層數')
-    parser.add_argument('--num_decoder_layers', type=int, default=3, help='解碼器層數')
-    parser.add_argument('--dim_feedforward', type=int, default=1024, help='前饋網絡維度')
+    # 模型參數 - 超輕量化配置以大幅減少記憶體使用和訓練時間
+    parser.add_argument('--d_model', type=int, default=128, help='Transformer 模型維度')
+    parser.add_argument('--nhead', type=int, default=2, help='注意力頭數')
+    parser.add_argument('--num_encoder_layers', type=int, default=2, help='編碼器層數')
+    parser.add_argument('--num_decoder_layers', type=int, default=2, help='解碼器層數')
+    parser.add_argument('--dim_feedforward', type=int, default=256, help='前饋網絡維度')
     parser.add_argument('--max_length', type=int, default=256, help='最大序列長度')
     parser.add_argument('--dropout', type=float, default=0.1, help='Dropout 率')
     
@@ -1146,6 +1146,8 @@ def main():
                         help='每位語者最大句子數')
     parser.add_argument('--val_speakers', nargs='+', default=['girl9', 'boy7'],
                         help='驗證集語者')
+    parser.add_argument('--train_speakers', nargs='+', default=None,
+                        help='訓練集語者 (如果指定，只使用這些語者進行訓練；如果不指定，使用除驗證集外的所有語者)')
     
     args = parser.parse_args()
     
@@ -1203,8 +1205,12 @@ def main():
     
     logging.info(f"數據集大小: {len(audio_dataset)} 個音頻對")
     
-    # 按語者分割數據集（符合實驗設計：10人訓練、2人驗證）
+    # 按語者分割數據集（符合實驗設計：可指定訓練和驗證語者）
     logging.info(f"按語者分割數據集，驗證集語者: {args.val_speakers}")
+    if args.train_speakers:
+        logging.info(f"指定訓練集語者: {args.train_speakers}")
+    else:
+        logging.info("訓練集語者: 除驗證集外的所有語者")
     
     train_indices = []
     val_indices = []
@@ -1216,8 +1222,11 @@ def main():
         
         if speaker in args.val_speakers:
             val_indices.append(idx)
-        else:
+        elif args.train_speakers is None or speaker in args.train_speakers:
+            # 如果沒有指定訓練語者，使用除驗證集外的所有語者
+            # 如果指定了訓練語者，只使用指定的語者
             train_indices.append(idx)
+        # 如果語者既不在驗證集也不在指定的訓練集中，則跳過
     
     # 限制樣本數（用於快速測試）
     if args.max_samples and args.max_samples < len(audio_dataset):
