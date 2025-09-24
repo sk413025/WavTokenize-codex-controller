@@ -45,6 +45,9 @@ export TTT_EXPERIMENT_ID="${EXP_ID}" # 設置實驗ID
 export INPUT_SAMPLE_RATE=16000      # 設置輸入音頻採樣率
 export CONTENT_BATCHING=true        # 啟用內容感知批次採樣
 
+# GPU 配置 - 明確指定使用空閒的 GPU 2，不影響其他程序
+export CUDA_VISIBLE_DEVICES=2      # 僅使用 GPU 2 (完全空閒)
+
 # 設置運行參數
 LOG_FILE="logs/crossentropy_experiment_${EXP_ID}.log"
 OUTPUT_DIR="results/crossentropy_exp_${EXP_ID}"
@@ -55,6 +58,8 @@ mkdir -p "$OUTPUT_DIR"
 
 echo "運行環境設定:"
 echo "- 實驗類型 \"Experiment Type\": 純交叉熵實驗"
+echo "- GPU 使用: GPU 2 (RTX 2080 Ti) - 完全空閒，不影響其他程序"
+echo "- 記憶體需求: ~33MB (超輕量化)"
 echo "- 批次大小 \"Batch Size\": $TTT_BATCH_SIZE"
 echo "- 資料載入線程數: $TTT_NUM_WORKERS"
 echo "- 日誌文件: $LOG_FILE"

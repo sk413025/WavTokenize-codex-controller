@@ -518,7 +518,7 @@ def train_epoch_with_token_loss(model, dataloader, optimizer, device, epoch,
                 target_tokens=target_tokens,
                 input_tokens=noisy_tokens,
                 embedding_layer=embedding_layer,
-                loss_weights=loss_weights
+                weights=loss_weights  # 修正參數名稱
             )
         except Exception as e:
             logging.warning(f"Token loss 計算失敗，回退到交叉熵: {e}")
