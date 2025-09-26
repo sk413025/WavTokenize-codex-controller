@@ -233,11 +233,16 @@ class WavTokenizerTransformerDenoiser(nn.Module):
             bandwidth_id = torch.tensor([0], device=tokens.device)
             audio = self.wavtokenizer.decode(features, bandwidth_id=bandwidth_id)
             
-            # 確保輸出是3D張量 [batch, channels, time]，如果是4D則去除額外維度
-            if audio.dim() == 4 and audio.size(1) == 1:
-                audio = audio.squeeze(1)  # [batch, 1, 1, time] -> [batch, 1, time]
+            # WavTokenizer.decode 返回 [batch, time]，需要添加 channel 維度變為 [batch, 1, time]
+            if audio.dim() == 2:
+                audio = audio.unsqueeze(1)  # [batch, time] -> [batch, 1, time]
+            
+            # 如果是4D張量，進行維度調整
             elif audio.dim() == 4:
-                audio = audio.squeeze(2)  # [batch, channels, 1, time] -> [batch, channels, time]
+                if audio.size(1) == 1:
+                    audio = audio.squeeze(1)  # [batch, 1, 1, time] -> [batch, 1, time]
+                elif audio.size(2) == 1:
+                    audio = audio.squeeze(2)  # [batch, channels, 1, time] -> [batch, channels, time]
             
             return audio
     
@@ -256,17 +261,22 @@ class WavTokenizerTransformerDenoiser(nn.Module):
         """Transformer 前向傳播（僅處理 token 序列）"""
         batch_size, src_seq_len = src_tokens.size()
         max_pos_len = self.pos_encoding.shape[1]
-        src_emb = self.src_embedding(src_tokens) * math.sqrt(self.d_model)
+        
+        # 處理 src_tokens 的長度
         if src_seq_len < max_pos_len:
             # 填充到最大長度
             pad_size = max_pos_len - src_seq_len
-            pad = torch.zeros(batch_size, pad_size, src_emb.shape[2], device=src_emb.device, dtype=src_emb.dtype)
-            src_emb = torch.cat([src_emb, pad], dim=1)
-            src_seq_len = max_pos_len
+            pad = torch.full((batch_size, pad_size), self.pad_token, device=src_tokens.device, dtype=src_tokens.dtype)
+            src_tokens_padded = torch.cat([src_tokens, pad], dim=1)
         elif src_seq_len > max_pos_len:
             # 裁切到最大長度
-            src_emb = src_emb[:, :max_pos_len, :]
-            src_seq_len = max_pos_len
+            src_tokens_padded = src_tokens[:, :max_pos_len]
+        else:
+            src_tokens_padded = src_tokens
+            
+        # 使用處理後的 tokens 計算 embedding
+        src_emb = self.src_embedding(src_tokens_padded) * math.sqrt(self.d_model)
+        src_seq_len = src_tokens_padded.shape[1]
         src_emb = src_emb + self.pos_encoding[:, :src_seq_len, :]
         
         # 如果是訓練模式且提供了目標序列
@@ -285,15 +295,8 @@ class WavTokenizerTransformerDenoiser(nn.Module):
             tgt_emb = tgt_emb + self.pos_encoding[:, :tgt_seq_len, :]
             # 創建遮罩
             tgt_mask = self.generate_square_subsequent_mask(tgt_seq_len).to(src_tokens.device)
-            src_padding_mask = self.create_padding_mask(src_tokens)
+            src_padding_mask = self.create_padding_mask(src_tokens_padded)
             tgt_padding_mask = self.create_padding_mask(tgt_tokens)
-            # 填充或裁切 src_padding_mask 到 max_pos_len
-            if src_padding_mask.shape[1] < max_pos_len:
-                pad_size = max_pos_len - src_padding_mask.shape[1]
-                pad = torch.zeros(src_padding_mask.shape[0], pad_size, device=src_padding_mask.device, dtype=src_padding_mask.dtype)
-                src_padding_mask = torch.cat([src_padding_mask, pad], dim=1)
-            elif src_padding_mask.shape[1] > max_pos_len:
-                src_padding_mask = src_padding_mask[:, :max_pos_len]
             # 填充或裁切 tgt_padding_mask 到 max_pos_len
             if tgt_padding_mask.shape[1] < max_pos_len:
                 pad_size = max_pos_len - tgt_padding_mask.shape[1]
@@ -315,7 +318,7 @@ class WavTokenizerTransformerDenoiser(nn.Module):
         
         else:
             # 推理模式：使用 encoder 進行 self-attention
-            src_padding_mask = self.create_padding_mask(src_tokens)
+            src_padding_mask = self.create_padding_mask(src_tokens_padded)
             
             # 僅使用 encoder
             encoder_output = self.transformer.encoder(

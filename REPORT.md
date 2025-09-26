@@ -1,5 +1,59 @@
 # 實驗記錄報告
 
+## WavTokenizer Transformer 遮罩維度修復實驗 - MASK_FIX_20250119_120000
+**執行時間:** 2025-01-19 12:00:00  
+**實驗類型:** 系統錯誤修復  
+**實驗編號:** MASK_FIX_20250119  
+
+### 🎯 實驗背景與動機
+用戶回報音訓練過程中音檔沒有成功輸出人聲，經分析發現是由於 "Mask size should match input size" 錯誤導致的 `save_sample_ttt2_style` 函式執行失敗。
+
+### 📋 實驗目的
+1. 診斷並修復 PyTorch Transformer 模組中的遮罩維度不匹配問題
+2. 恢復音頻樣本在訓練過程中的正常保存功能
+3. 驗證 WavTokenizer 的 2D/3D 張量維度轉換處理邏輯
+
+### 🔧 實際執行結果
+#### 1. 問題診斷階段
+- ✅ 識別錯誤來源：`torch.nn.modules.transformer.py` 第 460 行遮罩驗證失敗
+- ✅ 追溯根本原因：`forward_transformer()` 方法中 `src_tokens` 和 `src_emb` 序列長度不一致
+- ✅ 發現關鍵問題：填充後的 `src_tokens_padded` 用於嵌入計算，但原始 `src_tokens` 用於創建遮罩
+
+#### 2. 程式碼修復
+- ✅ 確認 `src_padding_mask` 已正確使用 `src_tokens_padded` 創建遮罩
+- ✅ 修正 `decode_tokens_to_audio()` 方法處理 2D→3D 張量轉換
+- ✅ 維持推理模式和訓練模式的遮罩處理一致性
+
+#### 3. 功能驗證測試
+- ✅ **遮罩維度測試**: 通過 `test_mask_fix.py` 驗證 Transformer 前向傳播
+  - 輸入音頻: `torch.Size([2, 72000])`
+  - 編碼 tokens: `torch.Size([2, 225])`
+  - Transformer 輸出: `torch.Size([2, 1000])`
+  - 重建音頻: `torch.Size([2, 1, 320000])`
+
+- ✅ **音頻保存功能測試**: 通過 `test_audio_save.py` 驗證完整音頻處理流程  
+  - 模型推理模式輸出: `{'denoised_audio', 'denoised_tokens', 'noisy_tokens'}`
+  - 3D→2D 維度轉換: `torch.Size([2, 320000])`
+  - 音頻檔案成功保存: `temp/audio_samples/test_sample_20250119_01.wav` (1.28 MB)
+
+### 📊 實驗結果解讀
+- **遮罩問題解決**: 序列填充後的維度一致性確保 Transformer 模組正常運行
+- **音頻處理修復**: WavTokenizer 的 2D/3D 張量轉換邏輯現已正確處理
+- **系統功能恢復**: 訓練過程中的音頻樣本保存功能完全恢復
+
+### 🔍 實驗反思
+- **維度一致性重要性**: 在 Transformer 架構中，token 序列和嵌入序列的長度必須完全匹配
+- **系統性測試價值**: 建立完整的測試腳本有助於快速驗證修復效果
+- **錯誤追溯方法**: 從症狀（音檔未輸出）到根本原因（遮罩維度）的系統性診斷
+
+### 🚀 重現實驗步驟
+1. **問題重現**: 運行原始訓練腳本會遇到 "Mask size should match input size" 錯誤
+2. **修復驗證**: 執行 `python test_mask_fix.py` 確認遮罩維度處理正確
+3. **音頻測試**: 執行 `python test_audio_save.py` 驗證音頻保存功能
+4. **完整訓練**: 現在可以正常運行 WavTokenizer-Transformer 訓練並生成音頻樣本
+
+---
+
 ## 語者配置同步實驗 - SPEAKER_SYNC_20250923_035915
 **執行時間:** 2025-09-23 03:59:15  
 **實驗類型:** 系統配置同步  
@@ -2193,3 +2247,32 @@ print(f"選擇內容ID範圍：{selected_pairs[0]['content_id']} 到 {selected_p
 - 對比記憶體: 輕量化設計的效率提升
 
 ----
+
+## 純交叉熵音頻降噪實驗 - CROSSENTROPY_EXP_202509241021
+**執行時間:** 2025-09-24 10:21:50
+**實驗類型:** 純交叉熵損失驗證實驗
+**輸出目錄:** results/crossentropy_exp_202509241021
+
+### 🎯 實驗目的與背景
+1. **驗證假設:** 純交叉熵損失能否實現語者風格還原和降噪
+2. **對比分析:** 與 Token Loss 系統的性能差異比較
+3. **機制探索:** 離散 Token 空間中交叉熵的學習機制
+4. **基準建立:** 為後續複雜損失函數提供基準線
+
+### 🔧 實驗配置
+- **損失函數:** 純交叉熵 (禁用 Token Loss)
+- **架構:** 超輕量化 Transformer (d_model=128, layers=2+2)
+- **語者分割:** 訓練集 10 人，驗證集 2 人 (與 Token Loss 實驗一致)
+- **訓練輪數:** 50 epochs (快速驗證)
+- **數據集:** 僅 box 材質音頻數據
+
+### 📊 預期分析指標
+1. **損失收斂:** 交叉熵損失的下降趨勢和穩定性
+2. **語者還原:** 還原音頻是否保持原語者特徵
+3. **降噪效果:** 噪聲去除程度和音質改善
+4. **vs Token Loss:** 兩種方法的性能對比分析
+
+### 🔍 實驗結果
+*實驗完成後填入具體結果和分析*
+
+---

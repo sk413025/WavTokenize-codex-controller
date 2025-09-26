@@ -1,0 +1,127 @@
+2025-09-25 05:02:23,912 - INFO - 🔧 開始音頻維度測試...
+2025-09-25 05:02:23,960 - INFO - 使用設備: cuda
+2025-09-25 05:02:23,960 - ERROR - ❌ 維度測試失敗: WavTokenizerTransformerDenoiser.__init__() got an unexpected keyword argument 'wavtokenizer_config_path'
+2025-09-25 05:02:23,960 - ERROR - Traceback (most recent call last):
+  File "/home/sbplab/ruizi/c_code/debug_audio_save.py", line 42, in test_audio_dimensions
+    model = WavTokenizerTransformerDenoiser(
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        wavtokenizer_config_path='/home/sbplab/ruizi/c_code/config/wavtokenizer_smalldata_frame40_3s_nq1_code4096_dim512_kmeans200_attn.yaml',
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        dim_feedforward=256
+        ^^^^^^^^^^^^^^^^^^^
+    ).to(device)
+    ^
+TypeError: WavTokenizerTransformerDenoiser.__init__() got an unexpected keyword argument 'wavtokenizer_config_path'
+
+2025-09-25 05:11:52,059 - INFO - 🔧 開始音頻維度測試...
+2025-09-25 05:11:52,110 - INFO - 使用設備: cuda
+2025-09-25 05:11:56,815 - ERROR - ❌ 維度測試失敗: [Errno 2] No such file or directory: '/home/sbplab/ruizi/WavTokenizer/model_ckpts/wavtokenizer_smalldata_frame40_3s_nq1_code4096_dim512_kmeans200_attn.pth'
+2025-09-25 05:11:56,823 - ERROR - Traceback (most recent call last):
+  File "/home/sbplab/ruizi/c_code/debug_audio_save.py", line 42, in test_audio_dimensions
+    model = WavTokenizerTransformerDenoiser(
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        config_path='/home/sbplab/ruizi/c_code/config/wavtokenizer_smalldata_frame40_3s_nq1_code4096_dim512_kmeans200_attn.yaml',
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        dim_feedforward=256
+        ^^^^^^^^^^^^^^^^^^^
+    ).to(device)
+    ^
+  File "/home/sbplab/ruizi/c_code/wavtokenizer_transformer_denoising.py", line 144, in __init__
+    self.wavtokenizer = WavTokenizer.from_pretrained0802(config_path, model_path)
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sbplab/ruizi/c_code/decoder/pretrained.py", line 110, in from_pretrained0802
+    checkpoint = torch.load(model_path, map_location="cpu")
+  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/serialization.py", line 1425, in load
+    with _open_file_like(f, "rb") as opened_file:
+         ~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/serialization.py", line 751, in _open_file_like
+    return _open_file(name_or_buffer, mode)
+  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/serialization.py", line 732, in __init__
+    super().__init__(open(name, mode))
+                     ~~~~^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/sbplab/ruizi/WavTokenizer/model_ckpts/wavtokenizer_smalldata_frame40_3s_nq1_code4096_dim512_kmeans200_attn.pth'
+
+2025-09-25 06:15:21,699 - INFO - 🔧 開始音頻維度測試...
+2025-09-25 06:15:21,746 - INFO - 使用設備: cuda
+2025-09-25 06:15:28,587 - ERROR - ❌ 維度測試失敗: Error(s) in loading state_dict for WavTokenizer:
+	size mismatch for feature_extractor.encodec.encoder.model.3.conv.conv.weight_v: copying a param with shape torch.Size([64, 32, 4]) from checkpoint, the shape in current model is torch.Size([64, 32, 8]).
+	size mismatch for feature_extractor.encodec.encoder.model.6.conv.conv.weight_v: copying a param with shape torch.Size([128, 64, 8]) from checkpoint, the shape in current model is torch.Size([128, 64, 10]).
+	size mismatch for feature_extractor.encodec.encoder.model.12.conv.conv.weight_v: copying a param with shape torch.Size([512, 256, 16]) from checkpoint, the shape in current model is torch.Size([512, 256, 12]).
+	size mismatch for feature_extractor.encodec.decoder.model.3.convtr.convtr.weight_v: copying a param with shape torch.Size([512, 256, 16]) from checkpoint, the shape in current model is torch.Size([512, 256, 12]).
+	size mismatch for feature_extractor.encodec.decoder.model.9.convtr.convtr.weight_v: copying a param with shape torch.Size([128, 64, 8]) from checkpoint, the shape in current model is torch.Size([128, 64, 10]).
+	size mismatch for feature_extractor.encodec.decoder.model.12.convtr.convtr.weight_v: copying a param with shape torch.Size([64, 32, 4]) from checkpoint, the shape in current model is torch.Size([64, 32, 8]).
+	size mismatch for head.out.weight: copying a param with shape torch.Size([1282, 768]) from checkpoint, the shape in current model is torch.Size([2402, 768]).
+	size mismatch for head.out.bias: copying a param with shape torch.Size([1282]) from checkpoint, the shape in current model is torch.Size([2402]).
+	size mismatch for head.istft.window: copying a param with shape torch.Size([1280]) from checkpoint, the shape in current model is torch.Size([2400]).
+2025-09-25 06:15:28,590 - ERROR - Traceback (most recent call last):
+  File "/home/sbplab/ruizi/c_code/debug_audio_save.py", line 42, in test_audio_dimensions
+    model = WavTokenizerTransformerDenoiser(
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        config_path='/home/sbplab/ruizi/c_code/config/wavtokenizer_smalldata_frame40_3s_nq1_code4096_dim512_kmeans200_attn.yaml',
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        dim_feedforward=256
+        ^^^^^^^^^^^^^^^^^^^
+    ).to(device)
+    ^
+  File "/home/sbplab/ruizi/c_code/wavtokenizer_transformer_denoising.py", line 144, in __init__
+    self.wavtokenizer = WavTokenizer.from_pretrained0802(config_path, model_path)
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sbplab/ruizi/c_code/decoder/pretrained.py", line 117, in from_pretrained0802
+    model.load_state_dict(state_dict, strict=False)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/module.py", line 2581, in load_state_dict
+    raise RuntimeError(
+    ...<3 lines>...
+    )
+RuntimeError: Error(s) in loading state_dict for WavTokenizer:
+	size mismatch for feature_extractor.encodec.encoder.model.3.conv.conv.weight_v: copying a param with shape torch.Size([64, 32, 4]) from checkpoint, the shape in current model is torch.Size([64, 32, 8]).
+	size mismatch for feature_extractor.encodec.encoder.model.6.conv.conv.weight_v: copying a param with shape torch.Size([128, 64, 8]) from checkpoint, the shape in current model is torch.Size([128, 64, 10]).
+	size mismatch for feature_extractor.encodec.encoder.model.12.conv.conv.weight_v: copying a param with shape torch.Size([512, 256, 16]) from checkpoint, the shape in current model is torch.Size([512, 256, 12]).
+	size mismatch for feature_extractor.encodec.decoder.model.3.convtr.convtr.weight_v: copying a param with shape torch.Size([512, 256, 16]) from checkpoint, the shape in current model is torch.Size([512, 256, 12]).
+	size mismatch for feature_extractor.encodec.decoder.model.9.convtr.convtr.weight_v: copying a param with shape torch.Size([128, 64, 8]) from checkpoint, the shape in current model is torch.Size([128, 64, 10]).
+	size mismatch for feature_extractor.encodec.decoder.model.12.convtr.convtr.weight_v: copying a param with shape torch.Size([64, 32, 4]) from checkpoint, the shape in current model is torch.Size([64, 32, 8]).
+	size mismatch for head.out.weight: copying a param with shape torch.Size([1282, 768]) from checkpoint, the shape in current model is torch.Size([2402, 768]).
+	size mismatch for head.out.bias: copying a param with shape torch.Size([1282]) from checkpoint, the shape in current model is torch.Size([2402]).
+	size mismatch for head.istft.window: copying a param with shape torch.Size([1280]) from checkpoint, the shape in current model is torch.Size([2400]).
+
+2025-09-25 06:17:03,425 - INFO - 🔧 開始音頻維度測試...
+2025-09-25 06:17:03,470 - INFO - 使用設備: cuda
+2025-09-25 06:17:11,205 - INFO - 輸入音頻維度: torch.Size([2, 1, 24000])
+2025-09-25 06:17:11,205 - INFO - 🔄 編碼音頻到 tokens...
+2025-09-25 06:17:12,434 - INFO - Tokens 維度: torch.Size([2, 75])
+2025-09-25 06:17:12,434 - INFO - 🔄 解碼 tokens 到音頻...
+2025-09-25 06:17:12,597 - INFO - 重建音頻維度: torch.Size([2, 1, 24000])
+2025-09-25 06:17:12,597 - INFO - 🔄 測試模型推理...
+2025-09-25 06:17:12,641 - ERROR - ❌ 維度測試失敗: Mask size should match input size
+2025-09-25 06:17:12,649 - ERROR - Traceback (most recent call last):
+  File "/home/sbplab/ruizi/c_code/debug_audio_save.py", line 74, in test_audio_dimensions
+    model_output = model(test_audio)
+  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/sbplab/ruizi/c_code/wavtokenizer_transformer_denoising.py", line 389, in forward
+    denoised_tokens = self.forward_transformer(noisy_tokens)
+  File "/home/sbplab/ruizi/c_code/wavtokenizer_transformer_denoising.py", line 326, in forward_transformer
+    encoder_output = self.transformer.encoder(
+        src_emb,
+        src_key_padding_mask=src_padding_mask
+    )
+  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/transformer.py", line 460, in forward
+    ) and not torch._nested_tensor_from_mask_left_aligned(
+              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        src, src_key_padding_mask.logical_not()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+RuntimeError: Mask size should match input size
+
