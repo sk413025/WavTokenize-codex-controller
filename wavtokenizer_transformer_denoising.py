@@ -1424,6 +1424,24 @@ def main():
                         
                         # 推理模式：使用模型生成降噪音頻 (比照 ttt2.py 的 output_tuple)
                         with torch.no_grad():
+                            # 在早期訓練階段 (前10個epochs)，額外保存純WavTokenizer重建作為參考
+                            if epoch < 10:
+                                # 保存純 WavTokenizer 重建（跳過 Transformer）
+                                pure_tokens = model.encode_audio_to_tokens(input_wav)
+                                pure_reconstructed = model.decode_tokens_to_audio(pure_tokens)
+                                
+                                # 保存純重建樣本
+                                save_sample_ttt2_style(
+                                    input_audio=input_wav,
+                                    output_audio=pure_reconstructed, 
+                                    target_audio=target_wav,
+                                    epoch=epoch,
+                                    batch_idx=f"{batch_idx}_pure_wavtokenizer",
+                                    save_dir=args.output_dir,
+                                    device=device
+                                )
+                            
+                            # 正常的模型推理（經過 Transformer）
                             model_output = model(input_wav)  # 這會返回字典
                             if isinstance(model_output, dict) and 'denoised_audio' in model_output:
                                 output_audio = model_output['denoised_audio']

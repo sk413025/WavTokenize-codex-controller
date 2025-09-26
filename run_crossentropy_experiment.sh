@@ -26,7 +26,7 @@ echo "1. 禁用 --use_token_loss: 僅使用純交叉熵損失"
 echo "2. 超輕量化Transformer: d_model=128, 2層encoder/decoder, ff=256, heads=2"
 echo "3. 相同語者分割: 訓練集[boy1,3,4,5,6+girl2,3,4,6,7] vs 驗證集[girl9,boy7]"
 echo "4. 相同數據集: box材質，確保與Token Loss實驗對比公平"
-echo "5. 快速驗證: 減少訓練輪數，專注於損失函數對比"
+echo "5. 延長訓練: 200 epochs 以充分訓練，每25輪保存模型"
 echo ""
 echo "📊 預期結果:"
 echo "• 交叉熵損失曲線應該穩定下降"
@@ -89,10 +89,10 @@ python wavtokenizer_transformer_denoising.py \
     --max_length 256 \
     --batch_size 8 \
     --gradient_accumulation_steps 2 \
-    --num_epochs 50 \
+    --num_epochs 200 \
     --learning_rate 1e-4 \
     --output_dir "$OUTPUT_DIR" \
-    --save_every 10 \
+    --save_every 25 \
     --val_speakers girl9 boy7 \
     --train_speakers boy1 boy3 boy4 boy5 boy6 girl2 girl3 girl4 girl6 girl7 \
     --max_sentences_per_speaker 100 \
@@ -123,7 +123,7 @@ echo "### 🔧 實驗配置" >> $REPORT_FILE
 echo "- **損失函數:** 純交叉熵 (禁用 Token Loss)" >> $REPORT_FILE
 echo "- **架構:** 超輕量化 Transformer (d_model=128, layers=2+2)" >> $REPORT_FILE
 echo "- **語者分割:** 訓練集 10 人，驗證集 2 人 (與 Token Loss 實驗一致)" >> $REPORT_FILE
-echo "- **訓練輪數:** 50 epochs (快速驗證)" >> $REPORT_FILE
+echo "- **訓練輪數:** 200 epochs (延長訓練以充分學習)" >> $REPORT_FILE
 echo "- **數據集:** 僅 box 材質音頻數據" >> $REPORT_FILE
 echo "" >> $REPORT_FILE
 echo "### 📊 預期分析指標" >> $REPORT_FILE
