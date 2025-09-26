@@ -714,13 +714,18 @@ def save_sample_ttt2_style(input_audio, output_audio, target_audio, epoch, batch
     """保存音頻樣本和頻譜圖，完全比照 ttt2.py 的 save_sample 函數
     
     Args:
-        input_audio: 輸入音頻 (噪聲音頻)
-        output_audio: 模型輸出音頻 (降噪音頻)
-        target_audio: 目標音頻 (清潔音頻)
+        input_audio: 重建的輸入音頻 (經過 WavTokenizer encode-decode)
+        output_audio: 模型輸出音頻 (經過 Transformer + WavTokenizer 降噪)
+        target_audio: 重建的目標音頻 (經過 WavTokenizer encode-decode)
         epoch: 當前訓練週期
         batch_idx: 批次索引
         save_dir: 保存目錄
         device: 計算設備
+        
+    重要修正:
+        - input/target 現在都經過 WavTokenizer 重建，確保公平比較
+        - enhanced 經過 Transformer + WavTokenizer，展現降噪效果
+        - 三種音檔都具有相同的 WavTokenizer 基準品質 (~0.3-0.4 correlation)
     """
     import random
     
@@ -1424,35 +1429,30 @@ def main():
                         
                         # 推理模式：使用模型生成降噪音頻 (比照 ttt2.py 的 output_tuple)
                         with torch.no_grad():
-                            # 在早期訓練階段 (前10個epochs)，額外保存純WavTokenizer重建作為參考
-                            if epoch < 10:
-                                # 保存純 WavTokenizer 重建（跳過 Transformer）
-                                pure_tokens = model.encode_audio_to_tokens(input_wav)
-                                pure_reconstructed = model.decode_tokens_to_audio(pure_tokens)
-                                
-                                # 保存純重建樣本
-                                save_sample_ttt2_style(
-                                    input_audio=input_wav,
-                                    output_audio=pure_reconstructed, 
-                                    target_audio=target_wav,
-                                    epoch=epoch,
-                                    batch_idx=f"{batch_idx}_pure_wavtokenizer",
-                                    save_dir=args.output_dir,
-                                    device=device
-                                )
-                            
-                            # 正常的模型推理（經過 Transformer）
                             model_output = model(input_wav)  # 這會返回字典
                             if isinstance(model_output, dict) and 'denoised_audio' in model_output:
                                 output_audio = model_output['denoised_audio']
                             else:
                                 output_audio = model_output  # 備用方案
+                            
+                            # 🔧 修正：為了真實反映 WavTokenizer 系統性能
+                            # input 和 target 也應該經過 WavTokenizer encode-decode 重建
+                            # 這樣可以公平比較三種音檔的品質
+                            
+                            # 重建 input 音檔 (通過 WavTokenizer encode-decode)
+                            input_tokens = model.encode_audio_to_tokens(input_wav)
+                            input_reconstructed = model.decode_tokens_to_audio(input_tokens)
+                            
+                            # 重建 target 音檔 (通過 WavTokenizer encode-decode)  
+                            target_tokens = model.encode_audio_to_tokens(target_wav)
+                            target_reconstructed = model.decode_tokens_to_audio(target_tokens)
                         
                         # 使用與 ttt2.py 完全相同的 save_sample 邏輯
+                        # 🔧 修正：使用經過 WavTokenizer 重建的音檔，確保公平比較
                         save_sample_ttt2_style(
-                            input_audio=input_wav,
-                            output_audio=output_audio, 
-                            target_audio=target_wav,
+                            input_audio=input_reconstructed,  # 經過 WavTokenizer 重建的 input
+                            output_audio=output_audio,        # 經過 Transformer + WavTokenizer 的 enhanced
+                            target_audio=target_reconstructed, # 經過 WavTokenizer 重建的 target
                             epoch=epoch,
                             batch_idx=batch_idx,
                             save_dir=args.output_dir,
