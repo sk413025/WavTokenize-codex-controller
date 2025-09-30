@@ -45,8 +45,8 @@ export TTT_EXPERIMENT_ID="${EXP_ID}" # 設置實驗ID
 export INPUT_SAMPLE_RATE=16000      # 設置輸入音頻採樣率
 export CONTENT_BATCHING=true        # 啟用內容感知批次採樣
 
-# GPU 配置 - 明確指定使用空閒的 GPU 2，不影響其他程序
-export CUDA_VISIBLE_DEVICES=2      # 僅使用 GPU 2 (完全空閒)
+# GPU 配置 - 明確指定使用 GPU 2，實際對應物理GPU 0（GTX 1080 Ti）
+export CUDA_VISIBLE_DEVICES=2      # 僅使用 GPU 2 (對應物理GPU 0)
 
 # 設置運行參數
 LOG_FILE="logs/crossentropy_experiment_${EXP_ID}.log"
