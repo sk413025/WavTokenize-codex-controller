@@ -68,3 +68,5 @@ test_*.py
 
 # VS Code specific
 .vscode/mcp.json
+logs/
+*.log
