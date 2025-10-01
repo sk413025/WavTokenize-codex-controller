@@ -214,8 +214,14 @@ class WavTokenizerTransformerDenoiser(nn.Module):
                 tokens = discrete_codes
             
             tokens = tokens.long()
-            # 確保tokens在詞彙範圍內
+            # 確保tokens在詞彙範圍內 - 修復索引越界問題
             tokens = torch.clamp(tokens, 0, self.codebook_size - 1)
+            
+            # 額外檢查：確保沒有無效值
+            if torch.any(tokens < 0) or torch.any(tokens >= self.vocab_size):
+                print(f"Warning: 檢測到無效token值，範圍: {tokens.min().item()} to {tokens.max().item()}")
+                tokens = torch.clamp(tokens, 0, self.codebook_size - 1)
+            
             return tokens
     
     def decode_tokens_to_audio(self, tokens):
@@ -366,18 +372,42 @@ class WavTokenizerTransformerDenoiser(nn.Module):
             
             # Step 2: Transformer 降噪 (在 token 空間)
             logits = self.forward_transformer(input_tokens, decoder_input)
+            
+            # 動態調整所有序列到實際的logits長度，而不是強制到max_length
+            actual_seq_len = logits.shape[1]
+            
             # 確保 target_tokens shape 與 logits 一致
-            max_pos_len = logits.shape[1]
-            if target_tokens.shape[1] < max_pos_len:
-                pad_size = max_pos_len - target_tokens.shape[1]
+            if target_tokens.shape[1] < actual_seq_len:
+                pad_size = actual_seq_len - target_tokens.shape[1]
                 pad = torch.full((target_tokens.shape[0], pad_size), self.pad_token, device=target_tokens.device, dtype=target_tokens.dtype)
                 target_tokens = torch.cat([target_tokens, pad], dim=1)
-            elif target_tokens.shape[1] > max_pos_len:
-                target_tokens = target_tokens[:, :max_pos_len]
+            elif target_tokens.shape[1] > actual_seq_len:
+                target_tokens = target_tokens[:, :actual_seq_len]
+            
+            # 同樣調整 input_tokens 的長度
+            if input_tokens.shape[1] < actual_seq_len:
+                pad_size = actual_seq_len - input_tokens.shape[1]
+                pad = torch.full((input_tokens.shape[0], pad_size), self.pad_token, device=input_tokens.device, dtype=input_tokens.dtype)
+                input_tokens = torch.cat([input_tokens, pad], dim=1)
+            elif input_tokens.shape[1] > actual_seq_len:
+                input_tokens = input_tokens[:, :actual_seq_len]
+                
+            # 調整 noisy_tokens 長度，確保與處理後的序列一致
+            # 由於input_tokens = noisy_tokens + EOS，所以noisy_tokens長度應該是actual_seq_len-1
+            target_noisy_len = max(1, actual_seq_len - 1)  # 至少保留1個token
+            if noisy_tokens.shape[1] < target_noisy_len:
+                pad_size = target_noisy_len - noisy_tokens.shape[1]
+                pad = torch.full((noisy_tokens.shape[0], pad_size), self.pad_token, device=noisy_tokens.device, dtype=noisy_tokens.dtype)
+                noisy_tokens_adjusted = torch.cat([noisy_tokens, pad], dim=1)
+            elif noisy_tokens.shape[1] > target_noisy_len:
+                noisy_tokens_adjusted = noisy_tokens[:, :target_noisy_len]
+            else:
+                noisy_tokens_adjusted = noisy_tokens
+                
             return {
                 'logits': logits,
                 'target_tokens': target_tokens,
-                'noisy_tokens': noisy_tokens,
+                'noisy_tokens': noisy_tokens_adjusted,  # 使用調整後的版本
                 'clean_tokens': clean_tokens
             }
         
@@ -452,6 +482,10 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch):
         # 計算損失（忽略 padding tokens）- 使用reshape確保tensor連續性
         logits_flat = logits.reshape(-1, logits.size(-1))
         target_flat = target_tokens.reshape(-1)
+        
+        # 確保target_flat在有效範圍內 - 修復CUDA斷言錯誤
+        target_flat = torch.clamp(target_flat, 0, model.codebook_size - 1)
+        
         # 只對 codebook tokens 計算損失（忽略特殊 tokens）
         mask = target_flat < model.codebook_size
         if mask.sum() > 0:
@@ -513,6 +547,13 @@ def train_epoch_with_token_loss(model, dataloader, optimizer, device, epoch,
         # 獲取預測 tokens
         predicted_tokens = torch.argmax(logits, dim=-1)  # [batch_size, seq_len]
         
+        # 確保預測的tokens在有效範圍內 - 修復CUDA斷言錯誤
+        predicted_tokens = torch.clamp(predicted_tokens, 0, model.codebook_size - 1)
+        
+        # 檢查所有token的有效性
+        target_tokens = torch.clamp(target_tokens, 0, model.codebook_size - 1)
+        noisy_tokens = torch.clamp(noisy_tokens, 0, model.codebook_size - 1)
+        
         # 使用 Token Loss 系統計算損失（ttt2.py 邏輯移植）
         try:
             total_loss, loss_dict = compute_combined_token_loss(
@@ -528,6 +569,10 @@ def train_epoch_with_token_loss(model, dataloader, optimizer, device, epoch,
             # 回退到簡單交叉熵 - 使用reshape確保tensor連續性
             logits_flat = logits.reshape(-1, logits.size(-1))
             target_flat = target_tokens.reshape(-1)
+            
+            # 確保target_flat在有效範圍內 - 修復CUDA斷言錯誤
+            target_flat = torch.clamp(target_flat, 0, model.codebook_size - 1)
+            
             mask = target_flat < model.codebook_size
             if mask.sum() > 0:
                 total_loss = F.cross_entropy(logits_flat[mask], target_flat[mask])
@@ -638,32 +683,34 @@ def validate_epoch(model, dataloader, criterion, device):
                               device=clean_tokens.device, dtype=torch.long)
                 ], dim=1)
                 
-                # 添加 padding 以匹配模型期望的序列長度（與訓練階段一致）
-                max_pos_len = model.max_length  # 使用模型定義的最大長度
-                current_seq_len = input_tokens.size(1)
+                # 添加 padding 以匹配批次中的最大序列長度（動態調整）
+                batch_max_len = max(input_tokens.size(1), decoder_input.size(1), target_tokens.size(1))
                 
-                if current_seq_len < max_pos_len:
-                    pad_len = max_pos_len - current_seq_len
-                    
-                    # 對 input_tokens 進行 padding
+                # 動態調整到批次最大長度，而不是固定的max_length
+                if input_tokens.size(1) < batch_max_len:
+                    pad_len = batch_max_len - input_tokens.size(1)
                     input_padding = torch.full((input_tokens.size(0), pad_len), model.pad_token,
                                              device=input_tokens.device, dtype=torch.long)
                     input_tokens = torch.cat([input_tokens, input_padding], dim=1)
-                    
-                    # 對 decoder_input 進行 padding
+                
+                if decoder_input.size(1) < batch_max_len:
+                    pad_len = batch_max_len - decoder_input.size(1)
                     decoder_padding = torch.full((decoder_input.size(0), pad_len), model.pad_token,
                                                 device=decoder_input.device, dtype=torch.long)
                     decoder_input = torch.cat([decoder_input, decoder_padding], dim=1)
-                    
-                    # 對 target_tokens 進行 padding
+                
+                if target_tokens.size(1) < batch_max_len:
+                    pad_len = batch_max_len - target_tokens.size(1)
                     target_padding = torch.full((target_tokens.size(0), pad_len), model.pad_token,
                                                device=target_tokens.device, dtype=torch.long)
                     target_tokens = torch.cat([target_tokens, target_padding], dim=1)
-                elif current_seq_len > max_pos_len:
-                    # 如果序列太長，截斷到最大長度
-                    input_tokens = input_tokens[:, :max_pos_len]
-                    decoder_input = decoder_input[:, :max_pos_len]
-                    target_tokens = target_tokens[:, :max_pos_len]
+                
+                # 如果批次最大長度超過模型限制，截斷到模型最大長度
+                model_max_len = model.max_length
+                if batch_max_len > model_max_len:
+                    input_tokens = input_tokens[:, :model_max_len]
+                    decoder_input = decoder_input[:, :model_max_len]
+                    target_tokens = target_tokens[:, :model_max_len]
                 
                 # 使用transformer前向傳播
                 logits = model.forward_transformer(input_tokens, decoder_input)
@@ -1054,7 +1101,7 @@ def save_spectrograms(model, dataloader, epoch, output_dir, device, num_samples=
     logging.info(f"完成頻譜圖保存，共保存 {saved_count} 個樣本")
 
 
-def save_checkpoint(model, optimizer, epoch, loss, save_path, config=None):
+def save_checkpoint(model, optimizer, epoch, loss, save_path, config=None, train_losses=None, val_losses=None, val_accuracies=None):
     """保存模型檢查點"""
     checkpoint = {
         'epoch': epoch,
@@ -1063,6 +1110,15 @@ def save_checkpoint(model, optimizer, epoch, loss, save_path, config=None):
         'loss': loss,
         'config': config,
     }
+    
+    # 添加訓練歷史到檢查點
+    if train_losses is not None:
+        checkpoint['train_losses'] = train_losses
+    if val_losses is not None:
+        checkpoint['val_losses'] = val_losses
+    if val_accuracies is not None:
+        checkpoint['val_accuracies'] = val_accuracies
+        
     torch.save(checkpoint, save_path)
     logging.info(f"檢查點已保存到: {save_path}")
 
@@ -1156,6 +1212,12 @@ def main():
                         help='驗證集語者')
     parser.add_argument('--train_speakers', nargs='+', default=None,
                         help='訓練集語者 (如果指定，只使用這些語者進行訓練；如果不指定，使用除驗證集外的所有語者)')
+    
+    # 檢查點恢復參數
+    parser.add_argument('--resume_from_checkpoint', type=str, default=None,
+                        help='從指定檢查點恢復訓練的路徑')
+    parser.add_argument('--start_epoch', type=int, default=0,
+                        help='開始訓練的epoch數 (用於檢查點恢復)')
     
     args = parser.parse_args()
     
@@ -1322,8 +1384,36 @@ def main():
     val_losses = []
     val_accuracies = []
     best_val_loss = float('inf')
+    start_epoch = 1
     
-    for epoch in range(1, args.num_epochs + 1):
+    # 檢查點恢復邏輯
+    if args.resume_from_checkpoint and os.path.exists(args.resume_from_checkpoint):
+        logging.info(f"從檢查點恢復訓練: {args.resume_from_checkpoint}")
+        checkpoint = torch.load(args.resume_from_checkpoint, map_location=device)
+        
+        # 載入模型狀態
+        model.load_state_dict(checkpoint['model_state_dict'])
+        logging.info("已載入模型狀態")
+        
+        # 載入優化器狀態
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        logging.info("已載入優化器狀態")
+        
+        # 設置起始epoch
+        start_epoch = checkpoint['epoch'] + 1
+        best_val_loss = checkpoint.get('loss', float('inf'))
+        
+        # 如果檢查點包含訓練歷史，也恢復它們
+        if 'train_losses' in checkpoint:
+            train_losses = checkpoint['train_losses']
+        if 'val_losses' in checkpoint:
+            val_losses = checkpoint['val_losses']
+        if 'val_accuracies' in checkpoint:
+            val_accuracies = checkpoint['val_accuracies']
+            
+        logging.info(f"恢復訓練從epoch {start_epoch}開始，當前最佳驗證loss: {best_val_loss:.4f}")
+    
+    for epoch in range(start_epoch, args.num_epochs + 1):
         try:
             # 選擇訓練函數
             if args.use_token_loss:

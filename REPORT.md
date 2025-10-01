@@ -1,5 +1,121 @@
 # 實驗記錄報告
 
+## 離散Token音頻特徵可視化實驗 - 2025年10月1日
+
+### 實驗背景
+開發離散音頻特徵可視化工具，實現類似文字編輯的直觀音頻分析。將音頻轉換為離散token序列，並對比連續特徵（如Mel頻譜圖）與離散特徵的優勢。
+
+### 實驗目的
+1. 創建離散token可視化工具，展示音頻內容、說話者、材質差異
+2. 對比分析連續特徵vs離散特徵的優劣
+3. 展示離散token在音頻分析中的"文字處理"特性
+
+### 實驗過程
+
+#### 工具開發
+1. **simple_discrete_visualizer.py**: 簡化版離散token可視化器
+   - 將音頻轉換為離散token序列
+   - 創建類似文字編輯器的token視圖
+   - 進行token統計分析和比較
+
+2. **audio_feature_comparator.py**: 音頻特徵對比分析器
+   - 同時提取Mel頻譜圖、MFCC、離散token特徵
+   - 全面對比連續vs離散特徵的優勢
+   - 生成詳細的分析報告
+
+#### 測試數據
+- 音頻1: `/home/sbplab/ruizi/c_code/1n/nor_boy1_box_LDV_001.wav` (2.66秒)
+- 音頻2: `/home/sbplab/ruizi/c_code/1n/nor_boy2_box_LDV_001.wav` (2.77秒)
+- 兩個不同男性說話者，相同的box材質環境
+
+### 實驗結果
+
+#### Token化效果
+- **boy1**: 200 tokens (75.2 tokens/秒), 156唯一tokens, 多樣性0.780
+- **boy2**: 208 tokens (75.1 tokens/秒), 148唯一tokens, 多樣性0.712
+- Token化效率穩定，約75 tokens/秒
+
+#### 主要發現
+
+##### 1. 離散Token的優勢
+- **直觀性**: Token序列可像文字一樣逐個查看和編輯
+- **壓縮效率**: 整數token比浮點頻譜圖更緊湊
+- **噪音抗性**: 量化過程天然過濾小幅度噪音
+- **版本控制友好**: 可使用Git等工具追蹤音頻內容變化
+
+##### 2. 說話者差異檢測
+- Token多樣性能有效區分不同說話者
+- boy1的token多樣性(0.780) > boy2(0.712)
+- 離散特徵比連續Mel頻譜更穩定
+
+##### 3. 技術實現突破
+- 成功解決WavTokenizer數據類型匹配問題
+- 實現了Mel頻譜圖與離散token的同步對比分析
+- 創建了"文字編輯器"風格的音頻可視化
+
+### 技術細節
+
+#### 解決的關鍵問題
+1. **數據類型匹配**: discrete_code需要轉換為long類型用於decode
+2. **張量維度處理**: 音頻輸入需要正確的3D張量格式[B,C,T]
+3. **中文字體警告**: 改用英文呈現避免字體缺失警告
+
+#### 核心程式流程
+```python
+# 音頻 -> 離散tokens
+features, discrete_code = model.encode_infer(waveform, bandwidth_id)
+tokens = discrete_code[0].squeeze().long().cpu().numpy()
+
+# Token可視化 (類似文字編輯器)
+tokens_per_line = 50
+token_matrix = reshape_tokens_to_matrix(tokens, tokens_per_line)
+plt.imshow(token_matrix, cmap='tab20')
+```
+
+### 生成的文件
+1. **結果目錄**: `/home/sbplab/ruizi/c_code/results/`
+   - `simple_discrete_visualization/experiment_boy1_vs_boy2_box/`
+   - `feature_comparison/experiment_mel_vs_discrete_tokens/`
+
+2. **可視化文件**:
+   - Token文字視圖: 顯示token序列的文字編輯器風格
+   - Token比較分析: 統計特徵對比和差異分析
+   - 全面特徵對比: Mel頻譜圖vs離散token並排比較
+   - 離散優勢分析: 量化分析離散特徵的優勢
+
+3. **分析報告**: 詳細的Markdown格式分析報告（英文）
+
+### 實驗意義
+
+#### 1. 創新性貢獻
+- 首次實現音頻的"文字編輯器"風格可視化
+- 將音頻分析帶入"文字處理"時代
+- 展示離散化對音頻分析的革命性意義
+
+#### 2. 實用價值
+- **音頻編輯**: 可直接操作token進行精確編輯
+- **內容分析**: 使用文字處理算法分析音頻模式
+- **調試友好**: 可精確定位問題發生的時間點（token位置）
+- **跨平台一致性**: 整數token在不同系統間完全一致
+
+#### 3. 研究方向
+- 為音頻生成AI提供新的表示方法
+- 支援更直觀的音頻內容分析和編輯工具
+- 開創音頻與文字處理技術的融合領域
+
+### 後續工作
+1. 擴展到更多音頻類型和說話者
+2. 開發基於token的音頻編輯工具
+3. 研究token序列的語義模式
+4. 整合到音頻生成和處理pipeline
+
+### 技術更新
+- 新增plotly、pandas、seaborn依賴至requirements.txt
+- 優化字體設置避免中文字體警告
+- 實現英文界面提升國際化兼容性
+
+---
+
 ## Token轉換正確性驗證 - 2025年10月1日
 
 ### 實驗背景

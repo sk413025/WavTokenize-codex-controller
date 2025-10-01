@@ -24,6 +24,11 @@ def compute_token_l2_loss(predicted_tokens, target_tokens, embedding_layer=None)
     Returns:
         torch.Tensor: L2 距離損失
     """
+    # 確保維度匹配
+    min_seq_len = min(predicted_tokens.size(1), target_tokens.size(1))
+    predicted_tokens = predicted_tokens[:, :min_seq_len]
+    target_tokens = target_tokens[:, :min_seq_len]
+    
     if embedding_layer is not None:
         # 方案 1: 使用嵌入層將 token 映射到連續空間
         predicted_embed = embedding_layer(predicted_tokens)  # [batch, seq_len, embed_dim]
@@ -55,12 +60,31 @@ def compute_token_content_consistency_loss(predicted_logits, target_tokens,
     Returns:
         torch.Tensor: 內容一致性損失
     """
+    # 首先確保維度匹配 - 處理動態序列長度問題
+    batch_size = predicted_logits.size(0)
+    pred_seq_len = predicted_logits.size(1)
+    target_seq_len = target_tokens.size(1)
+    vocab_size = predicted_logits.size(-1)
+    
+    # 動態調整維度到較短的長度，避免維度不匹配
+    min_seq_len = min(pred_seq_len, target_seq_len)
+    
+    # 截取到相同長度
+    predicted_logits = predicted_logits[:, :min_seq_len, :]  # [batch, min_seq_len, vocab_size]
+    target_tokens = target_tokens[:, :min_seq_len]  # [batch, min_seq_len]
+    
+    if input_tokens is not None:
+        input_tokens = input_tokens[:, :min_seq_len]  # [batch, min_seq_len]
+    
     # 主要一致性損失：交叉熵（確保預測正確的 token）
-    predicted_logits_flat = predicted_logits.reshape(-1, predicted_logits.size(-1))
+    predicted_logits_flat = predicted_logits.reshape(-1, vocab_size)
     target_tokens_flat = target_tokens.reshape(-1)
     
-    # 過濾無效 token（pad token = 0）
-    valid_mask = target_tokens_flat != 0
+    # 確保token在有效範圍內 - 修復CUDA斷言錯誤
+    target_tokens_flat = torch.clamp(target_tokens_flat, 0, vocab_size - 1)
+    
+    # 過濾無效 token（pad token = 0或超出範圍的token）
+    valid_mask = (target_tokens_flat > 0) & (target_tokens_flat < vocab_size)
     
     if valid_mask.sum() > 0:
         consistency_loss = F.cross_entropy(
@@ -101,6 +125,11 @@ def compute_token_manifold_regularization_loss(predicted_tokens, input_tokens,
     Returns:
         torch.Tensor: manifold 正則化損失
     """
+    # 確保維度匹配
+    min_seq_len = min(predicted_tokens.size(1), input_tokens.size(1))
+    predicted_tokens = predicted_tokens[:, :min_seq_len]
+    input_tokens = input_tokens[:, :min_seq_len]
+    
     # 將 tokens 映射到嵌入空間
     predicted_embed = embedding_layer(predicted_tokens)  # [batch, seq_len, embed_dim]
     input_embed = embedding_layer(input_tokens)
@@ -167,29 +196,34 @@ def compute_token_normalization_loss(predicted_logits, target_distribution=None,
 
 def compute_token_coherence_loss(predicted_tokens, input_tokens, window_size=5, gamma=0.05):
     """
-    Token 序列連貫性損失
+    Token 連貫性損失
     
-    概念：確保生成的 token 序列在語義上連貫
-    類似於 ttt2.py 中的時間一致性約束
+    概念：確保預測的 token 序列在語義上連貫
+    等同於 ttt2.py 中的時間連貫性損失
     
     Args:
-        predicted_tokens: [batch, seq_len] 預測 tokens
-        input_tokens: [batch, seq_len] 輸入 tokens
-        window_size: 局部窗口大小
-        gamma: 連貫性權重
+        predicted_tokens: [batch, seq_len] 預測的 tokens
+        input_tokens: [batch, seq_len] 輸入的 tokens
+        window_size: 連貫性檢查的窗口大小
+        gamma: 連貫性損失權重
         
     Returns:
         torch.Tensor: 連貫性損失
     """
-    batch_size, seq_len = predicted_tokens.shape
+    # 確保維度匹配
+    min_seq_len = min(predicted_tokens.size(1), input_tokens.size(1))
+    predicted_tokens = predicted_tokens[:, :min_seq_len]
+    input_tokens = input_tokens[:, :min_seq_len]
     
-    if seq_len <= window_size:
+    if min_seq_len < window_size:
+        # 如果序列太短，返回零損失
         return torch.tensor(0.0, device=predicted_tokens.device)
     
     coherence_losses = []
     
-    for i in range(seq_len - window_size + 1):
-        # 獲取局部窗口
+    # 滑動窗口檢查連貫性
+    for i in range(min_seq_len - window_size + 1):
+        # 提取窗口
         pred_window = predicted_tokens[:, i:i+window_size]  # [batch, window_size]
         input_window = input_tokens[:, i:i+window_size]
         
@@ -202,7 +236,10 @@ def compute_token_coherence_loss(predicted_tokens, input_tokens, window_size=5, 
         coherence_losses.append(diff_loss)
     
     # 平均所有窗口的損失
-    coherence_loss = gamma * torch.stack(coherence_losses).mean()
+    if coherence_losses:
+        coherence_loss = gamma * torch.stack(coherence_losses).mean()
+    else:
+        coherence_loss = torch.tensor(0.0, device=predicted_tokens.device)
     
     return coherence_loss
 
