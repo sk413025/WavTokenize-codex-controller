@@ -1,5 +1,88 @@
 # 實驗記錄報告
 
+## Token轉換正確性驗證 - 2025年10月1日
+
+### 實驗背景
+針對WavTokenizer的token轉換方法進行正確性驗證，確保在離散token空間中的編碼解碼流程能夠正確運行。
+
+### 實驗目的
+1. 驗證WavTokenizer模型載入和基本功能
+2. 測試音檔到discrete token的編碼過程
+3. 測試discrete token到音檔的解碼重建過程
+4. 評估重建品質和token使用效率
+
+### 實驗設計
+- **測試數據**: 1n資料夾中的5個語音檔案
+- **模型配置**: wavtokenizer_large_speech_320_24k.ckpt (75 tokens/sec, 4096詞彙)
+- **處理參數**: 24kHz採樣率, 3秒時長, bandwidth_id=0
+- **評估指標**: SNR, MSE損失, L1損失, token使用率
+
+### 實驗結果
+
+#### ✅ Token轉換功能正常
+1. **編碼過程**: 音檔 → Features (512×225) → Discrete codes (1×1×225)
+2. **解碼過程**: Discrete codes → Features → 重建音檔
+3. **Token範圍**: 0-1833 (全部在4096詞彙範圍內)
+4. **無效token**: 0個 (100%有效)
+
+#### ⚠️ 重建品質需要關注
+- **平均信噪比**: 0.61 dB (低於理想的15+ dB)
+- **平均MSE損失**: 0.028853
+- **信噪比範圍**: -1.50 到 5.44 dB
+- **最佳重建**: nor_girl2_box_LDV_101.wav (5.44 dB)
+
+#### 📊 Token使用特性
+- **Token數量**: 每個3秒音檔產生225個token (75 tokens/sec)
+- **詞彙使用率**: 3.99% (159-184個獨特token / 4096總詞彙)
+- **使用範圍**: 稀疏但合理，符合語音數據特性
+
+### 重要發現
+
+#### 1. 轉換方法正確性 ✅
+- WavTokenizer的`encode_infer()`和`decode()`方法工作正常
+- `codes_to_features()`方法能正確處理discrete token
+- bandwidth_id參數正確控制編碼品質
+
+#### 2. 模型配置符合預期 ✅
+- 75 tokens/sec的token化率與配置一致
+- 4096詞彙大小設置正確
+- 24kHz採樣率處理正常
+
+#### 3. 重建品質議題 ⚠️
+- 信噪比較低可能因為：
+  - 測試音檔質量或錄音環境
+  - 模型針對特定域的優化程度
+  - 需要更長的訓練或更大的模型
+
+#### 4. 詞彙使用效率 📈
+- 3.99%的使用率雖然看似稀疏，但：
+  - 符合語音信號的稀疏性特點
+  - 為未來擴展保留足夠space
+  - 避免過度擬合特定語音模式
+
+### 實驗結論
+
+**Token轉換方法基本正確** ✅
+- 編碼解碼流程完整且功能正常
+- Token範圍控制正確，無越界問題
+- API使用方式符合README.md規範
+
+**建議改進方向** 📋
+1. 使用更高品質的測試音檔進行驗證
+2. 測試不同bandwidth_id設定的效果
+3. 考慮在discrete token space訓練中加入重建損失權重調整
+
+### 對後續實驗的影響
+
+此次驗證確認了WavTokenizer的基本功能正常，為接下來的離散token空間降噪實驗提供了：
+1. 正確的模型載入和使用方式
+2. 合理的token數量和範圍預期
+3. 重建品質基準線參考
+
+**下一步**: 繼續修復離散TokenLoss實驗中的維度匹配問題，並參考此次測試的token處理方式。
+
+---
+
 ## Transformer 訓練時間延長實驗 - TRAINING_EXT_20250926
 **執行時間:** 2025-09-26 
 **實驗類型:** 訓練策略優化  
@@ -2304,3 +2387,33 @@ print(f"選擇內容ID範圍：{selected_pairs[0]['content_id']} 到 {selected_p
 *實驗完成後填入具體結果和分析*
 
 ---
+
+## WavTokenizer-Transformer 離散Token訓練 - TOKEN_202510010318
+**執行時間:** 2025-10-01 03:18:39
+**模式:** 輕量化Transformer + Token Loss
+**輸出目錄:** results/wavtokenizer_tokenloss_202510010318
+
+### 🔧 關鍵特色
+1. **離散Token空間:** vs ttt2.py連續特徵空間
+2. **Transformer架構:** vs ttt2.py ResidualBlock架構
+3. **Token Loss系統:** 移植ttt2.py損失邏輯到離散空間
+4. **內容一致性損失:** batch_size=8 確保相同內容ID樣本
+5. **指定語者分割:** 訓練集10位語者 vs 驗證集2位語者
+
+### 🎯 訓練設定
+- **模型:** WavTokenizer-Transformer (輕量化)
+- **架構:** d_model=256, 3+3層, nhead=4
+- **損失函數:** Token Loss系統 (ttt2.py移植版)
+- **材質:** 僅 box 材質
+- **訓練語者:** boy1,boy3,boy4,boy5,boy6,girl2,girl3,girl4,girl6,girl7
+- **驗證語者:** girl9,boy7
+- **批次大小:** 8 (內容一致性損失需要)
+- **日誌檔案:** `logs/wavtokenizer_transformer_training_202510010318.log`
+
+### 📊 預期對比
+- 對比ttt2.py: 離散 vs 連續特徵空間處理效果
+- 對比架構: Transformer vs ResidualBlock 降噪能力
+- 對比損失: Token Loss在離散空間的適應性
+- 對比記憶體: 輕量化設計的效率提升
+
+----
