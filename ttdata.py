@@ -306,13 +306,14 @@ class AudioDataset(Dataset):
     """
     自定義音頻資料集類別，可處理多個輸入目錄。
     """
-    def __init__(self, input_dirs, target_dir, max_files_per_dir=None, handle_speed_diff=False, speech_rate_threshold=10, max_sentences_per_speaker=100):
+    def __init__(self, input_dirs, target_dir, max_files_per_dir=None, handle_speed_diff=False, speech_rate_threshold=10, max_sentences_per_speaker=100, allowed_speakers=None):
         self.input_dirs = input_dirs if isinstance(input_dirs, list) else [input_dirs]
         self.target_dir = target_dir
         self.paired_files = []
         self.handle_speed_diff = False  # 取消處理語速差異
         self.speech_rate_threshold = speech_rate_threshold  # 語速閾值，暫時保留但不使用
         self.max_sentences_per_speaker = max_sentences_per_speaker  # 每位與者最大句子數
+        self.allowed_speakers = allowed_speakers  # 允許的語者列表，None表示允許所有語者
         
         # 檢查目錄是否存在
         for input_dir in self.input_dirs:
@@ -360,6 +361,10 @@ class AudioDataset(Dataset):
                             # material = parts[0]  # 舊的方法，從文件名取得材質
                             speaker = parts[1] if len(parts) > 1 else "unknown"  # 如 boy1, girl6 等
                             number = parts[-1]     # 136.wav or 137.wav
+                            
+                            # 語者過濾：如果指定了allowed_speakers，只處理允許的語者
+                            if self.allowed_speakers is not None and speaker not in self.allowed_speakers:
+                                continue  # 跳過不在允許列表中的語者
                             
                             # 提取內容ID (從文件名中的數字部分，去除.wav)
                             content_id = number.split('.')[0] if '.' in number else number

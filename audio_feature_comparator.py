@@ -28,7 +28,7 @@ class AudioFeatureComparator:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         # 設置輸出目錄
-        self.output_dir = Path("/home/sbplab/ruizi/c_code/results/feature_comparison")
+        self.output_dir = Path("/home/sbplab/ruizi/c_code/results/feature_comparison/n")
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         print(f"🎯 Audio Feature Comparator Initialized")

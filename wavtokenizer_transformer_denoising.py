@@ -625,7 +625,7 @@ def validate_epoch(model, dataloader, criterion, device):
     batch_count = 0
     
     with torch.no_grad():
-        for batch in tqdm(dataloader, desc="Validation"):
+        for batch_idx, batch in enumerate(tqdm(dataloader, desc="Validation")):
             if batch_count >= max_val_batches:
                 break
                 
@@ -729,7 +729,7 @@ def validate_epoch(model, dataloader, criterion, device):
                     mask = mask[:min_size]
                     logits_flat = logits_flat[:min_size]
                     target_flat = target_flat[:min_size]
-                    logging.warning(f"驗證批次 {batch_idx}: 維度不匹配，已截斷到 {min_size}")
+                    logging.warning(f"驗證批次 {batch_count}: 維度不匹配，已截斷到 {min_size}")
                 
                 if mask.sum() > 0:
                     loss = criterion(logits_flat[mask], target_flat[mask])
@@ -1269,9 +1269,24 @@ def main():
         logging.error("未找到數據目錄，請確保數據路徑正確")
         return
     
-    # 創建音頻數據集
+    # 準備允許的語者列表（訓練語者 + 驗證語者）
+    allowed_speakers = set()
+    if args.train_speakers:
+        allowed_speakers.update(args.train_speakers)
+    if args.val_speakers:
+        allowed_speakers.update(args.val_speakers)
+    
+    # 如果沒有指定訓練語者，預設允許所有語者
+    if not args.train_speakers:
+        allowed_speakers = None  # None 表示允許所有語者
+    else:
+        allowed_speakers = list(allowed_speakers)
+        logging.info(f"只載入以下語者的數據: {allowed_speakers}")
+    
+    # 創建音頻數據集，只載入需要的語者
     audio_dataset = AudioDataset(input_dirs, target_dir, 
-                                max_sentences_per_speaker=args.max_sentences_per_speaker)
+                                max_sentences_per_speaker=args.max_sentences_per_speaker,
+                                allowed_speakers=allowed_speakers)
     
     logging.info(f"數據集大小: {len(audio_dataset)} 個音頻對")
     
