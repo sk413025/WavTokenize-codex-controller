@@ -1,5 +1,100 @@
 # 實驗記錄報告
 
+## 🎯 最新實驗：TTT2 Token Enhancement System - 2025年1月15日
+
+### 實驗概述
+設計並實現了全新的 **Token-Based Feature Enhancement** 系統，修復了舊模型的 decoder 重建問題，並實現了通用的跨材質、跨語者音頻增強模型。
+
+#### ✅ 完成的工作
+1. **新模型設計**: `ttt2_token.py` - 完整的 token 空間特徵增強系統
+2. **Decoder 修復**: 正確處理 token → feature → audio 的重建流程
+3. **執行腳本**: `run_ttt2_token.sh` - 自動 GPU 選擇和訓練管理
+4. **實驗文檔**: `TTT2_TOKEN_EXPERIMENT.md` - 完整的實驗說明和分析
+
+#### 🔑 關鍵創新
+- **Token Embedding 增強**: 在 continuous embedding 空間進行特徵增強，而非直接操作 discrete tokens
+- **多目標損失**: Token CE (0.4) + Feature L2 (0.3) + Audio L1 (0.2) + Token Smooth (0.1)
+- **凍結基準**: WavTokenizer encoder/decoder 完全凍結，確保穩定性
+- **通用設計**: 支持不同材質（噪音源）和不同語者的音頻增強
+
+#### 📊 架構特點
+```
+Noisy Audio → WavTokenizer Encoder (凍結) → Noisy Tokens
+                                                    ↓
+                                          Token Embedding
+                                                    ↓
+                                    Feature Enhancer (Transformer, 可訓練)
+                                                    ↓
+                                          Feature Projection
+                                                    ↓
+                                             Enhanced Tokens
+                                                    ↓
+                       WavTokenizer Decoder (凍結) → Enhanced Audio
+```
+
+#### 🐛 修復的問題
+**舊模型 decoder 重建失敗的根本原因**:
+1. Token 維度處理錯誤: 沒有正確從 `[batch, seq_len]` 轉換到 `[n_q, batch, seq_len]`
+2. `codes_to_features` 輸入格式不符合 WavTokenizer 預期
+3. Token 範圍沒有正確 clamp 到 `[0, 4095]`
+
+**修復後的正確流程**:
+```python
+tokens = tokens.unsqueeze(0)  # [batch, seq_len] → [1, batch, seq_len]
+tokens = torch.clamp(tokens, 0, self.codebook_size - 1)
+features = self.wavtokenizer.codes_to_features(tokens)
+bandwidth_id = torch.tensor([0], device=tokens.device)
+audio = self.wavtokenizer.decode(features, bandwidth_id=bandwidth_id)
+```
+
+#### 🎓 實驗設計
+- **模型參數**: embed_dim=512, 4-layer Transformer, 8 attention heads
+- **訓練配置**: batch_size=8, 100 epochs, AdamW optimizer, Cosine scheduler
+- **數據集**: 10 訓練語者 + 2 驗證語者, Box 材質噪音 → Clean 目標
+- **保存策略**: 每 10 epochs 保存檢查點 + 最佳模型 + 音頻樣本
+
+#### 📝 執行方式
+```bash
+# 直接執行（自動選擇 GPU 0 或 1）
+bash run_ttt2_token.sh
+
+# 背景執行
+nohup bash run_ttt2_token.sh > logs/ttt2_token_$(date +%Y%m%d_%H%M%S).log 2>&1 &
+
+# 指定 GPU
+CUDA_VISIBLE_DEVICES=1 bash run_ttt2_token.sh
+```
+
+#### 🔬 預期成果
+- Token CE Loss < 2.0
+- Feature L2 Loss < 0.5
+- Audio L1 Loss < 0.1
+- 清晰的音頻增強效果
+- 保持語者特徵
+- 成功消除材質噪音
+
+#### 📂 生成檔案
+```
+results/ttt2_token_enhancement/exp_YYYYMMDD_HHMMSS/
+├── config.json                      # 實驗配置
+├── checkpoints/                     # 模型檢查點
+│   ├── best_model.pth
+│   ├── checkpoint_epoch_10.pth
+│   └── final_model.pth
+├── audio_samples/epoch_X/           # 訓練音頻樣本
+├── validation_samples/epoch_X/      # 驗證音頻樣本
+└── training_history_epoch_X.png    # 訓練曲線
+```
+
+#### 🚀 後續方向
+1. 增加 Enhancer 層數以提升性能
+2. 添加 Cross-Attention 使用 target 作為參考
+3. 測試其他材質 (glass, paper) 的泛化能力
+4. 跨語者和跨材質的通用性測試
+5. 引入 Perceptual Loss 和 Adversarial Loss
+
+---
+
 ## 🚨 最新更新：離散化問題完整修復方案 - 2025年10月3日
 
 ### 🎯 修復完成摘要
