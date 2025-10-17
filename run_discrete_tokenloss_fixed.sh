@@ -39,20 +39,21 @@ OUTPUT_DIR="results/wavtokenizer_tokenloss_${EXP_ID}"
 mkdir -p logs
 mkdir -p "$OUTPUT_DIR"
 
-# 自動選擇空閒的GPU
+# 自動選擇空閒的GPU (排除GPU 2，它正在被其他訓練使用)
 echo "🔍 檢測可用的GPU..."
 GPU_INFO=$(nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader,nounits)
 echo "GPU狀況:"
 echo "$GPU_INFO"
 
-BEST_GPU=$(echo "$GPU_INFO" | awk -F',' '{print $1, $2, $3}' | sort -k2,2n | head -1 | awk '{print $1}')
+# 只從GPU 0和1中選擇最空閒的（排除GPU 2）
+BEST_GPU=$(echo "$GPU_INFO" | awk -F',' '$1 == 0 || $1 == 1 {print $1, $2, $3}' | sort -k2,2n | head -1 | awk '{print $1}')
 
 if [ -z "$BEST_GPU" ]; then
-    echo "❌ 無法檢測到可用的GPU，使用預設GPU 0"
-    export CUDA_VISIBLE_DEVICES=0
+    echo "❌ 無法檢測到可用的GPU，使用預設GPU 1"
+    export CUDA_VISIBLE_DEVICES=1
 else
     export CUDA_VISIBLE_DEVICES=$BEST_GPU
-    echo "✅ 選擇GPU $BEST_GPU (記憶體使用最少)"
+    echo "✅ 選擇GPU $BEST_GPU (記憶體使用最少，已排除GPU 2)"
 fi
 
 # 測試GPU和CUDA功能
@@ -120,7 +121,6 @@ python wavtokenizer_transformer_denoising.py \
     --save_every 10 \
     --val_speakers girl9 boy7 \
     --train_speakers boy1 boy3 boy4 boy5 boy6 girl2 girl3 girl4 girl6 girl7 \
-    --max_sentences_per_speaker 100 \
     2>&1 | tee -a $LOG_FILE
 
 echo ""
