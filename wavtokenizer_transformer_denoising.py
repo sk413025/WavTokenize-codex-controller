@@ -238,9 +238,30 @@ class WavTokenizerTransformerDenoiser(nn.Module):
         self.d_model = d_model
         self.max_length = max_length
         
-        # Token embeddings (僅用於 Transformer 部分)
-        self.src_embedding = nn.Embedding(self.vocab_size, d_model)
-        self.tgt_embedding = nn.Embedding(self.vocab_size, d_model)
+        # 提取 WavTokenizer 的預訓練 codebook
+        logging.info("提取 WavTokenizer 的 codebook 作為 token embedding...")
+        pretrained_embeddings = self._extract_codebook_embeddings()
+        codebook_dim = pretrained_embeddings.shape[1]
+        
+        # 創建兩個獨立的 Embedding 層
+        # 1. codebook_embedding: 用於聲學 token (0-4095)，使用預訓練權重並凍結
+        self.codebook_embedding = nn.Embedding.from_pretrained(
+            pretrained_embeddings, 
+            freeze=True  # 凍結預訓練權重
+        )
+        logging.info(f"成功創建 codebook embedding: shape={pretrained_embeddings.shape}, freeze=True")
+        
+        # 2. special_token_embedding: 用於 PAD, SOS, EOS (4096-4098)，可學習
+        self.special_token_embedding = nn.Embedding(3, codebook_dim)
+        logging.info(f"成功創建 special token embedding: 3 tokens, dim={codebook_dim}")
+        
+        # 3. 投影層：將 embedding 維度對齊到 Transformer 的 d_model
+        if codebook_dim != d_model:
+            self.embedding_projection = nn.Linear(codebook_dim, d_model)
+            logging.info(f"Codebook 維度投影: {codebook_dim} → {d_model}")
+        else:
+            self.embedding_projection = nn.Identity()
+            logging.info(f"Codebook 維度匹配: {codebook_dim}")
         
         # Positional encoding
         self.pos_encoding = self._create_positional_encoding(d_model, max_length)
@@ -261,6 +282,35 @@ class WavTokenizerTransformerDenoiser(nn.Module):
         
         # 初始化參數
         self._init_parameters()
+    
+    def _extract_codebook_embeddings(self):
+        """
+        從 WavTokenizer 提取預訓練的 codebook embeddings
+        返回可以直接用於 nn.Embedding.from_pretrained() 的張量
+        """
+        try:
+            vq_layers = self.wavtokenizer.feature_extractor.encodec.quantizer.vq.layers
+            
+            # 從第一個 VQ 層提取 codebook
+            # 注意：如果模型有多層量化器，這裡只用第一層
+            if len(vq_layers) == 1:
+                codebook_embeddings = vq_layers[0].codebook
+            else:
+                # 如果有多層，拼接所有層的 codebook
+                codebook_embeddings = torch.cat([vq.codebook for vq in vq_layers], dim=0)
+            
+            logging.info(f"成功提取 codebook embeddings: shape={codebook_embeddings.shape}")
+            logging.info(f"- 來自 {len(vq_layers)} 個 VQ 層")
+            logging.info(f"- 總共 {codebook_embeddings.shape[0]} 個 codes")
+            logging.info(f"- 每個 code 維度: {codebook_embeddings.shape[1]}")
+            
+            # detach 以避免梯度計算（nn.Embedding.from_pretrained 會再處理）
+            return codebook_embeddings.detach()
+            
+        except Exception as e:
+            logging.error(f"提取 codebook embeddings 失敗: {e}")
+            logging.error("請檢查 WavTokenizer 模型結構")
+            raise
     
     def _create_positional_encoding(self, d_model, max_len=5000):
         """創建位置編碼"""
@@ -338,6 +388,53 @@ class WavTokenizerTransformerDenoiser(nn.Module):
             pad_token = self.pad_token
         return (seq == pad_token)
     
+    def get_token_embeddings(self, tokens):
+        """
+        高效地獲取 token embeddings，使用兩個獨立的 Embedding 層：
+        - codebook_embedding: 用於聲學 tokens (0-4095)，預訓練且凍結
+        - special_token_embedding: 用於特殊 tokens (4096-4098)，可學習
+        
+        Args:
+            tokens: [batch_size, seq_len] - token indices
+                - 0 ~ 4095: codebook tokens
+                - 4096: pad_token
+                - 4097: sos_token  
+                - 4098: eos_token
+            
+        Returns:
+            embeddings: [batch_size, seq_len, d_model] - embedded representations
+        """
+        device = tokens.device
+        codebook_dim = self.codebook_embedding.embedding_dim
+        
+        # 創建未投影的 embedding 張量（使用 codebook 的原始維度 512）
+        raw_embeddings = torch.zeros(
+            tokens.shape[0], tokens.shape[1], codebook_dim,
+            device=device
+        )
+        
+        # 創建 mask 來區分兩種類型的 token
+        codebook_mask = tokens < self.codebook_size  # 0-4095
+        special_mask = tokens >= self.codebook_size  # 4096-4098
+        
+        # 1. 處理 codebook tokens (0-4095)
+        #    使用預訓練的 codebook_embedding（凍結）
+        if codebook_mask.any():
+            codebook_indices = tokens[codebook_mask]
+            raw_embeddings[codebook_mask] = self.codebook_embedding(codebook_indices)
+        
+        # 2. 處理 special tokens (4096-4098)
+        #    將 token ID 映射到 embedding 索引 (0, 1, 2)
+        #    使用可學習的 special_token_embedding
+        if special_mask.any():
+            special_indices = tokens[special_mask] - self.codebook_size  # 映射: 4096→0, 4097→1, 4098→2
+            raw_embeddings[special_mask] = self.special_token_embedding(special_indices)
+        
+        # 3. 統一投影到 Transformer 的 d_model 維度
+        embeddings = self.embedding_projection(raw_embeddings)  # [B, L, 512] → [B, L, d_model]
+        
+        return embeddings
+    
     def forward_transformer(self, src_tokens, tgt_tokens=None):
         """Transformer 前向傳播（僅處理 token 序列）"""
         batch_size, src_seq_len = src_tokens.size()
@@ -355,8 +452,8 @@ class WavTokenizerTransformerDenoiser(nn.Module):
         else:
             src_tokens_padded = src_tokens
             
-        # 使用處理後的 tokens 計算 embedding
-        src_emb = self.src_embedding(src_tokens_padded) * math.sqrt(self.d_model)
+        # 使用預訓練 codebook 計算 embedding
+        src_emb = self.get_token_embeddings(src_tokens_padded) * math.sqrt(self.d_model)
         src_seq_len = src_tokens_padded.shape[1]
         src_emb = src_emb + self.pos_encoding[:, :src_seq_len, :]
         
@@ -364,27 +461,27 @@ class WavTokenizerTransformerDenoiser(nn.Module):
         if tgt_tokens is not None and self.training:
             _, tgt_seq_len = tgt_tokens.size()
             max_pos_len = self.pos_encoding.shape[1]
-            tgt_emb = self.tgt_embedding(tgt_tokens) * math.sqrt(self.d_model)
+            
+            # 修正：先對 token ID 序列進行填充或裁剪，然後再做 embedding
             if tgt_seq_len < max_pos_len:
                 pad_size = max_pos_len - tgt_seq_len
-                pad = torch.zeros(tgt_emb.shape[0], pad_size, tgt_emb.shape[2], device=tgt_emb.device, dtype=tgt_emb.dtype)
-                tgt_emb = torch.cat([tgt_emb, pad], dim=1)
-                tgt_seq_len = max_pos_len
+                pad = torch.full((tgt_tokens.shape[0], pad_size), self.pad_token, 
+                               device=tgt_tokens.device, dtype=torch.long)
+                tgt_tokens_padded = torch.cat([tgt_tokens, pad], dim=1)
             elif tgt_seq_len > max_pos_len:
-                tgt_emb = tgt_emb[:, :max_pos_len, :]
-                tgt_seq_len = max_pos_len
-            tgt_emb = tgt_emb + self.pos_encoding[:, :tgt_seq_len, :]
-            # 創建遮罩
-            tgt_mask = self.generate_square_subsequent_mask(tgt_seq_len).to(src_tokens.device)
+                tgt_tokens_padded = tgt_tokens[:, :max_pos_len]
+            else:
+                tgt_tokens_padded = tgt_tokens
+            
+            # 對填充後的完整序列進行 embedding
+            tgt_emb = self.get_token_embeddings(tgt_tokens_padded) * math.sqrt(self.d_model)
+            actual_tgt_len = tgt_tokens_padded.shape[1]
+            tgt_emb = tgt_emb + self.pos_encoding[:, :actual_tgt_len, :]
+            
+            # 創建遮罩（使用填充後的序列）
+            tgt_mask = self.generate_square_subsequent_mask(actual_tgt_len).to(src_tokens.device)
             src_padding_mask = self.create_padding_mask(src_tokens_padded)
-            tgt_padding_mask = self.create_padding_mask(tgt_tokens)
-            # 填充或裁切 tgt_padding_mask 到 max_pos_len
-            if tgt_padding_mask.shape[1] < max_pos_len:
-                pad_size = max_pos_len - tgt_padding_mask.shape[1]
-                pad = torch.zeros(tgt_padding_mask.shape[0], pad_size, device=tgt_padding_mask.device, dtype=tgt_padding_mask.dtype)
-                tgt_padding_mask = torch.cat([tgt_padding_mask, pad], dim=1)
-            elif tgt_padding_mask.shape[1] > max_pos_len:
-                tgt_padding_mask = tgt_padding_mask[:, :max_pos_len]
+            tgt_padding_mask = self.create_padding_mask(tgt_tokens_padded)
             # Transformer 前向傳播
             output = self.transformer(
                 src_emb, tgt_emb,

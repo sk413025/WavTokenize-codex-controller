@@ -1,11 +1,125 @@
 # 實驗記錄報告
 
-## 🎯 最新實驗：離散 Token 訓練完整分析與 TTT2 Token Enhancement 設計 - 2025年10月16-17日
+## 🎯 最新實驗：Codebook Embedding 架構重大改進 - 2025年10月17日
+
+### 核心洞察
+**問題發現**：原始設計使用隨機初始化的 `nn.Embedding` 層來學習 token 表示，這丟失了 WavTokenizer 從大量數據中學習的語義結構。
+
+**解決方案**：直接使用 WavTokenizer 的預訓練 codebook 作為 token embedding，保留預訓練的語義，只訓練 Feature Enhancer 層。
+
+**Git Commit**: `待提交`
+
+#### 🏗️ 架構改進細節
+
+**❌ 原始架構（錯誤）**：
+```python
+self.token_embedding = nn.Embedding(4096, 512)  # 隨機初始化
+noisy_features = self.token_embedding(noisy_tokens)  # 丟失預訓練語義
+```
+
+**✅ 改進架構（正確）**：
+```python
+# 提取 WavTokenizer 的預訓練 codebook
+self.codebook_weights = self._extract_codebook_weights()  # [4096, 512]
+self.codebook_weights = self.codebook_weights.detach()  # 凍結
+
+# 使用預訓練 codebook 作為 embedding
+noisy_features = F.embedding(noisy_tokens, self.codebook_weights)  # 保留語義
+```
+
+#### ✅ 技術實現
+
+**1. Codebook 提取**
+```python
+def _extract_codebook_weights(self):
+    """從 WavTokenizer 提取預訓練的 codebook weights"""
+    vq_layers = self.wavtokenizer.feature_extractor.encodec.quantizer.vq.layers
+    codebook_weights = torch.cat([vq.codebook for vq in vq_layers], dim=0)
+    return codebook_weights.detach()  # [4096, 512]
+```
+
+**2. Token → Feature Embedding**
+```python
+# 使用 F.embedding 而不是 nn.Embedding（保持凍結）
+noisy_emb = F.embedding(noisy_tokens, self.codebook_weights)
+target_emb = F.embedding(target_tokens, self.codebook_weights)
+```
+
+**3. Feature → Token 量化**
+```python
+def quantize_features_to_tokens(self, features):
+    """通過最近鄰搜索量化為 discrete tokens"""
+    distances = torch.cdist(features, self.codebook_weights)
+    tokens = torch.argmin(distances, dim=-1)
+    return tokens
+```
+
+#### 📊 實驗驗證
+
+**測試結果**：
+```
+成功提取 codebook weights: shape=torch.Size([4096, 512])
+- 來自 1 個 VQ 層
+- 總共 4096 個 codes
+- 每個 code 維度: 512
+
+測試前向傳播...
+Enhanced audio shape: torch.Size([2, 1, 24000])
+Enhanced tokens shape: torch.Size([2, 75])
+✅ 所有測試通過！
+```
+
+**參數統計**：
+- 總參數量: 87,910,885
+- 可訓練參數量: 7,358,465 (8.4%)
+- WavTokenizer（凍結）: 80,552,420 (91.6%)
+
+#### 🎨 完整數據流
+
+```
+Input Audio → [WavTokenizer Encoder]
+    ↓
+Noisy Tokens → [F.embedding with pretrained codebook] ← 關鍵改進
+    ↓
+Noisy Features → [Feature Enhancer - 可訓練]
+    ↓
+Enhanced Features → [Quantize via Nearest Neighbor] ← 關鍵改進
+    ↓
+Enhanced Tokens → [WavTokenizer Decoder]
+    ↓
+Enhanced Audio
+```
+
+#### 💡 核心優勢
+
+1. **保留預訓練語義**
+   - WavTokenizer 的 codebook 已經包含豐富的音頻語義
+   - 避免重新學習已知的表示
+
+2. **更快收斂**
+   - 使用預訓練 embedding 作為初始化
+   - 只需訓練 Feature Enhancer（8.4% 參數）
+
+3. **更好性能**
+   - 在一致的語義空間內操作
+   - 增強而不是重建表示
+
+4. **訓練穩定**
+   - 連續特徵空間的損失計算
+   - 避免離散化的梯度問題
+
+#### 📚 相關文檔
+- `CODEBOOK_EMBEDDING_ARCHITECTURE.md`: 完整架構設計文檔
+- `ttt2_token.py`: 實現代碼（已更新）
+
+---
+
+## 實驗：離散 Token 訓練完整分析與 TTT2 Token Enhancement 設計 - 2025年10月16日
 
 ### 實驗概述
 系統性診斷了純離散 token 訓練的失敗原因，證明了 Decoder 工作正常，並確立了 TTT2 Token 混合架構（離散輸入/輸出，連續處理）作為唯一可行方案。
 
-**Git Commit**: `8f21a16737cc9d86a359e47822ffa7b74f94a955`
+**Git Commit**: `2bfba1a3e65d3f61b3c5ccac7ebf8df890efc9d7`（合併提交）
 
 #### 🔬 實驗背景
 1. **問題**: 已訓練模型 `wavtokenizer_tokenloss_fixed_202510150302` 的 enhancement 完全失敗（SNR -5.63 dB，比噪音更差）

@@ -171,6 +171,7 @@ class TTT2TokenModel(nn.Module):
         # 1. 載入預訓練的 WavTokenizer (凍結)
         logger.info("載入預訓練的 WavTokenizer...")
         self.wavtokenizer = WavTokenizer.from_pretrained0802(config_path, model_path)
+        self.wavtokenizer = self.wavtokenizer.to(device)  # 移到指定設備
         self.wavtokenizer.eval()
         
         # 凍結 WavTokenizer
@@ -179,8 +180,19 @@ class TTT2TokenModel(nn.Module):
         
         self.codebook_size = 4096  # WavTokenizer codebook size
         
-        # 2. Token Embedding Layer (投影到特徵增強空間)
-        self.token_embedding = nn.Embedding(self.codebook_size, embed_dim)
+        # 2. 直接使用 WavTokenizer 的 Codebook 作為 Token Embedding
+        # 不創建新的 nn.Embedding，而是提取預訓練的 codebook weights
+        logger.info("提取 WavTokenizer 的 codebook 作為 token embedding...")
+        self.codebook_weights = self._extract_codebook_weights()
+        
+        # 如果 codebook 維度與 embed_dim 不同，需要投影層
+        codebook_dim = self.codebook_weights.shape[1]
+        if codebook_dim != embed_dim:
+            self.codebook_projection = nn.Linear(codebook_dim, embed_dim)
+            logger.info(f"Codebook 維度投影: {codebook_dim} → {embed_dim}")
+        else:
+            self.codebook_projection = nn.Identity()
+            logger.info(f"Codebook 維度匹配: {codebook_dim}")
         
         # 3. Positional Encoding
         self.pos_encoding = self._create_positional_encoding(max_len=1000, d_model=embed_dim)
@@ -194,15 +206,19 @@ class TTT2TokenModel(nn.Module):
             dropout=dropout
         )
         
-        # 5. Feature to Token (特徵映射回 token)
-        # 這裡我們需要將增強的特徵映射到 codebook 特徵空間
-        # 然後通過量化得到 discrete tokens
-        self.feature_projection = nn.Sequential(
+        # 5. Feature to Token (特徵映射回 codebook 空間用於量化)
+        # 將增強的特徵投影到 codebook 的特徵維度
+        # 然後通過最近鄰搜索找到對應的 token
+        codebook_dim = self.codebook_weights.shape[1]
+        self.feature_to_codebook = nn.Sequential(
             nn.Linear(embed_dim, embed_dim),
             nn.LayerNorm(embed_dim),
             nn.GELU(),
-            nn.Linear(embed_dim, self.codebook_size)  # 投影到 codebook 空間用於量化
+            nn.Dropout(dropout),
+            nn.Linear(embed_dim, codebook_dim)  # 投影到 codebook 的特徵空間
         )
+        
+        logger.info(f"Feature to Codebook projection: {embed_dim} → {codebook_dim}")
         
         logger.info(f"TTT2TokenModel 初始化完成")
         logger.info(f"- Codebook size: {self.codebook_size}")
@@ -215,6 +231,38 @@ class TTT2TokenModel(nn.Module):
         logger.info(f"- 總參數量: {total_params:,}")
         logger.info(f"- 可訓練參數量: {trainable_params:,}")
     
+    def _extract_codebook_weights(self):
+        """
+        從 WavTokenizer 提取預訓練的 codebook weights
+        
+        這是關鍵：直接使用 WavTokenizer 學到的 token 表示，
+        而不是創建一個隨機初始化的 Embedding 層
+        
+        Returns:
+            codebook_weights: [total_codebook_size, codebook_dim]
+        """
+        try:
+            # 從 WavTokenizer 的 quantizer 提取 codebook
+            # 參考: decoder/pretrained.py line 239
+            vq_layers = self.wavtokenizer.feature_extractor.encodec.quantizer.vq.layers
+            
+            # 將所有層的 codebook 拼接起來
+            codebook_weights = torch.cat([vq.codebook for vq in vq_layers], dim=0)
+            
+            logger.info(f"成功提取 codebook weights: shape={codebook_weights.shape}")
+            logger.info(f"- 來自 {len(vq_layers)} 個 VQ 層")
+            logger.info(f"- 總共 {codebook_weights.shape[0]} 個 codes")
+            logger.info(f"- 每個 code 維度: {codebook_weights.shape[1]}")
+            
+            # 凍結 codebook weights (保持預訓練的語義)
+            codebook_weights = codebook_weights.detach()
+            
+            return codebook_weights
+            
+        except Exception as e:
+            logger.error(f"提取 codebook weights 失敗: {e}")
+            raise
+    
     def _create_positional_encoding(self, max_len, d_model):
         """創建位置編碼"""
         pe = torch.zeros(max_len, d_model)
@@ -223,6 +271,35 @@ class TTT2TokenModel(nn.Module):
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         return pe.unsqueeze(0)  # [1, max_len, d_model]
+    
+    def quantize_features_to_tokens(self, features):
+        """
+        將連續特徵量化為 discrete tokens
+        通過在 codebook 中尋找最近鄰
+        
+        Args:
+            features: [batch_size, seq_len, codebook_dim]
+            
+        Returns:
+            tokens: [batch_size, seq_len] - token indices
+        """
+        batch_size, seq_len, dim = features.shape
+        
+        # 將特徵展平以便批次處理
+        flat_features = features.reshape(-1, dim)  # [B*L, dim]
+        
+        # 計算與所有 codebook entries 的歐氏距離
+        # codebook_weights: [codebook_size, dim]
+        # flat_features: [B*L, dim]
+        distances = torch.cdist(flat_features, self.codebook_weights)  # [B*L, codebook_size]
+        
+        # 找最近的 codebook entry
+        tokens = torch.argmin(distances, dim=-1)  # [B*L]
+        
+        # 重塑回原始形狀
+        tokens = tokens.reshape(batch_size, seq_len)  # [B, L]
+        
+        return tokens
     
     def encode_audio_to_tokens(self, audio):
         """
@@ -312,9 +389,15 @@ class TTT2TokenModel(nn.Module):
         if target_audio is not None:
             target_tokens, target_wavtok_features = self.encode_audio_to_tokens(target_audio)
         
-        # Step 2: Token Embedding (投影到特徵增強空間)
+        # Step 2: Token Embedding (使用預訓練的 codebook weights)
         batch_size, seq_len = noisy_tokens.shape
-        noisy_emb = self.token_embedding(noisy_tokens)  # [batch_size, seq_len, embed_dim]
+        
+        # 使用 WavTokenizer 的 codebook 作為 embedding
+        # 這保留了預訓練模型學到的語義結構
+        noisy_emb = F.embedding(noisy_tokens, self.codebook_weights)  # [batch_size, seq_len, codebook_dim]
+        
+        # 如果需要，投影到增強空間的維度
+        noisy_emb = self.codebook_projection(noisy_emb)  # [batch_size, seq_len, embed_dim]
         
         # 添加位置編碼
         if seq_len <= self.pos_encoding.size(1):
@@ -328,10 +411,13 @@ class TTT2TokenModel(nn.Module):
         # Step 3: Feature Enhancement (可訓練)
         enhanced_features = self.feature_enhancer(noisy_features)
         
-        # Step 4: 將增強的特徵映射回 token 空間
-        # 方法A: 通過投影層得到 logits，然後取 argmax
-        token_logits = self.feature_projection(enhanced_features)  # [batch_size, seq_len, codebook_size]
-        enhanced_tokens = torch.argmax(token_logits, dim=-1)  # [batch_size, seq_len]
+        # Step 4: 將增強的特徵映射回 codebook 空間並量化為 tokens
+        # 4.1 投影到 codebook 的特徵維度
+        enhanced_codebook_features = self.feature_to_codebook(enhanced_features)  # [B, L, codebook_dim]
+        
+        # 4.2 通過最近鄰搜索量化為 discrete tokens
+        # 計算與所有 codebook entries 的距離
+        enhanced_tokens = self.quantize_features_to_tokens(enhanced_codebook_features)  # [B, L]
         
         # Step 5: 使用 Decoder 重建音頻
         enhanced_audio = self.decode_tokens_to_audio(enhanced_tokens)
@@ -341,12 +427,13 @@ class TTT2TokenModel(nn.Module):
             'enhanced_audio': enhanced_audio,
             'enhanced_tokens': enhanced_tokens,
             'noisy_tokens': noisy_tokens,
-            'token_logits': token_logits
+            'enhanced_codebook_features': enhanced_codebook_features
         }
         
         if target_audio is not None:
-            # 訓練模式：計算目標
-            target_emb = self.token_embedding(target_tokens)
+            # 訓練模式：計算目標 (同樣使用預訓練的 codebook)
+            target_emb = F.embedding(target_tokens, self.codebook_weights)
+            target_emb = self.codebook_projection(target_emb)
             target_features = target_emb + pos_enc
             
             result.update({
