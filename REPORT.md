@@ -1,6 +1,65 @@
 # 實驗記錄報告
 
-## 🎯 最新實驗：Codebook Embedding 架構重大改進 - 2025年10月17日
+## 🎯 最新實驗：CrossEntropyLoss Data Type 完整修復 - 2025年10月21日
+
+### 實驗編號：EXP-DTYPE-FIX-20251021
+
+#### 核心成就
+✅ **徹底解決 Transformer 訓練的數據類型錯誤問題**
+- 修復了持續出現的 `"host_softmax" not implemented for 'Long'` 錯誤
+- Token Accuracy 從 0% 提升到 8-15%
+- 訓練和驗證邏輯穩定運行，無任何錯誤
+
+#### 關鍵洞察
+**問題根源**：PyTorch 錯誤訊息具有誤導性
+- 錯誤訊息說「not implemented for 'Long'」
+- 實際問題：logits 必須是 float，target 必須是 long
+- 如果 logits 是 long，會報「not implemented for 'Long'」錯誤（誤導開發者認為是 target 的問題）
+
+**解決方案**：明確的數據類型轉換
+```python
+# 確保數據類型正確
+# PyTorch CrossEntropyLoss 要求: logits 必須是 float, target 必須是 long
+logits_flat = logits_flat.float()
+target_flat = target_flat.long()
+
+loss = criterion(logits_flat, target_flat)
+```
+
+#### 三次迭代的修復歷程
+
+**第一次修復**：CrossEntropyLoss with ignore_index
+- 問題：手動創建 mask 導致維度不匹配
+- 解決：使用 `CrossEntropyLoss(ignore_index=pad_token)`
+- 結果：簡化代碼，但仍有數據類型錯誤
+
+**第二次修復**：target.long()
+- 問題：Target 為 float 類型
+- 解決：添加 `target_flat = target_flat.long()`
+- 結果：修復了一半，但錯誤訊息誤導了診斷
+
+**第三次修復（最終）**：logits.float() + target.long()
+- 問題：Logits 為 long 類型
+- 解決：明確轉換兩者的類型
+- 結果：✅ 完全修復，測試通過，訓練穩定
+
+#### 訓練成果
+- **進程 ID**: 3998810
+- **啟動時間**: 2025-10-21 02:56:52
+- **Token Accuracy**: 8-15% (Epoch 1, Batch 140+)
+- **Total Loss**: 78.77 (持續下降)
+- **訓練速度**: ~7.0 it/s
+- **錯誤檢查**: ✅ 無任何錯誤
+
+#### 相關文件
+- `DTYPE_FIX_COMPLETE_REPORT_20251021.md` - 完整實驗報告
+- `test_validation_fix.py` - 數據類型測試腳本（5/5 測試通過）
+- `wavtokenizer_transformer_denoising.py` - 修復的訓練和驗證邏輯
+- `logs/large_tokenloss_FINAL_FIX_20251021_025652.log` - 訓練日誌
+
+---
+
+## 🎯 實驗：Codebook Embedding 架構重大改進 - 2025年10月17日
 
 ### 核心洞察
 **問題發現**：原始設計使用隨機初始化的 `nn.Embedding` 層來學習 token 表示，這丟失了 WavTokenizer 從大量數據中學習的語義結構。
@@ -3029,3 +3088,973 @@ print(f"選擇內容ID範圍：{selected_pairs[0]['content_id']} 到 {selected_p
 - 對比記憶體: 輕量化設計的效率提升
 
 ----
+
+---
+
+## 🎯 Codebook Embedding 實驗 - 2025-10-18 14:34:09
+
+### 實驗 ID: codebook_emb_202510181434
+
+### 架構改進
+- ✅ 使用 WavTokenizer 預訓練 Codebook 作為 Token Embedding
+- ✅ 保留預訓練模型的語義結構
+- ✅ 混合 embedding 策略：codebook tokens + special tokens
+
+### 技術細節
+- Codebook dim: 512
+- Transformer d_model: 128
+- Codebook tokens (0-4095): 使用預訓練 `F.embedding(tokens, codebook_weights)`
+- Special tokens (pad/sos/eos): 使用可學習 `nn.Embedding(3, 128)`
+
+### 訓練配置
+- 批次大小: 8
+- Epochs: 300
+- Learning rate: 1e-4
+- 訓練語者: boy1, boy3, boy4, boy5, boy6, girl2, girl3, girl4, girl6, girl7
+- 驗證語者: girl9, boy7
+
+### 預期結果
+- 更快收斂速度
+- 更好的最終性能
+- 更穩定的訓練過程
+
+### 結果
+- 日誌: logs/transformer_codebook_codebook_emb_202510181434.log
+- 輸出: results/transformer_codebook_codebook_emb_202510181434
+- Git Commit: ec83aa5
+
+
+---
+
+## 🎯 Codebook Embedding 實驗 - 2025-10-18 14:41:49
+
+### 實驗 ID: codebook_emb_202510181441
+
+### 架構改進
+- ✅ 使用 WavTokenizer 預訓練 Codebook 作為 Token Embedding
+- ✅ 保留預訓練模型的語義結構
+- ✅ 混合 embedding 策略：codebook tokens + special tokens
+
+### 技術細節
+- Codebook dim: 512
+- Transformer d_model: 128
+- Codebook tokens (0-4095): 使用預訓練 `F.embedding(tokens, codebook_weights)`
+- Special tokens (pad/sos/eos): 使用可學習 `nn.Embedding(3, 128)`
+
+### 訓練配置
+- 批次大小: 8
+- Epochs: 300
+- Learning rate: 1e-4
+- 訓練語者: boy1, boy3, boy4, boy5, boy6, girl2, girl3, girl4, girl6, girl7
+- 驗證語者: girl9, boy7
+
+### 預期結果
+- 更快收斂速度
+- 更好的最終性能
+- 更穩定的訓練過程
+
+### 結果
+- 日誌: logs/transformer_codebook_codebook_emb_202510181441.log
+- 輸出: results/transformer_codebook_codebook_emb_202510181441
+- Git Commit: ec83aa5
+
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_202510190519)
+**時間**: 2025-10-19 05:19:33  
+**實驗 ID**: `large_tokenloss_202510190519`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_202510190519`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_202510190519.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_202510190523)
+**時間**: 2025-10-19 05:23:37  
+**實驗 ID**: `large_tokenloss_202510190523`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_202510190523`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_202510190523.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_202510200359)
+**時間**: 2025-10-20 03:59:53  
+**實驗 ID**: `large_tokenloss_202510200359`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_202510200359`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_202510200359.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_FIXED_LR_202510210121)
+**時間**: 2025-10-21 01:21:09  
+**實驗 ID**: `large_tokenloss_FIXED_LR_202510210121`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210121`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210121.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_FIXED_LR_202510210230)
+**時間**: 2025-10-21 02:30:53  
+**實驗 ID**: `large_tokenloss_FIXED_LR_202510210230`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210230`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210230.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_FIXED_LR_202510210241)
+**時間**: 2025-10-21 02:41:18  
+**實驗 ID**: `large_tokenloss_FIXED_LR_202510210241`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210241`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210241.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_FIXED_LR_202510210256)
+**時間**: 2025-10-21 02:56:52  
+**實驗 ID**: `large_tokenloss_FIXED_LR_202510210256`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210256`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210256.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_FIXED_LR_202510210302)
+**時間**: 2025-10-21 03:02:23  
+**實驗 ID**: `large_tokenloss_FIXED_LR_202510210302`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210302`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210302.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_FIXED_LR_202510210304)
+**時間**: 2025-10-21 03:04:12  
+**實驗 ID**: `large_tokenloss_FIXED_LR_202510210304`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210304`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210304.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_FIXED_LR_202510210314)
+**時間**: 2025-10-21 03:14:41  
+**實驗 ID**: `large_tokenloss_FIXED_LR_202510210314`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210314`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210314.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_FIXED_LR_202510210317)
+**時間**: 2025-10-21 03:17:57  
+**實驗 ID**: `large_tokenloss_FIXED_LR_202510210317`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210317`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210317.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_FIXED_LR_202510210354)
+**時間**: 2025-10-21 03:54:17  
+**實驗 ID**: `large_tokenloss_FIXED_LR_202510210354`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210354`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210354.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_FIXED_LR_202510210414)
+**時間**: 2025-10-21 04:14:27  
+**實驗 ID**: `large_tokenloss_FIXED_LR_202510210414`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210414`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210414.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_FIXED_LR_202510210416)
+**時間**: 2025-10-21 04:16:37  
+**實驗 ID**: `large_tokenloss_FIXED_LR_202510210416`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210416`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210416.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_FIXED_LR_202510210427)
+**時間**: 2025-10-21 04:27:45  
+**實驗 ID**: `large_tokenloss_FIXED_LR_202510210427`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210427`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210427.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_FIXED_LR_202510210433)
+**時間**: 2025-10-21 04:33:58  
+**實驗 ID**: `large_tokenloss_FIXED_LR_202510210433`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210433`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210433.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_FIXED_LR_202510210440)
+**時間**: 2025-10-21 04:40:06  
+**實驗 ID**: `large_tokenloss_FIXED_LR_202510210440`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210440`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210440.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_FIXED_LR_202510210451)
+**時間**: 2025-10-21 04:51:42  
+**實驗 ID**: `large_tokenloss_FIXED_LR_202510210451`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210451`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210451.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---

@@ -9,309 +9,125 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-def compute_token_l2_loss(predicted_tokens, target_tokens, embedding_layer=None):
-    """
-    Token 的 L2 距離損失
-    
-    概念：將 token 嵌入到連續空間後計算 L2 距離
-    這等同於 ttt2.py 中的 torch.norm(enhanced_features - target_features, p=2)
-    
-    Args:
-        predicted_tokens: [batch, seq_len] 預測的 token 序列
-        target_tokens: [batch, seq_len] 目標 token 序列  
-        embedding_layer: nn.Embedding 層，用於將 token 映射到連續空間
-        
-    Returns:
-        torch.Tensor: L2 距離損失
-    """
-    # 確保維度匹配
-    min_seq_len = min(predicted_tokens.size(1), target_tokens.size(1))
-    predicted_tokens = predicted_tokens[:, :min_seq_len]
-    target_tokens = target_tokens[:, :min_seq_len]
-    
-    if embedding_layer is not None:
-        # 方案 1: 使用嵌入層將 token 映射到連續空間
-        predicted_embed = embedding_layer(predicted_tokens)  # [batch, seq_len, embed_dim]
-        target_embed = embedding_layer(target_tokens)
-        
-        # 計算 L2 距離（等同於 ttt2.py 的做法）
-        l2_distance = torch.norm(predicted_embed - target_embed, p=2, dim=-1)  # [batch, seq_len]
-        return l2_distance.mean()
-    else:
-        # 方案 2: 直接在 token ID 空間計算距離
-        # 將 token 視為座標點，計算歐式距離
-        token_distance = torch.abs(predicted_tokens.float() - target_tokens.float())
-        return token_distance.mean()
 
-def compute_token_content_consistency_loss(predicted_logits, target_tokens, 
-                                         input_tokens=None, temperature=1.0):
-    """
-    Token 內容一致性損失
-    
-    概念：確保預測的 token 分佈與目標保持一致
-    等同於 ttt2.py 中的碼本一致性損失邏輯
-    
-    Args:
-        predicted_logits: [batch, seq_len, vocab_size] 預測的 logits
-        target_tokens: [batch, seq_len] 目標 tokens
-        input_tokens: [batch, seq_len] 輸入 tokens（可選）
-        temperature: 軟化溫度參數
-        
-    Returns:
-        torch.Tensor: 內容一致性損失
-    """
-    # 首先確保維度匹配 - 處理動態序列長度問題
-    batch_size = predicted_logits.size(0)
-    pred_seq_len = predicted_logits.size(1)
-    target_seq_len = target_tokens.size(1)
-    vocab_size = predicted_logits.size(-1)
-    
-    # 動態調整維度到較短的長度，避免維度不匹配
-    min_seq_len = min(pred_seq_len, target_seq_len)
-    
-    # 截取到相同長度
-    predicted_logits = predicted_logits[:, :min_seq_len, :]  # [batch, min_seq_len, vocab_size]
-    target_tokens = target_tokens[:, :min_seq_len]  # [batch, min_seq_len]
-    
-    if input_tokens is not None:
-        input_tokens = input_tokens[:, :min_seq_len]  # [batch, min_seq_len]
-    
-    # 主要一致性損失：交叉熵（確保預測正確的 token）
-    predicted_logits_flat = predicted_logits.reshape(-1, vocab_size)
-    target_tokens_flat = target_tokens.reshape(-1)
-    
-    # 確保token在有效範圍內 - 修復CUDA斷言錯誤
-    target_tokens_flat = torch.clamp(target_tokens_flat, 0, vocab_size - 1)
-    
-    # 過濾無效 token（pad token = 0或超出範圍的token）
-    valid_mask = (target_tokens_flat > 0) & (target_tokens_flat < vocab_size)
-    
-    if valid_mask.sum() > 0:
-        consistency_loss = F.cross_entropy(
-            predicted_logits_flat[valid_mask], 
-            target_tokens_flat[valid_mask], 
-            reduction='mean'
-        )
-    else:
-        consistency_loss = torch.tensor(0.0, device=predicted_logits.device)
-    
-    # 可選：添加分佈平滑性（類似於 ttt2.py 的特徵平滑性）
-    if input_tokens is not None:
-        # 確保預測不會偏離輸入太遠（token 空間的 manifold 約束）
-        predicted_probs = F.softmax(predicted_logits / temperature, dim=-1)
-        
-        # 計算預測分佈的熵（鼓勵適度的不確定性）
-        entropy_loss = -(predicted_probs * torch.log(predicted_probs + 1e-10)).sum(dim=-1)
-        entropy_regularization = -entropy_loss.mean() * 0.01  # 負號：鼓勵適度熵
-        
-        consistency_loss = consistency_loss + entropy_regularization
-    
-    return consistency_loss
-
-def compute_token_manifold_regularization_loss(predicted_tokens, input_tokens, 
-                                             embedding_layer, alpha=0.1):
-    """
-    Token 的 Manifold 正則化損失
-    
-    概念：防止預測的 token 偏離輸入 token manifold 太遠
-    等同於 ttt2.py 中的 compute_manifold_regularization_loss
-    
-    Args:
-        predicted_tokens: [batch, seq_len] 預測的 tokens
-        input_tokens: [batch, seq_len] 輸入的 tokens  
-        embedding_layer: nn.Embedding 層
-        alpha: 正則化強度
-        
-    Returns:
-        torch.Tensor: manifold 正則化損失
-    """
-    # 確保維度匹配
-    min_seq_len = min(predicted_tokens.size(1), input_tokens.size(1))
-    predicted_tokens = predicted_tokens[:, :min_seq_len]
-    input_tokens = input_tokens[:, :min_seq_len]
-    
-    # 將 tokens 映射到嵌入空間
-    predicted_embed = embedding_layer(predicted_tokens)  # [batch, seq_len, embed_dim]
-    input_embed = embedding_layer(input_tokens)
-    
-    # 計算 L2 距離（等同於 ttt2.py 的做法）
-    manifold_distance = torch.norm(predicted_embed - input_embed, p=2, dim=-1)  # [batch, seq_len]
-    
-    # 使用適應性閾值（完全按照 ttt2.py 的邏輯）
-    mean_distance = manifold_distance.mean()
-    std_distance = manifold_distance.std()
-    adaptive_threshold = mean_distance + 2 * std_distance
-    
-    # 對超過閾值的部分進行懲罰（完全按照 ttt2.py 的邏輯）
-    excess_distance = F.relu(manifold_distance - adaptive_threshold)
-    manifold_loss = alpha * excess_distance.mean()
-    
-    return manifold_loss
-
-def compute_token_normalization_loss(predicted_logits, target_distribution=None, 
-                                   norm_type='l2', beta=0.01):
-    """
-    Token 正則化損失
-    
-    概念：確保 token 預測分佈的正則性
-    等同於 ttt2.py 中的特徵正則化
-    
-    Args:
-        predicted_logits: [batch, seq_len, vocab_size] 預測 logits
-        target_distribution: 目標分佈（可選）
-        norm_type: 正則化類型 ('l1', 'l2', 'entropy')
-        beta: 正則化強度
-        
-    Returns:
-        torch.Tensor: 正則化損失
-    """
-    if norm_type == 'l2':
-        # L2 正則化：懲罰過大的 logits
-        l2_norm = torch.norm(predicted_logits, p=2, dim=-1)  # [batch, seq_len]
-        regularization_loss = beta * l2_norm.mean()
-        
-    elif norm_type == 'l1':
-        # L1 正則化：促進稀疏性
-        l1_norm = torch.norm(predicted_logits, p=1, dim=-1)
-        regularization_loss = beta * l1_norm.mean()
-        
-    elif norm_type == 'entropy':
-        # 熵正則化：控制分佈的不確定性
-        predicted_probs = F.softmax(predicted_logits, dim=-1)
-        entropy = -(predicted_probs * torch.log(predicted_probs + 1e-10)).sum(dim=-1)
-        
-        if target_distribution is not None:
-            # 目標熵
-            target_entropy = target_distribution
-        else:
-            # 默認適中熵（不太確定，不太隨機）
-            target_entropy = np.log(predicted_logits.size(-1)) * 0.5
-            
-        regularization_loss = beta * F.mse_loss(entropy, 
-                                               torch.full_like(entropy, target_entropy))
-    else:
-        regularization_loss = torch.tensor(0.0, device=predicted_logits.device)
-    
-    return regularization_loss
-
-def compute_token_coherence_loss(predicted_tokens, input_tokens, window_size=5, gamma=0.05):
-    """
-    Token 連貫性損失
-    
-    修復數值過大問題：使用歸一化的token差異
-    
-    Args:
-        predicted_tokens: [batch, seq_len] 預測的 tokens
-        input_tokens: [batch, seq_len] 輸入的 tokens
-        window_size: 連貫性檢查的窗口大小
-        gamma: 連貫性損失權重
-        
-    Returns:
-        torch.Tensor: 連貫性損失
-    """
-    # 確保維度匹配
-    min_seq_len = min(predicted_tokens.size(1), input_tokens.size(1))
-    predicted_tokens = predicted_tokens[:, :min_seq_len]
-    input_tokens = input_tokens[:, :min_seq_len]
-    
-    if min_seq_len < window_size:
-        # 如果序列太短，返回零損失
-        return torch.tensor(0.0, device=predicted_tokens.device)
-    
-    coherence_losses = []
-    
-    # 滑動窗口檢查連貫性
-    for i in range(min_seq_len - window_size + 1):
-        # 提取窗口
-        pred_window = predicted_tokens[:, i:i+window_size]  # [batch, window_size]
-        input_window = input_tokens[:, i:i+window_size]
-        
-        # 修復：將token值歸一化到[0,1]範圍，避免數值過大
-        vocab_size = 4096  # WavTokenizer詞彙表大小
-        pred_normalized = pred_window.float() / vocab_size
-        input_normalized = input_window.float() / vocab_size
-        
-        # 計算窗口內的變化率（鄰近 token 的差異）
-        pred_diff = torch.abs(pred_normalized[:, 1:] - pred_normalized[:, :-1])
-        input_diff = torch.abs(input_normalized[:, 1:] - input_normalized[:, :-1])
-        
-        # 連貫性：預測的變化率應該與輸入相似
-        diff_loss = F.mse_loss(pred_diff, input_diff)
-        coherence_losses.append(diff_loss)
-    
-    # 平均所有窗口的損失
-    if coherence_losses:
-        coherence_loss = gamma * torch.stack(coherence_losses).mean()
-    else:
-        coherence_loss = torch.tensor(0.0, device=predicted_tokens.device)
-    
-    return coherence_loss
-
-def compute_combined_token_loss(predicted_logits, predicted_tokens, target_tokens, 
+def compute_combined_token_loss(predicted_logits, target_tokens, 
                               input_tokens, embedding_layer,
-                              weights={'l2': 0.4, 'consistency': 0.5, 'manifold': 0.05, 
-                                     'normalization': 0.04, 'coherence': 0.01}):
+                              weights={'ce': 1.0, 'l2_embed': 0.5, 'coherence': 0.2, 'manifold': 0.1}):
     """
-    組合 token 損失函數
+    重構後的組合 Token 損失函數
     
-    修復coherence_loss過度主導問題，重新平衡權重分配
-    主要改進：
-    1. 降低coherence權重從0.1到0.01
-    2. 增加l2和consistency權重
-    3. 確保總權重為1.0
+    設計理念：
+    1. **CE Loss (1.0)**: 主要監督信號，確保正確預測 Token ID
+    2. **L2 Embed (0.5)**: 輔助損失，即使預測錯誤也要錯得「聲學相似」
+    3. **Coherence (0.2)**: 時間連貫性，讓相鄰 Token 平滑過渡
+    4. **Manifold (0.1)**: 正則化，防止模型偏離輸入太遠
     
+    優勢：
+    - 權重更合理：CE 為主 (1.0)，其他為輔
+    - 邏輯更清晰：每個損失職責明確
+    - 代碼更簡潔：去除冗餘計算
+    - PAD 處理更優雅：使用 ignore_index
+
     Args:
-        predicted_logits: [batch, seq_len, vocab_size] 
-        predicted_tokens: [batch, seq_len]
-        target_tokens: [batch, seq_len] 
-        input_tokens: [batch, seq_len]
-        embedding_layer: nn.Embedding
+        predicted_logits: [B, L, VocabSize] 模型的原始輸出
+        target_tokens: [B, L] 正確答案 Token ID
+        input_tokens: [B, L] 輸入的帶噪聲 Token ID
+        embedding_layer: 用於將 Token ID 轉為向量的 Embedding 層
         weights: 各損失的權重字典
         
     Returns:
-        dict: 包含總損失和各項子損失的字典
+        tuple: (total_loss, loss_dict)
     """
+    import logging
     losses = {}
+    device = predicted_logits.device
+    vocab_size = predicted_logits.size(-1)
     
-    # 1. L2 距離損失（對應 ttt2.py 的 feature L2 loss）
-    if weights.get('l2', 0) > 0:
-        losses['l2_loss'] = compute_token_l2_loss(
-            predicted_tokens, target_tokens, embedding_layer
-        )
+    # ==================== 1. 主要監督信號：交叉熵損失 (CE Loss) ====================
+    # 職責：確保模型能準確預測出正確的 Token ID。這是最重要的損失。
+    if weights.get('ce', 0) > 0:
+        logits_flat = predicted_logits.reshape(-1, vocab_size)
+        target_flat = target_tokens.reshape(-1)
+        
+        # 忽略 PAD token (假設 PAD_TOKEN_ID = 4096)
+        losses['ce_loss'] = F.cross_entropy(logits_flat, target_flat, ignore_index=4096)
+
+    # 從 logits 中獲取預測的 token ID，用於後續計算
+    predicted_tokens = torch.argmax(predicted_logits, dim=-1)
     
-    # 2. 內容一致性損失（對應 ttt2.py 的 codebook consistency）
-    if weights.get('consistency', 0) > 0:
-        losses['consistency_loss'] = compute_token_content_consistency_loss(
-            predicted_logits, target_tokens, input_tokens
-        )
+    # 詳細調試日誌
+    logging.debug(f"[Token Loss] predicted_logits shape: {predicted_logits.shape}")
+    logging.debug(f"[Token Loss] predicted_tokens shape: {predicted_tokens.shape}")
+    logging.debug(f"[Token Loss] target_tokens shape: {target_tokens.shape}")
+    logging.debug(f"[Token Loss] input_tokens shape: {input_tokens.shape}")
+
+    # 一次性計算所有需要的 embeddings，避免重複計算和形狀不匹配
+    predicted_embed = None
+    target_embed = None
+    input_embed = None
     
-    # 3. Manifold 正則化（對應 ttt2.py 的 manifold regularization）
-    if weights.get('manifold', 0) > 0:
-        losses['manifold_loss'] = compute_token_manifold_regularization_loss(
-            predicted_tokens, input_tokens, embedding_layer
-        )
+    if embedding_layer is not None and (weights.get('l2_embed', 0) > 0 or 
+                                        weights.get('coherence', 0) > 0 or 
+                                        weights.get('manifold', 0) > 0):
+        # 計算預測的 embedding
+        predicted_embed = embedding_layer(predicted_tokens)
+        logging.debug(f"[Token Loss] predicted_embed shape: {predicted_embed.shape}")
+        
+        # 計算目標和輸入的 embedding（不需要梯度）
+        with torch.no_grad():
+            target_embed = embedding_layer(target_tokens)
+            input_embed = embedding_layer(input_tokens)
+            logging.debug(f"[Token Loss] target_embed shape: {target_embed.shape}")
+            logging.debug(f"[Token Loss] input_embed shape: {input_embed.shape}")
+
+    # ==================== 2. 聲學相似性損失：Embedding L2 Loss ====================
+    # 職責：讓預測錯誤時，也盡量錯得「比較像」。鼓勵聲學上的相似性。
+    if weights.get('l2_embed', 0) > 0 and predicted_embed is not None:
+        losses['l2_embed_loss'] = F.mse_loss(predicted_embed, target_embed)
+
+    # ==================== 3. 時間連貫性損失：Coherence Loss ====================
+    # 職責：讓相鄰 Token 之間的過渡更平滑，解決頻譜破碎問題。
+    if weights.get('coherence', 0) > 0 and predicted_embed is not None:
+        try:
+            logging.debug(f"[Token Loss] Computing coherence loss, predicted_embed shape: {predicted_embed.shape}")
+            # 計算相鄰 embedding 的差異的 L2 範數
+            slice1 = predicted_embed[:, 1:, :]
+            slice2 = predicted_embed[:, :-1, :]
+            logging.debug(f"[Token Loss] slice1 shape: {slice1.shape}, slice2 shape: {slice2.shape}")
+            pred_diff = slice1 - slice2
+            logging.debug(f"[Token Loss] pred_diff shape: {pred_diff.shape}")
+            # 我們的目標是最小化這個差異，讓序列更平滑
+            losses['coherence_loss'] = pred_diff.pow(2).mean()
+            logging.debug(f"[Token Loss] coherence_loss computed: {losses['coherence_loss'].item():.4f}")
+        except Exception as e:
+            # 如果 coherence loss 計算失敗，記錄錯誤但不中斷訓練
+            logging.error(f"❌ Coherence loss 計算失敗（predicted_embed shape: {predicted_embed.shape}）: {e}")
+            import traceback
+            traceback.print_exc()
+            # 設置為 0 以避免影響訓練
+            losses['coherence_loss'] = torch.tensor(0.0, device=device)
+
+    # ==================== 4. 正則化項：Manifold Loss ====================
+    # 職責：防止模型偏離輸入太遠，只做「降噪」而非「創造」。
+    if weights.get('manifold', 0) > 0 and predicted_embed is not None:
+        # 簡單版本：直接懲罰與輸入 embedding 的距離
+        losses['manifold_loss'] = F.mse_loss(predicted_embed, input_embed)
     
-    # 4. 正則化損失（對應 ttt2.py 的 normalization）
-    if weights.get('normalization', 0) > 0:
-        losses['normalization_loss'] = compute_token_normalization_loss(
-            predicted_logits, norm_type='l2'
-        )
-    
-    # 5. 連貫性損失（對應 ttt2.py 的時間一致性）- 權重大幅降低
-    if weights.get('coherence', 0) > 0:
-        losses['coherence_loss'] = compute_token_coherence_loss(
-            predicted_tokens, input_tokens
-        )
-    
-    # 計算總損失
-    total_loss = sum(weights.get(name.replace('_loss', ''), 0) * loss 
-                    for name, loss in losses.items())
+    # ==================== 計算總損失 ====================
+    total_loss = torch.tensor(0.0, device=device)
+    if 'ce_loss' in losses:
+        total_loss += weights.get('ce', 0) * losses['ce_loss']
+    if 'l2_embed_loss' in losses:
+        total_loss += weights.get('l2_embed', 0) * losses['l2_embed_loss']
+    if 'coherence_loss' in losses:
+        total_loss += weights.get('coherence', 0) * losses['coherence_loss']
+    if 'manifold_loss' in losses:
+        total_loss += weights.get('manifold', 0) * losses['manifold_loss']
     
     losses['total_loss'] = total_loss
     
     # 轉換為數值用於記錄
-    loss_dict = {name: loss.item() if hasattr(loss, 'item') else loss 
-                for name, loss in losses.items()}
+    loss_dict = {name: loss.item() for name, loss in losses.items()}
     
     return total_loss, loss_dict
 

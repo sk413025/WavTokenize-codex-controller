@@ -37,6 +37,22 @@ from ttdata import AudioDataset
 from ttt2 import collate_fn
 from token_loss_system import compute_combined_token_loss
 
+# 設置 logger
+logger = logging.getLogger(__name__)
+
+class EmbeddingWrapper:
+    """
+    包裝器：讓模型的 _embed_tokens 方法可以像 nn.Embedding 一樣被調用
+    
+    這個包裝器允許 token_loss_system 使用模型的完整 embedding 流程，
+    包括 codebook_embedding、special_token_embedding 和 projection。
+    """
+    def __init__(self, embed_func):
+        self.embed_func = embed_func
+    
+    def __call__(self, tokens):
+        return self.embed_func(tokens)
+
 def set_seed(seed=42):
     """設定隨機種子以確保實驗可重現"""
     torch.manual_seed(seed)
@@ -278,7 +294,9 @@ class WavTokenizerTransformerDenoiser(nn.Module):
         )
         
         # Output projection (將 Transformer 輸出投影回 token 空間)
-        self.output_projection = nn.Linear(d_model, self.codebook_size)
+        # 🔴 修復: 使用 vocab_size (4099) 而非 codebook_size (4096)
+        # 必須包含特殊 token (PAD=4096, SOS=4097, EOS=4098)
+        self.output_projection = nn.Linear(d_model, self.vocab_size)
         
         # 初始化參數
         self._init_parameters()
@@ -435,8 +453,18 @@ class WavTokenizerTransformerDenoiser(nn.Module):
         
         return embeddings
     
-    def forward_transformer(self, src_tokens, tgt_tokens=None):
-        """Transformer 前向傳播（僅處理 token 序列）"""
+    def forward_transformer(self, src_tokens, tgt_tokens=None, return_logits=False):
+        """Transformer 前向傳播（僅處理 token 序列）
+        
+        Args:
+            src_tokens: 源 token 序列 [B, L]
+            tgt_tokens: 目標 token 序列 [B, L]（訓練/驗證時提供）
+            return_logits: 強制返回 logits 而非 predicted_tokens（用於驗證）
+        
+        Returns:
+            training 模式或 return_logits=True: logits [B, L, vocab_size]
+            inference 模式: predicted_tokens [B, L]
+        """
         batch_size, src_seq_len = src_tokens.size()
         max_pos_len = self.pos_encoding.shape[1]
         
@@ -457,8 +485,8 @@ class WavTokenizerTransformerDenoiser(nn.Module):
         src_seq_len = src_tokens_padded.shape[1]
         src_emb = src_emb + self.pos_encoding[:, :src_seq_len, :]
         
-        # 如果是訓練模式且提供了目標序列
-        if tgt_tokens is not None and self.training:
+        # 修改條件：訓練模式 OR 需要返回 logits（用於驗證）
+        if tgt_tokens is not None and (self.training or return_logits):
             _, tgt_seq_len = tgt_tokens.size()
             max_pos_len = self.pos_encoding.shape[1]
             
@@ -495,28 +523,57 @@ class WavTokenizerTransformerDenoiser(nn.Module):
             return logits
         
         else:
-            # 推理模式：使用 encoder 進行 self-attention
+            # 推理模式：快速 encoder-only 推理
+            # 適用於去噪任務（輸入輸出長度相同）
             src_padding_mask = self.create_padding_mask(src_tokens_padded)
             
-            # 僅使用 encoder
+            # Encoder 處理輸入序列
             encoder_output = self.transformer.encoder(
                 src_emb,
                 src_key_padding_mask=src_padding_mask
             )
             
             # 投影到 token 空間
-            logits = self.output_projection(encoder_output)
-            predicted_tokens = torch.argmax(logits, dim=-1)
+            logits = self.output_projection(encoder_output)  # [B, T, vocab_size]
+            predicted_tokens = torch.argmax(logits, dim=-1)  # [B, T]
+            
+            # 移除 padding：找到原始輸入的實際長度
+            # 注意：src_tokens 可能已經被填充了，需要找到原始長度
+            original_length = src_tokens.size(1)
+            if original_length < predicted_tokens.size(1):
+                predicted_tokens = predicted_tokens[:, :original_length]
             
             return predicted_tokens
     
-    def forward(self, noisy_audio, clean_audio=None):
-        """完整的前向傳播：Audio → Tokens → Transformer → Tokens → Audio"""
+    def forward(self, noisy_audio, clean_audio=None, return_logits=False):
+        """完整的前向傳播：Audio → Tokens → Transformer → Tokens → Audio
+        
+        Args:
+            noisy_audio: 輸入的噪聲音頻 [B, 1, T]
+            clean_audio: 乾淨音頻（訓練/驗證時提供）[B, 1, T]
+            return_logits: 強制返回 logits 格式（用於驗證），即使在 eval 模式也返回 logits
+                         - True: 返回 {'logits', 'target_tokens', 'noisy_tokens', 'clean_tokens'}
+                         - False (推理): 返回 {'denoised_audio', 'denoised_tokens', 'noisy_tokens'}
+        
+        Returns:
+            dict: 根據模式返回不同的內容
+                訓練/驗證模式 (training=True 或 return_logits=True):
+                    - logits: [B, L, 4096] Transformer 輸出的 token 機率分佈
+                    - target_tokens: [B, L] 目標 token 序列
+                    - noisy_tokens: [B, L-1] 噪聲 token 序列（已調整長度）
+                    - clean_tokens: [B, L_original] 原始乾淨 token 序列
+                推理模式 (training=False 且 return_logits=False):
+                    - denoised_audio: [B, 1, T] 降噪後的音頻
+                    - denoised_tokens: [B, L] 預測的 token 序列
+                    - noisy_tokens: [B, L] 原始噪聲 token 序列
+        """
         
         # Step 1: 將音頻轉換為 tokens (使用凍結的 WavTokenizer Encoder)
         noisy_tokens = self.encode_audio_to_tokens(noisy_audio)
         
-        if self.training and clean_audio is not None:
+        # 修改條件：訓練模式 OR 需要返回 logits（用於驗證）
+        # 這樣在 model.eval() + return_logits=True 時也能計算 loss
+        if (self.training or return_logits) and clean_audio is not None:
             # 訓練模式：需要 clean tokens 作為目標
             clean_tokens = self.encode_audio_to_tokens(clean_audio)
             
@@ -543,7 +600,8 @@ class WavTokenizerTransformerDenoiser(nn.Module):
             ], dim=1)
             
             # Step 2: Transformer 降噪 (在 token 空間)
-            logits = self.forward_transformer(input_tokens, decoder_input)
+            # 傳遞 return_logits 參數確保在 eval 模式也返回 logits
+            logits = self.forward_transformer(input_tokens, decoder_input, return_logits=return_logits)
             
             # 動態調整所有序列到實際的logits長度，而不是強制到max_length
             actual_seq_len = logits.shape[1]
@@ -576,10 +634,14 @@ class WavTokenizerTransformerDenoiser(nn.Module):
             else:
                 noisy_tokens_adjusted = noisy_tokens
                 
+            # Debug: 檢查返回前的形狀
+            logger.info(f"Forward return shapes - logits: {logits.shape}, target_tokens: {target_tokens.shape}")
+            
             return {
                 'logits': logits,
                 'target_tokens': target_tokens,
-                'noisy_tokens': noisy_tokens_adjusted,  # 使用調整後的版本
+                'noisy_tokens': noisy_tokens_adjusted,  # 使用調整後的版本（長度少1）
+                'input_tokens': input_tokens,  # 完整輸入序列（與 target_tokens 長度一致）
                 'clean_tokens': clean_tokens
             }
         
@@ -631,10 +693,16 @@ class AudioTokenDataset(Dataset):
         return (noisy_audio, clean_audio, content_id)
 
 def train_epoch(model, dataloader, optimizer, criterion, device, epoch):
-    """使用原始 CrossEntropy 訓練一個 epoch"""
+    """使用原始 CrossEntropy 訓練一個 epoch
+    
+    優化（2025/10/21）：
+        - 使用 CrossEntropyLoss(ignore_index=pad_token) 自動處理 padding
+        - 簡化損失計算邏輯，與 validate_epoch 完全一致
+    """
     model.train()
     total_loss = 0.0
     total_tokens = 0
+    total_correct = 0
     
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch}")
     
@@ -648,57 +716,77 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch):
         # 前向傳播
         output = model(noisy_audio, clean_audio)
         
-        logits = output['logits']  # [batch_size, seq_len, vocab_size]
-        target_tokens = output['target_tokens']  # [batch_size, seq_len]
+        logits = output['logits']  # [B, L, vocab_size]
+        target_tokens = output['target_tokens']  # [B, L]
         
-        # 計算損失（忽略 padding tokens）- 使用reshape確保tensor連續性
-        logits_flat = logits.reshape(-1, logits.size(-1))
-        target_flat = target_tokens.reshape(-1)
+        # 計算損失 - 使用 reshape 確保 tensor 連續性
+        logits_flat = logits.reshape(-1, logits.size(-1))  # [B*L, vocab_size]
+        target_flat = target_tokens.reshape(-1)             # [B*L]
         
-        # 確保target_flat在有效範圍內 - 修復CUDA斷言錯誤
-        target_flat = torch.clamp(target_flat, 0, model.codebook_size - 1)
+        # 確保數據類型正確
+        # logits 必須是 float，target 必須是 long
+        logits_flat = logits_flat.float()
+        target_flat = target_flat.long()
         
-        # 只對 codebook tokens 計算損失（忽略特殊 tokens）
-        mask = target_flat < model.codebook_size
-        if mask.sum() > 0:
-            loss = criterion(logits_flat[mask], target_flat[mask])
-        else:
-            loss = torch.tensor(0.0, device=device, requires_grad=True)
+        # 使用 CrossEntropyLoss 的 ignore_index 參數自動處理 PAD token
+        # criterion 已經設置為 nn.CrossEntropyLoss(ignore_index=model.pad_token)
+        loss = criterion(logits_flat, target_flat)
+        
         # 反向傳播
         loss.backward()
+        
         # 梯度裁剪
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
         optimizer.step()
         
-        # 統計
+        # 統計（用於顯示）
         total_loss += loss.item()
-        total_tokens += mask.sum().item()
+        
+        # 計算準確率（只在非 PAD token 上）
+        mask = target_flat != model.pad_token
+        if mask.sum() > 0:
+            predictions = torch.argmax(logits_flat[mask], dim=-1)
+            total_correct += (predictions == target_flat[mask]).sum().item()
+            total_tokens += mask.sum().item()
         
         # 更新進度條
         avg_loss = total_loss / (batch_idx + 1)
-        progress_bar.set_postfix({'Loss': f'{avg_loss:.4f}', 'Tokens': total_tokens})
+        accuracy = (total_correct / total_tokens * 100) if total_tokens > 0 else 0.0
+        progress_bar.set_postfix({
+            'Loss': f'{avg_loss:.4f}', 
+            'Acc': f'{accuracy:.1f}%',
+            'Tokens': total_tokens
+        })
     
-    return total_loss / len(dataloader)
+    avg_loss = total_loss / len(dataloader)
+    accuracy = (total_correct / total_tokens) if total_tokens > 0 else 0.0
+    
+    return avg_loss
 
 def train_epoch_with_token_loss(model, dataloader, optimizer, device, epoch, 
                                loss_weights={'l2': 0.3, 'consistency': 0.4, 'manifold': 0.1, 
                                            'normalization': 0.1, 'coherence': 0.1}):
-    """使用 Token Loss 系統訓練一個 epoch（ttt2.py 損失邏輯移植到離散空間）"""
+    """使用 Token Loss 系統訓練一個 epoch（ttt2.py 損失邏輯移植到離散空間）
+    
+    新增詳細 logging：記錄 CE Loss、Token Accuracy 等關鍵指標
+    """
     model.train()
     total_losses = {'total': 0.0}
     loss_counts = 0
     
+    # 新增：統計 token 準確率
+    total_correct_tokens = 0
+    total_tokens_count = 0
+    
     # 獲取嵌入層用於 Token Loss 計算
-    embedding_layer = None
-    if hasattr(model, 'src_embedding'):
-        embedding_layer = model.src_embedding
-    elif hasattr(model, 'tgt_embedding'):
-        embedding_layer = model.tgt_embedding
+    # 使用全局的 EmbeddingWrapper 來包裝模型的 get_token_embeddings 方法
+    embedding_layer = EmbeddingWrapper(model.get_token_embeddings) if hasattr(model, 'get_token_embeddings') else None
     
     if embedding_layer is None:
         logging.warning("無法找到嵌入層，將使用簡化的 token loss")
     else:
-        logging.info(f"找到嵌入層：{type(embedding_layer).__name__}, 嵌入維度：{embedding_layer.embedding_dim}")
+        logging.info(f"✅ 找到嵌入層：使用 get_token_embeddings 方法（包含 codebook + special tokens + projection）")
     
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} (Token Loss)")
     
@@ -714,27 +802,26 @@ def train_epoch_with_token_loss(model, dataloader, optimizer, device, epoch,
         
         logits = output['logits']  # [batch_size, seq_len, vocab_size]
         target_tokens = output['target_tokens']  # [batch_size, seq_len]
-        noisy_tokens = output['noisy_tokens']  # [batch_size, seq_len]
+        input_tokens = output['input_tokens']  # [batch_size, seq_len] - 與 target 長度一致
         
         # 獲取預測 tokens
         predicted_tokens = torch.argmax(logits, dim=-1)  # [batch_size, seq_len]
         
-        # 確保預測的tokens在有效範圍內 - 修復CUDA斷言錯誤
-        predicted_tokens = torch.clamp(predicted_tokens, 0, model.codebook_size - 1)
+        # 新增：計算 token 準確率
+        correct = (predicted_tokens == target_tokens).sum().item()
+        total = target_tokens.numel()
+        total_correct_tokens += correct
+        total_tokens_count += total
         
-        # 檢查所有token的有效性
-        target_tokens = torch.clamp(target_tokens, 0, model.codebook_size - 1)
-        noisy_tokens = torch.clamp(noisy_tokens, 0, model.codebook_size - 1)
-        
-        # 使用 Token Loss 系統計算損失（ttt2.py 邏輯移植）
+        # 使用 Token Loss 系統計算損失（改良版：4 個損失組件）
+        # 注意：不再 clamp tokens，因為 input_tokens 和 target_tokens 已包含 special tokens (4096-4098)
         try:
             total_loss, loss_dict = compute_combined_token_loss(
                 predicted_logits=logits,
-                predicted_tokens=predicted_tokens,
                 target_tokens=target_tokens,
-                input_tokens=noisy_tokens,
+                input_tokens=input_tokens,  # 使用完整的 input_tokens，長度與 target 一致
                 embedding_layer=embedding_layer,
-                weights=loss_weights  # 修正參數名稱
+                weights=loss_weights
             )
         except Exception as e:
             logging.warning(f"Token loss 計算失敗，回退到交叉熵: {e}")
@@ -771,13 +858,24 @@ def train_epoch_with_token_loss(model, dataloader, optimizer, device, epoch,
         
         loss_counts += 1
         
+        # 新增：每 100 個 batch 記錄一次詳細統計
+        if (batch_idx + 1) % 100 == 0:
+            avg_acc = (total_correct_tokens / total_tokens_count * 100) if total_tokens_count > 0 else 0.0
+            logging.info(f"Epoch {epoch}, Batch {batch_idx+1}/{len(dataloader)}: "
+                        f"Token Accuracy={avg_acc:.2f}%, "
+                        f"CE Loss={loss_dict.get('ce_loss', loss_dict.get('consistency_loss', 0.0)):.4f}")
+        
         # 更新進度條
         avg_total_loss = total_losses.get('total_loss', total_losses['total']) / loss_counts
-        progress_info = {'Total': f'{avg_total_loss:.4f}'}
+        current_acc = (correct / total * 100) if total > 0 else 0.0
+        progress_info = {
+            'Total': f'{avg_total_loss:.4f}',
+            'Acc': f'{current_acc:.1f}%'
+        }
         
         # 添加主要 loss 組件到進度條
         if 'consistency_loss' in total_losses:
-            progress_info['Consistency'] = f'{total_losses["consistency_loss"]/loss_counts:.4f}'
+            progress_info['CE'] = f'{total_losses["consistency_loss"]/loss_counts:.4f}'
         if 'l2_loss' in total_losses:
             progress_info['L2'] = f'{total_losses["l2_loss"]/loss_counts:.4f}'
         
@@ -786,161 +884,113 @@ def train_epoch_with_token_loss(model, dataloader, optimizer, device, epoch,
     # 計算平均損失
     avg_losses = {key: value / loss_counts for key, value in total_losses.items()}
     
+    # 新增：添加整體 token 準確率到返回值
+    avg_losses['token_accuracy'] = (total_correct_tokens / total_tokens_count * 100) if total_tokens_count > 0 else 0.0
+    
+    # 新增：記錄 epoch 總結
+    logging.info(f"Epoch {epoch} Summary: Token Accuracy={avg_losses['token_accuracy']:.2f}%, "
+                f"CE Loss={avg_losses.get('ce_loss', avg_losses.get('consistency_loss', 0.0)):.4f}, "
+                f"Total Loss={avg_losses.get('total_loss', avg_losses['total']):.4f}")
+    
     return avg_losses
 
 def validate_epoch(model, dataloader, criterion, device):
     """驗證一個 epoch
     
-    修復驗證損失計算邏輯，確保能夠正確評估模型性能
-    主要改進：
-    1. 修復當batch_count為0時返回0的問題
-    2. 添加詳細的調試信息
-    3. 改善錯誤處理邏輯
+    優化設計（2025/10/21 改進）：
+        - 使用 model.eval() 設置評估模式（開頭設置一次即可）
+        - 通過 return_logits=True 強制返回 logits，即使在 eval 模式
+        - 使用 CrossEntropyLoss(ignore_index=pad_token) 自動處理 padding
+        - 簡化損失計算邏輯，與 train_epoch 完全一致
+        - 保持梯度關閉 (torch.no_grad())，節省內存
+    
+    Args:
+        model: WavTokenizerTransformerDenoiser 模型
+        dataloader: 驗證數據加載器
+        criterion: 損失函數，應該是 nn.CrossEntropyLoss(ignore_index=model.pad_token)
+        device: 計算設備
+    
+    Returns:
+        tuple: (avg_loss, accuracy)
+            - avg_loss: 平均驗證損失，若無有效batch則返回 NaN
+            - accuracy: Token 預測準確率 (0.0-1.0)
     """
-    model.eval()
+    model.eval()  # 設置為評估模式
     total_loss = 0.0
     total_correct = 0
     total_tokens = 0
-    valid_batches = 0  # 統計有效的batch數量
+    valid_batches = 0
     
     # 限制驗證批次數量以節省內存
     max_val_batches = 50
-    batch_count = 0
     
-    with torch.no_grad():
-        for batch_idx, batch in enumerate(tqdm(dataloader, desc="Validation")):
-            if batch_count >= max_val_batches:
+    with torch.no_grad():  # 確保不計算梯度
+        for batch in tqdm(dataloader, desc="Validation"):
+            if valid_batches >= max_val_batches:
                 break
-                
+            
             try:
                 # batch 是 tuple 格式: (noisy_audio, clean_audio, content_id)
-                noisy_audio = batch[0].to(device)
-                clean_audio = batch[1].to(device)
+                noisy_audio, clean_audio, _ = batch
+                noisy_audio = noisy_audio.to(device)
+                clean_audio = clean_audio.to(device)
                 
-                # 將音頻轉換為tokens
-                with torch.no_grad():
-                    # 使用標準化函數確保音頻張量是正確的形狀 [B, 1, T]
-                    noisy_audio = normalize_audio_dimensions(noisy_audio)
-                    clean_audio = normalize_audio_dimensions(clean_audio)
-                        
-                    # 編碼音頻為tokens
-                    noisy_tokens = model.wavtokenizer.encode_infer(noisy_audio, bandwidth_id=torch.tensor([0]))
-                    clean_tokens = model.wavtokenizer.encode_infer(clean_audio, bandwidth_id=torch.tensor([0]))
-                    
-                    # 提取第一層tokens [batch_size, time_frames] 並轉換為整數
-                    noisy_tokens = noisy_tokens[0][0].squeeze(1).long()  # 轉為長整數
-                    clean_tokens = clean_tokens[0][0].squeeze(1).long()  # 轉為長整數
-                    
-                    # 檢查token範圍並截斷超出詞彙的tokens
-                    max_token = model.codebook_size - 1
-                    noisy_tokens = torch.clamp(noisy_tokens, 0, max_token)
-                    clean_tokens = torch.clamp(clean_tokens, 0, max_token)
+                # >>>>> 核心改動 <<<<<
+                # 直接調用 forward，並傳遞 return_logits=True
+                # 模型內部會處理所有 tokenization 和序列準備工作
+                output = model(noisy_audio, clean_audio, return_logits=True)
                 
-                # 前向傳播 - 設置為訓練模式以獲得logits，但不計算梯度
-                model.train()  # 臨時設為訓練模式
+                logits = output['logits']              # [B, L, 4096]
+                target_tokens = output['target_tokens'] # [B, L]
                 
-                # 準備訓練所需的序列格式
-                input_tokens = torch.cat([
-                    noisy_tokens, 
-                    torch.full((noisy_tokens.size(0), 1), model.eos_token, 
-                              device=noisy_tokens.device, dtype=torch.long)
-                ], dim=1)
+                # Debug: 檢查形狀（使用 INFO 級別確保輸出）
+                logger.info(f"Validation shapes - logits: {logits.shape}, target: {target_tokens.shape}")
                 
-                decoder_input = torch.cat([
-                    torch.full((clean_tokens.size(0), 1), model.sos_token, 
-                              device=clean_tokens.device, dtype=torch.long),
-                    clean_tokens
-                ], dim=1)
+                # --- 計算損失和準確率 (與 train_epoch 完全一致) ---
+                # 使用與 train 完全相同的 flatten 方式
+                logits_flat = logits.view(-1, logits.size(-1))  # [B*L, vocab_size]
+                target_flat = target_tokens.view(-1)             # [B*L]
                 
-                target_tokens = torch.cat([
-                    clean_tokens,
-                    torch.full((clean_tokens.size(0), 1), model.eos_token, 
-                              device=clean_tokens.device, dtype=torch.long)
-                ], dim=1)
+                logger.info(f"After flatten - logits_flat: {logits_flat.shape}, target_flat: {target_flat.shape}")
                 
-                # 添加 padding 以匹配批次中的最大序列長度（動態調整）
-                batch_max_len = max(input_tokens.size(1), decoder_input.size(1), target_tokens.size(1))
+                # 確保數據類型正確
+                # logits 必須是 float，target 必須是 long
+                logits_flat = logits_flat.float()
+                target_flat = target_flat.long()
                 
-                # 動態調整到批次最大長度，而不是固定的max_length
-                if input_tokens.size(1) < batch_max_len:
-                    pad_len = batch_max_len - input_tokens.size(1)
-                    input_padding = torch.full((input_tokens.size(0), pad_len), model.pad_token,
-                                             device=input_tokens.device, dtype=torch.long)
-                    input_tokens = torch.cat([input_tokens, input_padding], dim=1)
+                # 使用 CrossEntropyLoss 的 ignore_index 參數自動處理 PAD token
+                # criterion 應該已經設置為 nn.CrossEntropyLoss(ignore_index=model.pad_token)
+                loss = criterion(logits_flat, target_flat)
                 
-                if decoder_input.size(1) < batch_max_len:
-                    pad_len = batch_max_len - decoder_input.size(1)
-                    decoder_padding = torch.full((decoder_input.size(0), pad_len), model.pad_token,
-                                                device=decoder_input.device, dtype=torch.long)
-                    decoder_input = torch.cat([decoder_input, decoder_padding], dim=1)
-                
-                if target_tokens.size(1) < batch_max_len:
-                    pad_len = batch_max_len - target_tokens.size(1)
-                    target_padding = torch.full((target_tokens.size(0), pad_len), model.pad_token,
-                                               device=target_tokens.device, dtype=torch.long)
-                    target_tokens = torch.cat([target_tokens, target_padding], dim=1)
-                
-                # 如果批次最大長度超過模型限制，截斷到模型最大長度
-                model_max_len = model.max_length
-                if batch_max_len > model_max_len:
-                    input_tokens = input_tokens[:, :model_max_len]
-                    decoder_input = decoder_input[:, :model_max_len]
-                    target_tokens = target_tokens[:, :model_max_len]
-                
-                # 使用transformer前向傳播
-                logits = model.forward_transformer(input_tokens, decoder_input)
-                
-                model.eval()  # 恢復驗證模式
-                
-                # 計算損失 - 使用reshape而非view確保tensor連續性
-                logits_flat = logits.reshape(-1, logits.size(-1))
-                target_flat = target_tokens.reshape(-1)
-                
-                # 確保mask和target維度匹配
-                mask = target_flat < model.codebook_size
-                if mask.size(0) != logits_flat.size(0):
-                    # 如果維度不匹配，截斷到較小的維度
-                    min_size = min(mask.size(0), logits_flat.size(0))
-                    mask = mask[:min_size]
-                    logits_flat = logits_flat[:min_size]
-                    target_flat = target_flat[:min_size]
-                    logging.warning(f"驗證批次 {batch_count}: 維度不匹配，已截斷到 {min_size}")
-                
-                if mask.sum() > 0:
-                    loss = criterion(logits_flat[mask], target_flat[mask])
+                if not torch.isnan(loss):
                     total_loss += loss.item()
-                    valid_batches += 1  # 增加有效batch計數
+                    valid_batches += 1
                     
-                    # 計算準確率
-                    predictions = torch.argmax(logits_flat[mask], dim=-1)
-                    total_correct += (predictions == target_flat[mask]).sum().item()
-                    total_tokens += mask.sum().item()
-                else:
-                    logging.warning(f"驗證批次 {batch_count}: 沒有有效的tokens用於計算損失")
-                
-                batch_count += 1
-                
-                # 清理內存
-                del noisy_audio, clean_audio, noisy_tokens, clean_tokens
-                del input_tokens, decoder_input, target_tokens, logits
-                torch.cuda.empty_cache()
+                    # 計算準確率 (只在非 PAD token 上計算)
+                    mask = target_flat != model.pad_token
+                    if mask.sum() > 0:
+                        predictions = torch.argmax(logits_flat[mask], dim=-1)
+                        total_correct += (predictions == target_flat[mask]).sum().item()
+                        total_tokens += mask.sum().item()
                 
             except Exception as e:
-                logging.error(f"驗證批次 {batch_count} 出錯，跳過: {e}")
-                batch_count += 1
+                logging.error(f"驗證批次出錯，跳過: {e}")
+                import traceback
+                traceback.print_exc()  # 打印詳細的錯誤堆棧
                 continue
     
-    # 修復驗證損失計算邏輯
+    # 計算平均損失和準確率
     if valid_batches > 0:
         avg_loss = total_loss / valid_batches
     else:
-        # 如果沒有有效batch，說明驗證過程有嚴重問題
-        logging.error("驗證過程中沒有有效的batch，返回高損失值")
-        avg_loss = 1e6  # 返回一個高損失值而非0
+        logging.error("驗證過程中沒有有效的batch")
+        avg_loss = float('nan')  # 使用 NaN 表示驗證失敗
     
-    accuracy = total_correct / total_tokens if total_tokens > 0 else 0.0
+    accuracy = (total_correct / total_tokens) if total_tokens > 0 else 0.0
     
-    logging.info(f"驗證統計: 有效批次={valid_batches}/{batch_count}, 總tokens={total_tokens}, 準確率={accuracy:.4f}")
+    # 記錄詳細的驗證結果
+    if valid_batches > 0:
+        logging.info(f"Validation: Loss={avg_loss:.4f}, Token Accuracy={accuracy*100:.2f}%, Valid Batches={valid_batches}")
     
     return avg_loss, accuracy
 
@@ -1377,23 +1427,27 @@ def main():
     parser.add_argument('--log_interval', type=int, default=10, help='日誌間隔')
     parser.add_argument('--warmup_steps', type=int, default=1000, help='預熱步數')
     parser.add_argument('--use_scheduler', action='store_true', help='使用學習率調度器')
+    parser.add_argument('--disable_scheduler', action='store_true', help='禁用學習率調度器（使用固定 LR）')
     parser.add_argument('--token_loss_weight', type=float, default=1.0, help='Token Loss權重')
     
-    # 損失函數選擇
+    # 損失函數選擇（重構版 - 更清晰的權重設計）
     parser.add_argument('--use_token_loss', action='store_true', 
-                        help='使用 Token Loss 系統（ttt2.py 邏輯移植到離散空間）而非單純交叉熵')
-    parser.add_argument('--l2_weight', type=float, default=0.3, help='L2 距離損失權重')
-    parser.add_argument('--consistency_weight', type=float, default=0.4, help='內容一致性損失權重')
-    parser.add_argument('--manifold_weight', type=float, default=0.1, help='Manifold 正則化權重')
-    parser.add_argument('--normalization_weight', type=float, default=0.1, help='正則化損失權重')
-    parser.add_argument('--coherence_weight', type=float, default=0.1, help='連貫性損失權重')
+                        help='使用混合 Token Loss 系統（CE + L2_Embed + Coherence + Manifold）')
+    parser.add_argument('--ce_weight', type=float, default=10.0, 
+                        help='交叉熵損失權重（主要監督信號，確保預測準確）[修改：1.0→10.0 修復 token 準確率問題]')
+    parser.add_argument('--l2_embed_weight', type=float, default=0.5, 
+                        help='L2 Embedding 損失權重（聲學相似性，錯也要錯得像）')
+    parser.add_argument('--coherence_weight', type=float, default=0.2, 
+                        help='連貫性損失權重（時間平滑，解決頻譜破碎）')
+    parser.add_argument('--manifold_weight', type=float, default=0.1, 
+                        help='Manifold 正則化權重（防止偏離輸入太遠）')
 
     # 數據參數
     parser.add_argument('--output_dir', type=str, default='results/wavtokenizer_transformer_denoising',
                         help='輸出目錄')
     parser.add_argument('--max_samples', type=int, default=None,
                         help='最大處理樣本數 (None 表示使用全部數據)')
-    parser.add_argument('--max_sentences_per_speaker', type=int, default=100,
+    parser.add_argument('--max_sentences_per_speaker', type=int, default=None,
                         help='每位語者最大句子數')
     parser.add_argument('--val_speakers', nargs='+', default=['girl9', 'boy7'],
                         help='驗證集語者')
@@ -1560,24 +1614,38 @@ def main():
         lr=args.learning_rate, 
         weight_decay=args.weight_decay
     )
-    criterion = nn.CrossEntropyLoss()
+    
+    # 損失函數：使用 ignore_index 自動處理 PAD token
+    # 這樣就不需要在損失計算時手動創建 mask 了
+    criterion = nn.CrossEntropyLoss(ignore_index=model.pad_token)
+    logging.info(f"✅ CrossEntropyLoss 已設置 ignore_index={model.pad_token} (PAD token)")
     
     # 學習率調度器
-    scheduler = optim.lr_scheduler.OneCycleLR(
-        optimizer,
-        max_lr=args.learning_rate,
-        steps_per_epoch=len(train_loader),
-        epochs=args.num_epochs,
-        pct_start=0.1
-    )
+    if args.disable_scheduler:
+        # 使用固定 LR（不進行調度）
+        scheduler = optim.lr_scheduler.ConstantLR(
+            optimizer,
+            factor=1.0,
+            total_iters=args.num_epochs * len(train_loader)
+        )
+        logging.info(f"🔧 使用固定 Learning Rate: {args.learning_rate}")
+    else:
+        # 使用 OneCycleLR
+        scheduler = optim.lr_scheduler.OneCycleLR(
+            optimizer,
+            max_lr=args.learning_rate,
+            steps_per_epoch=len(train_loader),
+            epochs=args.num_epochs,
+            pct_start=0.1
+        )
+        logging.info(f"🔧 使用 OneCycleLR scheduler (max_lr={args.learning_rate})")
     
-    # 準備損失權重字典
+    # 準備損失權重字典（重構版 - 更清晰的命名）
     loss_weights = {
-        'l2': args.l2_weight,
-        'consistency': args.consistency_weight,
-        'manifold': args.manifold_weight,
-        'normalization': args.normalization_weight,
-        'coherence': args.coherence_weight
+        'ce': args.ce_weight,              # 主要監督信號 (1.0)
+        'l2_embed': args.l2_embed_weight,  # 聲學相似性 (0.5)
+        'coherence': args.coherence_weight, # 時間平滑 (0.2)
+        'manifold': args.manifold_weight   # 正則化 (0.1)
     }
     
     # 訓練循環
@@ -1625,10 +1693,21 @@ def main():
                 )
                 train_loss = train_loss_dict.get('total_loss', 0.0)
                 
-                # 記錄詳細的損失信息
-                loss_info = " | ".join([f"{k}: {v:.4f}" for k, v in train_loss_dict.items() 
-                                       if k != 'total_loss'])
-                logging.info(f"Epoch {epoch} Train Loss Components: {loss_info}")
+                # 記錄詳細的損失信息（新增：包含 Token Accuracy 和 CE Loss）
+                ce_loss = train_loss_dict.get('ce_loss', train_loss_dict.get('consistency_loss', 0.0))
+                token_acc = train_loss_dict.get('token_accuracy', 0.0)
+                
+                loss_info = []
+                loss_info.append(f"Total={train_loss:.4f}")
+                loss_info.append(f"CE={ce_loss:.4f}")
+                loss_info.append(f"TokenAcc={token_acc:.2f}%")
+                
+                # 添加其他損失組件
+                for k, v in train_loss_dict.items():
+                    if k not in ['total_loss', 'total', 'ce_loss', 'consistency_loss', 'token_accuracy']:
+                        loss_info.append(f"{k}={v:.4f}")
+                
+                logging.info(f"Epoch {epoch} Train Loss: {' | '.join(loss_info)}")
             else:
                 # 使用原始交叉熵
                 train_loss = train_epoch(model, train_loader, optimizer, criterion, device, epoch)
