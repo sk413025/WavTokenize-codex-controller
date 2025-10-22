@@ -28,11 +28,7 @@ from ttdata import AudioDataset
 from ttt2 import collate_fn
 from token_denoising_transformer import TokenDenoisingTransformer, PositionalEncoding
 
-# 設置 logger
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+# 創建 logger（不在這裡配置，在 main 中配置）
 logger = logging.getLogger(__name__)
 
 
@@ -265,15 +261,25 @@ def main():
     # 創建輸出目錄
     os.makedirs(args.output_dir, exist_ok=True)
     
-    # 設定日誌
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(os.path.join(args.output_dir, 'training.log')),
-            logging.StreamHandler()
-        ]
-    )
+    # 設定日誌（清除現有 handlers 並重新配置）
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    logger.handlers.clear()  # 清除所有現有 handlers
+    
+    # 添加文件和控制台 handlers
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    
+    file_handler = logging.FileHandler(os.path.join(args.output_dir, 'training.log'))
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    
+    logger.info("=" * 80)
+    logger.info("Token Denoising Transformer - Frozen Codebook Training")
+    logger.info("=" * 80)
     
     # 設定設備
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
@@ -378,25 +384,30 @@ def main():
                 noisy_tokens_list.append(noisy_tokens[0])  # [1, seq_len]
                 clean_tokens_list.append(clean_tokens[0])  # [1, seq_len]
         
-        # 找出最大長度
-        max_len = max(t.shape[1] for t in noisy_tokens_list)
+        # 找出最大長度（考慮 noisy 和 clean）
+        max_len = max(
+            max(t.shape[1] for t in noisy_tokens_list),
+            max(t.shape[1] for t in clean_tokens_list)
+        )
         
         # Pad 所有 tokens 到相同長度
         padded_noisy = []
         padded_clean = []
         
         for noisy_t, clean_t in zip(noisy_tokens_list, clean_tokens_list):
-            # Pad noisy tokens [1, seq_len] -> [1, max_len]
-            if noisy_t.shape[1] < max_len:
-                pad_size = max_len - noisy_t.shape[1]
-                noisy_t = torch.nn.functional.pad(noisy_t, (0, pad_size), value=0)
-            padded_noisy.append(noisy_t.squeeze(0))  # [max_len]
+            # Pad noisy tokens [1, seq_len] -> [max_len]
+            curr_noisy = noisy_t.squeeze(0)  # [seq_len]
+            if curr_noisy.shape[0] < max_len:
+                pad_size = max_len - curr_noisy.shape[0]
+                curr_noisy = torch.nn.functional.pad(curr_noisy, (0, pad_size), value=0)
+            padded_noisy.append(curr_noisy)  # [max_len]
             
-            # Pad clean tokens
-            if clean_t.shape[1] < max_len:
-                pad_size = max_len - clean_t.shape[1]
-                clean_t = torch.nn.functional.pad(clean_t, (0, pad_size), value=0)
-            padded_clean.append(clean_t.squeeze(0))  # [max_len]
+            # Pad clean tokens [1, seq_len] -> [max_len]
+            curr_clean = clean_t.squeeze(0)  # [seq_len]
+            if curr_clean.shape[0] < max_len:
+                pad_size = max_len - curr_clean.shape[0]
+                curr_clean = torch.nn.functional.pad(curr_clean, (0, pad_size), value=0)
+            padded_clean.append(curr_clean)  # [max_len]
         
         # Stack tokens: [batch_size, seq_len]
         noisy_tokens_batch = torch.stack(padded_noisy, dim=0)
