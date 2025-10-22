@@ -4058,3 +4058,225 @@ print(f"選擇內容ID範圍：{selected_pairs[0]['content_id']} 到 {selected_p
 - ✅ 更少的頻譜破碎現象
 
 ---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_FIXED_LR_202510210504)
+**時間**: 2025-10-21 05:04:18  
+**實驗 ID**: `large_tokenloss_FIXED_LR_202510210504`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210504`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510210504.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_FIXED_LR_202510220002)
+**時間**: 2025-10-22 00:02:18  
+**實驗 ID**: `large_tokenloss_FIXED_LR_202510220002`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510220002`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510220002.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: 大模型 + Token Loss (large_tokenloss_FIXED_LR_202510220003)
+**時間**: 2025-10-22 00:03:55  
+**實驗 ID**: `large_tokenloss_FIXED_LR_202510220003`
+
+### 🎯 實驗目的
+解決小模型頻譜重建不連續的問題，採用雙重策略：
+1. 大幅提升模型容量
+2. 使用 Token Loss 優化聲學結構
+
+### 📊 模型配置
+| 參數 | 舊值 | 新值 | 提升倍數 |
+|------|------|------|----------|
+| d_model | 128 | 256 | 2x |
+| Encoder Layers | 2 | 4 | 2x |
+| Decoder Layers | 2 | 4 | 2x |
+| Feedforward Dim | 256 | 1024 | 4x |
+| Attention Heads | 2 | 8 | 4x |
+| Batch Size | 8 | 4 | 0.5x (記憶體限制) |
+| Gradient Accum | 2 | 2 | - |
+
+### 🔧 技術改進
+1. **模型容量提升**
+   - 可訓練參數: 1.26M → ~5-6M (預估)
+   - 更強的長時依賴建模能力
+   - 更好的 token 間關係學習
+
+2. **Token Loss 引入**
+   - L2 Loss: 直接優化 embedding 距離
+   - Consistency Loss: 保證相鄰 token 的平滑過渡
+   - 避免離散 token 預測的量化誤差
+
+3. **訓練策略調整**
+   - 學習率降低: 1e-4 → 5e-5 (大模型需要更小步長)
+   - Batch size 減半: 記憶體考量
+   - 保持有效 batch size 8 (梯度累積)
+
+### 📁 輸出路徑
+- 模型: `results/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510220003`
+- 日誌: `logs/transformer_large_tokenloss_large_tokenloss_FIXED_LR_202510220003.log`
+
+### 🔬 預期效果
+- ✅ 更平滑的頻譜重建
+- ✅ 更快的收斂速度
+- ✅ 更好的聽覺質量
+- ✅ 更少的頻譜破碎現象
+
+---
+
+---
+
+## 實驗: Token Denoising with Frozen Codebook (frozen_codebook_20251022_105343)
+**時間**: 2025-10-22 10:53:43  
+**實驗 ID**: `frozen_codebook_20251022_105343`
+
+### 🎯 實驗目的
+測試完全凍結 WavTokenizer Codebook 的降噪效果，類比機器翻譯的 Frozen Embedding 策略。
+
+### 🔬 核心假設
+1. **WavTokenizer 的 Codebook 已經學到最佳的音訊表示**
+   - 不需要重新訓練 embedding
+   - 直接查表即可獲得高質量的聲學特徵
+
+2. **降噪 = Token-to-Token 的序列映射**
+   - 輸入: Noisy Token IDs [0, 4095]
+   - 輸出: Clean Token IDs [0, 4095]
+   - 類比: 英文→中文翻譯
+
+### 📊 模型架構對比
+
+#### 現有模型 (wavtokenizer_transformer_denoising.py)
+```
+Audio → Encoder → Tokens → [可訓練 Codebook Embedding] 
+      → Transformer Encoder-Decoder → Decoder → Audio
+```
+- 可訓練參數: ~5-6M (含 Codebook Embedding)
+
+#### 本模型 (token_denoising_transformer.py - Frozen Codebook)
+```
+Audio → Encoder → Tokens → [凍結 Codebook Lookup] 
+      → Transformer Encoder → Output Projection → Tokens → Decoder → Audio
+```
+- 可訓練參數: ~3-4M (不含 Codebook)
+
+### 🔧 技術細節
+
+| 組件 | 現有模型 | Frozen Codebook 模型 |
+|------|----------|---------------------|
+| Codebook Embedding | ✅ 可訓練 | ❌ 完全凍結 |
+| Transformer 架構 | Encoder-Decoder | Encoder Only |
+| Embedding 查表 | 需要學習映射 | 直接 Codebook 查表 |
+| 參數量 | ~5-6M | ~3-4M |
+| 記憶體佔用 | 較高 | 較低 |
+
+### 🎨 設計靈感
+類比 **機器翻譯的 Frozen Pretrained Embedding**：
+- 英文詞嵌入 (frozen) → Transformer → 中文詞 IDs
+- Noisy Token IDs → Frozen Codebook → Transformer → Clean Token IDs
+
+### 📁 輸出路徑
+- 模型: `../results/token_denoising_frozen_codebook_frozen_codebook_20251022_105343`
+- 日誌: `../logs/token_denoising_frozen_codebook_frozen_codebook_20251022_105343.log`
+
+### 🔬 預期效果
+✅ **優勢**:
+1. 更快收斂 (參數更少)
+2. 更穩定訓練 (embedding 不變)
+3. 更好的泛化 (利用預訓練知識)
+
+⚠ **風險**:
+1. Codebook 可能不完美適配降噪任務
+2. 無法微調 embedding 以適應特定噪音類型
+
+### 📊 評估指標
+- Token 準確率 (與 Ground Truth 比較)
+- Token 變化率 (降噪前後差異)
+- 音訊質量 (PESQ, STOI)
+- 頻譜相似度 (MSE, Correlation)
+
+---
