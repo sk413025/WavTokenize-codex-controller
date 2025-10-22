@@ -650,8 +650,12 @@ class WavTokenizerTransformerDenoiser(nn.Module):
             # Step 2: Transformer 降噪
             denoised_tokens = self.forward_transformer(noisy_tokens)
             
+            # 🔧 修正：過濾掉特殊 tokens (PAD=4096, SOS=4097, EOS=4098)
+            # WavTokenizer decoder 只認識 0-4095 的 codebook tokens
+            denoised_tokens_filtered = denoised_tokens.clamp(0, self.codebook_size - 1)
+            
             # Step 3: 將 denoised tokens 轉換回音頻 (使用凍結的 WavTokenizer Decoder)
-            denoised_audio = self.decode_tokens_to_audio(denoised_tokens)
+            denoised_audio = self.decode_tokens_to_audio(denoised_tokens_filtered)
             
             return {
                 'denoised_audio': denoised_audio,
@@ -1812,11 +1816,15 @@ def main():
                             
                             # 重建 input 音檔 (通過 WavTokenizer encode-decode)
                             input_tokens = model.encode_audio_to_tokens(input_wav)
-                            input_reconstructed = model.decode_tokens_to_audio(input_tokens)
+                            # 過濾掉特殊 tokens (PAD=4096, SOS=4097, EOS=4098)，只保留 codebook tokens (0-4095)
+                            input_tokens_filtered = input_tokens.clamp(0, model.codebook_size - 1)
+                            input_reconstructed = model.decode_tokens_to_audio(input_tokens_filtered)
                             
                             # 重建 target 音檔 (通過 WavTokenizer encode-decode)  
                             target_tokens = model.encode_audio_to_tokens(target_wav)
-                            target_reconstructed = model.decode_tokens_to_audio(target_tokens)
+                            # 過濾掉特殊 tokens (PAD=4096, SOS=4097, EOS=4098)，只保留 codebook tokens (0-4095)
+                            target_tokens_filtered = target_tokens.clamp(0, model.codebook_size - 1)
+                            target_reconstructed = model.decode_tokens_to_audio(target_tokens_filtered)
                         
                         # 使用與 ttt2.py 完全相同的 save_sample 邏輯
                         # 🔧 修正：使用經過 WavTokenizer 重建的音檔，確保公平比較
