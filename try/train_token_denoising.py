@@ -296,8 +296,13 @@ def main():
     
     # 準備數據集
     logger.info("準備音頻資料集...")
-    input_dirs = [os.path.join(os.getcwd(), "data", "raw", "box")]
-    target_dir = os.path.join(os.getcwd(), "data", "clean", "box2")
+    
+    # 獲取項目根目錄（train_token_denoising.py 的父目錄的父目錄）
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(script_dir)
+    
+    input_dirs = [os.path.join(project_root, "data", "raw", "box")]
+    target_dir = os.path.join(project_root, "data", "clean", "box2")
     
     # 準備允許的語者列表
     allowed_speakers = set()
