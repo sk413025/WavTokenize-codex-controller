@@ -353,7 +353,7 @@ def main():
         noisy_tokens_list = []
         clean_tokens_list = []
         
-        for noisy_audio, clean_audio in batch:
+        for noisy_audio, clean_audio, content_id in batch:
             # 移到設備
             noisy_audio = noisy_audio.to(device).unsqueeze(0)
             clean_audio = clean_audio.to(device).unsqueeze(0)

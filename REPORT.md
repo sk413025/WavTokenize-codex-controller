@@ -4496,3 +4496,75 @@ Audio → Encoder → Tokens → [凍結 Codebook Lookup]
 - 頻譜相似度 (MSE, Correlation)
 
 ---
+
+---
+
+## 實驗: Token Denoising with Frozen Codebook (frozen_codebook_20251022_110059)
+**時間**: 2025-10-22 11:00:59  
+**實驗 ID**: `frozen_codebook_20251022_110059`
+
+### 🎯 實驗目的
+測試完全凍結 WavTokenizer Codebook 的降噪效果，類比機器翻譯的 Frozen Embedding 策略。
+
+### 🔬 核心假設
+1. **WavTokenizer 的 Codebook 已經學到最佳的音訊表示**
+   - 不需要重新訓練 embedding
+   - 直接查表即可獲得高質量的聲學特徵
+
+2. **降噪 = Token-to-Token 的序列映射**
+   - 輸入: Noisy Token IDs [0, 4095]
+   - 輸出: Clean Token IDs [0, 4095]
+   - 類比: 英文→中文翻譯
+
+### 📊 模型架構對比
+
+#### 現有模型 (wavtokenizer_transformer_denoising.py)
+```
+Audio → Encoder → Tokens → [可訓練 Codebook Embedding] 
+      → Transformer Encoder-Decoder → Decoder → Audio
+```
+- 可訓練參數: ~5-6M (含 Codebook Embedding)
+
+#### 本模型 (token_denoising_transformer.py - Frozen Codebook)
+```
+Audio → Encoder → Tokens → [凍結 Codebook Lookup] 
+      → Transformer Encoder → Output Projection → Tokens → Decoder → Audio
+```
+- 可訓練參數: ~3-4M (不含 Codebook)
+
+### 🔧 技術細節
+
+| 組件 | 現有模型 | Frozen Codebook 模型 |
+|------|----------|---------------------|
+| Codebook Embedding | ✅ 可訓練 | ❌ 完全凍結 |
+| Transformer 架構 | Encoder-Decoder | Encoder Only |
+| Embedding 查表 | 需要學習映射 | 直接 Codebook 查表 |
+| 參數量 | ~5-6M | ~3-4M |
+| 記憶體佔用 | 較高 | 較低 |
+
+### 🎨 設計靈感
+類比 **機器翻譯的 Frozen Pretrained Embedding**：
+- 英文詞嵌入 (frozen) → Transformer → 中文詞 IDs
+- Noisy Token IDs → Frozen Codebook → Transformer → Clean Token IDs
+
+### 📁 輸出路徑
+- 模型: `../results/token_denoising_frozen_codebook_frozen_codebook_20251022_110059`
+- 日誌: `../logs/token_denoising_frozen_codebook_frozen_codebook_20251022_110059.log`
+
+### 🔬 預期效果
+✅ **優勢**:
+1. 更快收斂 (參數更少)
+2. 更穩定訓練 (embedding 不變)
+3. 更好的泛化 (利用預訓練知識)
+
+⚠ **風險**:
+1. Codebook 可能不完美適配降噪任務
+2. 無法微調 embedding 以適應特定噪音類型
+
+### 📊 評估指標
+- Token 準確率 (與 Ground Truth 比較)
+- Token 變化率 (降噪前後差異)
+- 音訊質量 (PESQ, STOI)
+- 頻譜相似度 (MSE, Correlation)
+
+---
