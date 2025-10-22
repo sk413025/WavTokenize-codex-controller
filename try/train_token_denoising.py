@@ -319,7 +319,13 @@ def main():
     
     for idx in range(len(audio_dataset)):
         filename = audio_dataset.data[idx]['input']
-        speaker = filename.split('_')[0]
+        # 文件名格式: nor_boy10_box_LDV_001.wav
+        # 提取語者名稱 (第二個部分)
+        parts = os.path.basename(filename).split('_')
+        if len(parts) >= 2:
+            speaker = parts[1]  # boy10, girl9, etc.
+        else:
+            speaker = parts[0]  # fallback
         
         if speaker in args.val_speakers:
             val_indices.append(idx)
