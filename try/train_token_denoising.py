@@ -434,13 +434,15 @@ def main():
     # 確認 Codebook 凍結
     assert not model.codebook.requires_grad, "Codebook 必須凍結！"
     
-    # 計算參數量
-    total_params = sum(p.numel() for p in model.parameters())
+    # 計算參數量（正確方式：parameters 包含可訓練，buffers 包含凍結）
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    frozen_params = sum(b.numel() for b in model.buffers())  # Codebook 在 buffers 中
+    total_params = trainable_params + frozen_params
     
     logger.info(f"模型總參數數量: {total_params:,}")
-    logger.info(f"可訓練參數數量: {trainable_params:,}")
-    logger.info(f"凍結參數數量: {total_params - trainable_params:,}")
+    logger.info(f"  - 可訓練參數 (Transformer + Output): {trainable_params:,}")
+    logger.info(f"  - 凍結參數 (Codebook): {frozen_params:,}")
+    logger.info(f"  - Codebook 形狀: {model.codebook.shape}")
     
     # 創建優化器和損失函數
     optimizer = optim.AdamW(
