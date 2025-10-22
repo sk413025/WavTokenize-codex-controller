@@ -349,7 +349,11 @@ def main():
     
     # 創建數據載入器
     def token_collate_fn(batch):
-        """Collate function for token data with dynamic padding"""
+        """Collate function for token data with dynamic padding
+        
+        WavTokenizer 返回的 discrete_codes 形狀為 (num_quantizers, B, T)
+        我們只使用第一層量化器 (index 0)
+        """
         noisy_tokens_list = []
         clean_tokens_list = []
         
@@ -369,9 +373,10 @@ def main():
                     bandwidth_id=torch.tensor([0], device=device)
                 )
                 
-                # 移除 batch 維度 (因為我們會在後面重新組合)
-                noisy_tokens_list.append(noisy_tokens.squeeze(0))  # [num_quantizers, seq_len]
-                clean_tokens_list.append(clean_tokens.squeeze(0))
+                # discrete_codes 形狀: (num_quantizers, 1, seq_len)
+                # 只使用第一層量化器: (1, seq_len)
+                noisy_tokens_list.append(noisy_tokens[0])  # [1, seq_len]
+                clean_tokens_list.append(clean_tokens[0])  # [1, seq_len]
         
         # 找出最大長度
         max_len = max(t.shape[1] for t in noisy_tokens_list)
@@ -381,19 +386,19 @@ def main():
         padded_clean = []
         
         for noisy_t, clean_t in zip(noisy_tokens_list, clean_tokens_list):
-            # Pad noisy tokens
+            # Pad noisy tokens [1, seq_len] -> [1, max_len]
             if noisy_t.shape[1] < max_len:
                 pad_size = max_len - noisy_t.shape[1]
                 noisy_t = torch.nn.functional.pad(noisy_t, (0, pad_size), value=0)
-            padded_noisy.append(noisy_t)
+            padded_noisy.append(noisy_t.squeeze(0))  # [max_len]
             
             # Pad clean tokens
             if clean_t.shape[1] < max_len:
                 pad_size = max_len - clean_t.shape[1]
                 clean_t = torch.nn.functional.pad(clean_t, (0, pad_size), value=0)
-            padded_clean.append(clean_t)
+            padded_clean.append(clean_t.squeeze(0))  # [max_len]
         
-        # Stack tokens: [batch_size, num_quantizers, seq_len]
+        # Stack tokens: [batch_size, seq_len]
         noisy_tokens_batch = torch.stack(padded_noisy, dim=0)
         clean_tokens_batch = torch.stack(padded_clean, dim=0)
         
