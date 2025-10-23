@@ -1,6 +1,118 @@
 # 實驗記錄報告
 
-## 🎯 最新實驗：CrossEntropyLoss Data Type 完整修復 - 2025年10月21日
+## 🎯 最新實驗：Token Denoising with Frozen Codebook - 2025年10月22日
+
+### 實驗編號：frozen_codebook_20251022_111314
+
+#### 🚀 核心理念
+完全凍結 WavTokenizer Codebook，類比機器翻譯的 Frozen Embedding 架構
+- ❄️ **Codebook 完全凍結** (2.1M 參數，存於 buffers)
+- 🔥 **Transformer 可訓練** (21M 參數)
+- 🎯 **Token-to-Token 映射** (Noisy → Clean)
+
+#### 📊 模型架構
+```
+Noisy Token IDs (B, T)
+  ↓
+❄️ Frozen Codebook Lookup → (B, T, 512)
+  ↓
+Positional Encoding
+  ↓
+🔥 Transformer Encoder (6 layers, d_model=512, 8 heads)
+  ↓
+🔥 Linear Projection → (B, T, 4096)
+  ↓
+Clean Token IDs (B, T)
+```
+
+**參數統計** (已修正):
+- 總參數: **23,112,704**
+  - ❄️ Codebook (凍結): 2,097,152 (4096 × 512)
+  - 🔥 Transformer Encoder: 18,914,304
+  - 🔥 Output Projection: 2,101,248
+
+#### 🔧 技術改進
+
+**1. 修復 Padding 錯誤**
+```python
+# 問題: max_len 只考慮 noisy_tokens
+max_len = max(t.shape[1] for t in noisy_tokens_list)
+
+# 解決: 同時考慮 noisy 和 clean
+max_len = max(
+    max(t.shape[1] for t in noisy_tokens_list),
+    max(t.shape[1] for t in clean_tokens_list)
+)
+```
+
+**2. 修復 Log 空白問題**
+```python
+# 問題: logging.basicConfig() 被調用兩次，第二次不生效
+# 解決: 清除舊 handlers，重新配置
+logger.handlers.clear()
+file_handler = logging.FileHandler('training.log')
+logger.addHandler(file_handler)
+```
+
+**3. 修正參數統計**
+```python
+# 問題: register_buffer 的參數不在 model.parameters() 中
+# 解決: 分別統計 parameters 和 buffers
+trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+frozen_params = sum(b.numel() for b in model.buffers())  # Codebook
+```
+
+#### 📈 訓練成果
+
+**Epoch 1 結果** (已完成):
+- 訓練損失: **5.6221**
+- 訓練準確率: **20.74%** ✨
+- 驗證損失: **6.1308**
+- 驗證準確率: **15.00%**
+
+**Epoch 2 進行中**:
+- 當前損失: ~5.2
+- 當前準確率: **23%+** ⬆️
+- 進度: 5% (26/504 batches)
+
+#### ✅ 關鍵發現
+
+1. **第一個 epoch 就有顯著學習**
+   - Token 準確率從隨機 (0.024%) 提升到 20.74%
+   - 遠超隨機猜測 (1/4096 = 0.024%)
+
+2. **Frozen Codebook 策略有效**
+   - 保留了 WavTokenizer 的預訓練知識
+   - Transformer 成功學習 token 間的映射關係
+
+3. **驗證集泛化能力**
+   - 驗證準確率 15%，低於訓練但仍顯著
+   - 表明模型在學習通用的去噪模式
+
+#### 🎯 下一步計劃
+
+1. **監控訓練 600 epochs**
+   - 每 100 epochs 保存 checkpoint
+   - 觀察準確率是否能突破 50%+
+
+2. **音頻重建測試**
+   - 使用預測的 clean tokens 重建音頻
+   - 評估聽覺質量
+
+3. **與現有模型對比**
+   - 現有模型: Trainable Embedding (2M params)
+   - Frozen 模型: 完全凍結 Codebook
+   - 比較重建質量和訓練效率
+
+#### 📁 實驗文件
+- **輸出目錄**: `/home/sbplab/ruizi/c_code/results/token_denoising_frozen_codebook_frozen_codebook_20251022_111314/`
+- **Training.log**: 正常寫入 ✅
+- **主日誌**: `/home/sbplab/ruizi/c_code/logs/token_denoising_frozen_codebook_frozen_codebook_20251022_111314.log`
+- **代碼**: `/home/sbplab/ruizi/c_code/try/train_token_denoising.py`
+
+---
+
+## 🎯 實驗：CrossEntropyLoss Data Type 完整修復 - 2025年10月21日
 
 ### 實驗編號：EXP-DTYPE-FIX-20251021
 
@@ -4766,6 +4878,78 @@ Audio → Encoder → Tokens → [凍結 Codebook Lookup]
 ### 📁 輸出路徑
 - 模型: `../results/token_denoising_frozen_codebook_frozen_codebook_20251022_111100`
 - 日誌: `../logs/token_denoising_frozen_codebook_frozen_codebook_20251022_111100.log`
+
+### 🔬 預期效果
+✅ **優勢**:
+1. 更快收斂 (參數更少)
+2. 更穩定訓練 (embedding 不變)
+3. 更好的泛化 (利用預訓練知識)
+
+⚠ **風險**:
+1. Codebook 可能不完美適配降噪任務
+2. 無法微調 embedding 以適應特定噪音類型
+
+### 📊 評估指標
+- Token 準確率 (與 Ground Truth 比較)
+- Token 變化率 (降噪前後差異)
+- 音訊質量 (PESQ, STOI)
+- 頻譜相似度 (MSE, Correlation)
+
+---
+
+---
+
+## 實驗: Token Denoising with Frozen Codebook (frozen_codebook_20251022_111314)
+**時間**: 2025-10-22 11:13:14  
+**實驗 ID**: `frozen_codebook_20251022_111314`
+
+### 🎯 實驗目的
+測試完全凍結 WavTokenizer Codebook 的降噪效果，類比機器翻譯的 Frozen Embedding 策略。
+
+### 🔬 核心假設
+1. **WavTokenizer 的 Codebook 已經學到最佳的音訊表示**
+   - 不需要重新訓練 embedding
+   - 直接查表即可獲得高質量的聲學特徵
+
+2. **降噪 = Token-to-Token 的序列映射**
+   - 輸入: Noisy Token IDs [0, 4095]
+   - 輸出: Clean Token IDs [0, 4095]
+   - 類比: 英文→中文翻譯
+
+### 📊 模型架構對比
+
+#### 現有模型 (wavtokenizer_transformer_denoising.py)
+```
+Audio → Encoder → Tokens → [可訓練 Codebook Embedding] 
+      → Transformer Encoder-Decoder → Decoder → Audio
+```
+- 可訓練參數: ~5-6M (含 Codebook Embedding)
+
+#### 本模型 (token_denoising_transformer.py - Frozen Codebook)
+```
+Audio → Encoder → Tokens → [凍結 Codebook Lookup] 
+      → Transformer Encoder → Output Projection → Tokens → Decoder → Audio
+```
+- 可訓練參數: ~3-4M (不含 Codebook)
+
+### 🔧 技術細節
+
+| 組件 | 現有模型 | Frozen Codebook 模型 |
+|------|----------|---------------------|
+| Codebook Embedding | ✅ 可訓練 | ❌ 完全凍結 |
+| Transformer 架構 | Encoder-Decoder | Encoder Only |
+| Embedding 查表 | 需要學習映射 | 直接 Codebook 查表 |
+| 參數量 | ~5-6M | ~3-4M |
+| 記憶體佔用 | 較高 | 較低 |
+
+### 🎨 設計靈感
+類比 **機器翻譯的 Frozen Pretrained Embedding**：
+- 英文詞嵌入 (frozen) → Transformer → 中文詞 IDs
+- Noisy Token IDs → Frozen Codebook → Transformer → Clean Token IDs
+
+### 📁 輸出路徑
+- 模型: `../results/token_denoising_frozen_codebook_frozen_codebook_20251022_111314`
+- 日誌: `../logs/token_denoising_frozen_codebook_frozen_codebook_20251022_111314.log`
 
 ### 🔬 預期效果
 ✅ **優勢**:
