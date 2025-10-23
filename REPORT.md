@@ -1,114 +1,156 @@
 # 實驗記錄報告
 
-## 🎯 最新實驗：Token Denoising with Frozen Codebook - 2025年10月22日
+## 🎯 最新實驗：Token Denoising with Frozen Codebook - 完整分析 - 2025年10月23日
 
 ### 實驗編號：frozen_codebook_20251022_111314
 
-#### 🚀 核心理念
-完全凍結 WavTokenizer Codebook，類比機器翻譯的 Frozen Embedding 架構
-- ❄️ **Codebook 完全凍結** (2.1M 參數，存於 buffers)
-- 🔥 **Transformer 可訓練** (21M 參數)
-- 🎯 **Token-to-Token 映射** (Noisy → Clean)
+#### � 實驗總結
 
-#### 📊 模型架構
+**訓練時長**: ~43.5 小時 (10/22 11:13 - 10/23 00:36)  
+**完成進度**: 182/600 epochs (30.3%)  
+**終止原因**: ⚠️ 嚴重過擬合，手動停止  
+
+#### � 關鍵指標演變
+
+| Epoch | Train Loss | Train Acc | Val Loss | Val Acc | Train/Val Gap |
+|-------|------------|-----------|----------|---------|---------------|
+| 1 | 5.6221 | 20.74% | 6.1308 | 15.00% | 5.74% |
+| 50 | ~2.5 | ~55% | ~9.0 | ~15% | ~40% |
+| 100 | **2.0185** | **~63%** | **9.7229** | **14.94%** | **~48%** |
+| 182 | **1.2208** | **66.78%** | **11.7729** | **14.92%** | **51.86%** ❌ |
+
+#### ✅ 實驗成就
+
+1. **快速收斂**
+   - Epoch 1-50: 訓練準確率從 20% → 55% (暴增 175%)
+   - Epoch 50-182: 持續提升到 67%
+
+2. **架構驗證**
+   - ✅ Frozen Codebook 策略可行
+   - ✅ Transformer 能學習 token mapping
+   - ✅ 訓練穩定，無錯誤中斷
+
+3. **模型規模**
+   - 總參數: 23.1M (21M 可訓練 + 2.1M 凍結)
+   - 成功訓練 6 層 Transformer
+
+#### ❌ 實驗失敗
+
+1. **嚴重過擬合**
+   - Train/Val gap: 5.7% → 51.9% (擴大 9 倍)
+   - 驗證損失惡化: 6.1 → 11.8 (增加 92%)
+   - 驗證準確率停滯: 15% 維持 182 epochs
+
+2. **缺少音頻評估**
+   - ❌ 沒有音頻解碼功能
+   - ❌ 沒有保存音頻樣本
+   - ❌ 沒有頻譜圖分析
+   - ❌ 無法評估實際去噪效果
+
+3. **Token Accuracy ≠ Audio Quality**
+   - 67% token 準確率看似不錯
+   - 但驗證集完全沒進步 (14.9%)
+   - 無法證明對音頻質量有實際幫助
+
+#### 🔍 失敗根因分析
+
+##### 問題 1: Token-level 目標不適合音頻去噪
+
+**核心矛盾**:
+- 訓練目標: 預測正確的離散 token ID
+- 實際目標: 重建連續的清晰音頻信號
+
+**後果**:
+- Token 預測正確 ≠ 音頻質量好
+- Codebook lookup 無法捕捉細微差異
+- 離散化損失了連續音頻信息
+
+##### 問題 2: Frozen Codebook 的限制
+
+**Codebook 不可調整**:
+- 預訓練 codebook 不是為去噪設計
+- Noisy 和 Clean 音頻可能映射到相似 tokens
+- 無法學習去噪專用的 embeddings
+
+**舉例**:
 ```
-Noisy Token IDs (B, T)
-  ↓
-❄️ Frozen Codebook Lookup → (B, T, 512)
-  ↓
-Positional Encoding
-  ↓
-🔥 Transformer Encoder (6 layers, d_model=512, 8 heads)
-  ↓
-🔥 Linear Projection → (B, T, 4096)
-  ↓
-Clean Token IDs (B, T)
+Noisy Audio  → Token [1234, 5678, 9012, ...]
+Clean Audio  → Token [1234, 5680, 9012, ...]
+                      ↑ 只有 1 個不同！
 ```
 
-**參數統計** (已修正):
-- 總參數: **23,112,704**
-  - ❄️ Codebook (凍結): 2,097,152 (4096 × 512)
-  - 🔥 Transformer Encoder: 18,914,304
-  - 🔥 Output Projection: 2,101,248
+如果 noisy/clean 差異小，模型學不到有效去噪。
 
-#### 🔧 技術改進
+##### 問題 3: 語者泛化問題
 
-**1. 修復 Padding 錯誤**
-```python
-# 問題: max_len 只考慮 noisy_tokens
-max_len = max(t.shape[1] for t in noisy_tokens_list)
+- 訓練: 14 個語者 (boy1, boy3, ..., girl11)
+- 驗證: 4 個全新語者 (girl9, girl10, boy7, boy8)
+- Frozen codebook 無法適應新語者特性
 
-# 解決: 同時考慮 noisy 和 clean
-max_len = max(
-    max(t.shape[1] for t in noisy_tokens_list),
-    max(t.shape[1] for t in clean_tokens_list)
-)
-```
+##### 問題 4: 過擬合原因
 
-**2. 修復 Log 空白問題**
-```python
-# 問題: logging.basicConfig() 被調用兩次，第二次不生效
-# 解決: 清除舊 handlers，重新配置
-logger.handlers.clear()
-file_handler = logging.FileHandler('training.log')
-logger.addHandler(file_handler)
-```
+1. **模型太大**: 21M 參數 vs 4K 樣本 (參數/樣本比 = 5200:1)
+2. **Dropout 不足**: 0.1 太小，應該 0.3-0.5
+3. **無正則化**: 只有 weight_decay (0.01)
+4. **無早停機制**: 驗證 loss 惡化仍繼續訓練
 
-**3. 修正參數統計**
-```python
-# 問題: register_buffer 的參數不在 model.parameters() 中
-# 解決: 分別統計 parameters 和 buffers
-trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-frozen_params = sum(b.numel() for b in model.buffers())  # Codebook
-```
+#### 💡 關鍵洞察
 
-#### 📈 訓練成果
+1. **Token-level 目標不足**
+   - 必須添加 audio-level loss (L2, spectral)
+   - 或使用混合損失 (CrossEntropy + Perceptual Loss)
 
-**Epoch 1 結果** (已完成):
-- 訓練損失: **5.6221**
-- 訓練準確率: **20.74%** ✨
-- 驗證損失: **6.1308**
-- 驗證準確率: **15.00%**
+2. **Frozen 策略限制大**
+   - 應允許 codebook 微調 (fine-tuning)
+   - 或改用端到端架構 (Audio → Transformer → Audio)
 
-**Epoch 2 進行中**:
-- 當前損失: ~5.2
-- 當前準確率: **23%+** ⬆️
-- 進度: 5% (26/504 batches)
+3. **評估方法不全**
+   - Token accuracy 是必要但不充分的指標
+   - 必須評估實際音頻質量 (PESQ, STOI, 主觀聽測)
 
-#### ✅ 關鍵發現
+#### 📝 改進建議
 
-1. **第一個 epoch 就有顯著學習**
-   - Token 準確率從隨機 (0.024%) 提升到 20.74%
-   - 遠超隨機猜測 (1/4096 = 0.024%)
+**立即行動** (必須):
+1. 添加音頻解碼和保存功能
+2. 實現混合損失 (Token + Audio + Spectral)
+3. 增加 dropout (0.1 → 0.3)
+4. 添加早停機制 (patience=20)
 
-2. **Frozen Codebook 策略有效**
-   - 保留了 WavTokenizer 的預訓練知識
-   - Transformer 成功學習 token 間的映射關係
+**短期改進**:
+5. 允許 codebook 微調 (訓練最後幾層)
+6. 數據增強 (隨機噪聲、SpecAugment)
+7. 減小模型 (layers: 6 → 4, d_model: 512 → 256)
 
-3. **驗證集泛化能力**
-   - 驗證準確率 15%，低於訓練但仍顯著
-   - 表明模型在學習通用的去噪模式
+**長期方向**:
+8. 端到端架構 (跳過離散 tokens)
+9. 使用針對去噪預訓練的 codec
+10. Multi-task learning (同時預測多層 quantizer)
 
-#### 🎯 下一步計劃
+#### 🎯 結論
 
-1. **監控訓練 600 epochs**
-   - 每 100 epochs 保存 checkpoint
-   - 觀察準確率是否能突破 50%+
+**實驗價值**:
+- ✅ 驗證了 Frozen Codebook + Transformer 的可行性 (訓練集)
+- ✅ 提供了重要的負面結果 (驗證集失敗)
+- ✅ 揭示了 token-level 目標的根本限制
 
-2. **音頻重建測試**
-   - 使用預測的 clean tokens 重建音頻
-   - 評估聽覺質量
+**核心教訓**:
+> **Token準確率高不代表音頻質量好！**  
+> 音頻去噪需要連續信號層面的損失函數，  
+> 純離散 token 目標無法捕捉音頻的細微變化。
 
-3. **與現有模型對比**
-   - 現有模型: Trainable Embedding (2M params)
-   - Frozen 模型: 完全凍結 Codebook
-   - 比較重建質量和訓練效率
+**下一步**:
+1. 實現音頻評估腳本 (使用 checkpoint_epoch_100.pt)
+2. 聽聽 67% 準確率的實際效果
+3. 基於聽測結果決定是否值得繼續該方向
 
 #### 📁 實驗文件
-- **輸出目錄**: `/home/sbplab/ruizi/c_code/results/token_denoising_frozen_codebook_frozen_codebook_20251022_111314/`
-- **Training.log**: 正常寫入 ✅
-- **主日誌**: `/home/sbplab/ruizi/c_code/logs/token_denoising_frozen_codebook_frozen_codebook_20251022_111314.log`
-- **代碼**: `/home/sbplab/ruizi/c_code/try/train_token_denoising.py`
+
+- **模型**: `/home/sbplab/ruizi/c_code/results/token_denoising_frozen_codebook_frozen_codebook_20251022_111314/`
+  - `best_model.pt` (Epoch 1, Val Loss: 6.13)
+  - `checkpoint_epoch_100.pt` (Train Acc: 63%, Val Acc: 14.94%)
+- **日誌**: `/home/sbplab/ruizi/c_code/logs/token_denoising_frozen_codebook_frozen_codebook_20251022_111314.log`
+- **分析報告**: `/home/sbplab/ruizi/c_code/FROZEN_CODEBOOK_ANALYSIS_20251023.md`
+- **評估腳本**: `/home/sbplab/ruizi/c_code/try/evaluate_frozen_codebook.py` (已創建，待修復數據路徑)
 
 ---
 
