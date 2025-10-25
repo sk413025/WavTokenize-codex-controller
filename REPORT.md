@@ -1,6 +1,63 @@
 # 實驗記錄報告
 
-## 🎯 最新實驗：Token Denoising with Frozen Codebook - 完整分析 - 2025年10月23日
+## 🎯 最新實驗：Token Denoising with Hybrid Loss - 2025年1月23日
+
+### 實驗編號：hybrid_loss_20250123
+
+#### 📋 實驗背景
+
+**前置實驗**: Frozen Codebook (182 epochs, 嚴重過擬合)  
+**核心問題**: 
+1. Token 準確度高 (Train 67%) 但 Val 完全失敗 (15%)
+2. 只用了 100 句/語者，浪費了 188 句數據
+3. 純 CrossEntropy 無法保證音頻質量
+
+**解決策略**: 混合損失 = CrossEntropy + Content Consistency + Embedding L2
+
+#### 🔬 實驗設計
+
+**混合損失組成**:
+1. **CrossEntropy Loss** (weight=1.0): Token ID 準確度
+2. **Content Consistency Loss** (weight=0.5→0.01): 相同內容應相似 (動態衰減)
+3. **Embedding L2 Loss** (weight=0.3): Embedding 空間約束
+
+**數據改進**:
+- 之前: 100 句/語者 → 1400 訓練樣本
+- 現在: 288 句/語者 → 4032 訓練樣本 (↑188%)
+
+**參考理念**: 借鑑 `ttt2.py` 的內容一致性策略
+- 早期 (Epoch 0-50): 高權重學習"相同內容→相似表示"
+- 後期 (Epoch 50+): 降低權重，專注於去噪和重建
+
+#### 📊 預期結果
+
+| 指標 | Frozen Codebook | Hybrid Loss (目標) |
+|------|----------------|-------------------|
+| Train Acc | 66.78% | ~70% |
+| Val Acc | 14.92% ❌ | **>30%** ✓ |
+| Train/Val Gap | 51.9% ❌ | **<30%** ✓ |
+| 音頻質量 | 未評估 | 改善 (embedding 約束) |
+
+#### 📁 相關檔案
+
+- `try/discrete_hybrid_loss.py`: 混合損失實現
+- `try/train_token_denoising_hybrid.py`: 訓練腳本
+- `try/run_token_denoising_hybrid.sh`: 執行腳本
+- `HYBRID_LOSS_DESIGN.md`: 完整設計文檔
+
+#### ⏳ 實驗狀態
+
+**狀態**: 待執行  
+**預計時長**: ~48 小時 (600 epochs)  
+**開始指令**:
+```bash
+cd /home/sbplab/ruizi/c_code/try
+bash run_token_denoising_hybrid.sh
+```
+
+---
+
+## 📚 歷史實驗：Token Denoising with Frozen Codebook - 2025年10月23日
 
 ### 實驗編號：frozen_codebook_20251022_111314
 
