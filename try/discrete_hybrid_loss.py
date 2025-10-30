@@ -125,23 +125,31 @@ class DiscreteHybridLoss(nn.Module):
         # ============================================================
         # 計算動態權重：前期高，後期低
         content_weight = self._compute_content_weight(current_epoch, total_epochs)
-        
-        content_loss = self._compute_content_consistency_loss(
-            pred_logits, noisy_tokens, content_ids
-        )
-        
+
+        # 只在權重非零時計算，避免不必要的運算
+        if self.content_weight_max > 0 and content_weight > 0:
+            content_loss = self._compute_content_consistency_loss(
+                pred_logits, noisy_tokens, content_ids
+            )
+        else:
+            content_loss = torch.tensor(0.0, device=self.device)
+
         # ============================================================
         # 3. Embedding L2 Loss
         # ============================================================
-        # 預測的 token IDs
-        pred_tokens = pred_logits.argmax(dim=-1)  # (B, T)
-        
-        # 從 codebook 查表得到 embeddings
-        pred_embeddings = self.codebook[pred_tokens]      # (B, T, 512)
-        target_embeddings = self.codebook[target_tokens]  # (B, T, 512)
-        
-        # L2 距離
-        embed_loss = F.mse_loss(pred_embeddings, target_embeddings)
+        # 只在權重非零時計算，避免不必要的運算
+        if self.embed_weight > 0:
+            # 預測的 token IDs
+            pred_tokens = pred_logits.argmax(dim=-1)  # (B, T)
+
+            # 從 codebook 查表得到 embeddings
+            pred_embeddings = self.codebook[pred_tokens]      # (B, T, 512)
+            target_embeddings = self.codebook[target_tokens]  # (B, T, 512)
+
+            # L2 距離
+            embed_loss = F.mse_loss(pred_embeddings, target_embeddings)
+        else:
+            embed_loss = torch.tensor(0.0, device=self.device)
         
         # ============================================================
         # 4. Spectral Loss (可選，計算成本高)

@@ -78,28 +78,45 @@ def save_audio_samples(
     
     with torch.no_grad():
         for i in range(num_samples):
-            # 擴展 tokens 到 (1, B, T) 格式 (單層量化器)
-            noisy_tok = noisy_tokens[i:i+1].unsqueeze(0)
-            pred_tok = pred_tokens[i:i+1].unsqueeze(0)
-            clean_tok = clean_tokens[i:i+1].unsqueeze(0)
-            
-            # 解碼為音頻 - 修復維度問題
+            # 完全複製 debug_single_sample.py 的解碼邏輯
+            # 假設 noisy_tokens shape 可能是 (B, T) 或 (B, 1, T)
+            # 統一處理：確保取出的是 2D tensor (1, T)，然後 unsqueeze(0) 變成 (1, 1, T)
+            if noisy_tokens.dim() == 3:  # (B, 1, T)
+                noisy_tok = noisy_tokens[i].unsqueeze(0).to(device)  # (1, T) -> (1, 1, T)
+                pred_tok = pred_tokens[i].unsqueeze(0).to(device)
+                clean_tok = clean_tokens[i].unsqueeze(0).to(device)
+            else:  # (B, T)
+                noisy_tok = noisy_tokens[i].unsqueeze(0).unsqueeze(0).to(device)  # (T) -> (1, 1, T)
+                pred_tok = pred_tokens[i].unsqueeze(0).unsqueeze(0).to(device)
+                clean_tok = clean_tokens[i].unsqueeze(0).unsqueeze(0).to(device)
+
+            # 解碼為音頻 - 與 debug_single_sample.py 完全相同的流程
             noisy_features = wavtokenizer.codes_to_features(noisy_tok)
             pred_features = wavtokenizer.codes_to_features(pred_tok)
             clean_features = wavtokenizer.codes_to_features(clean_tok)
-            
-            # 檢查並修正維度：codes_to_features 可能返回 4D [1, T, 1, D]
-            # 需要轉換為 3D [1, T, D] 供 decode 使用
+
+            # 與 debug_single_sample.py 相同的 squeeze 處理
             if noisy_features.dim() == 4:
-                noisy_features = noisy_features.squeeze(2)  # [1, T, 1, D] -> [1, T, D]
+                noisy_features = noisy_features.squeeze(2)
             if pred_features.dim() == 4:
                 pred_features = pred_features.squeeze(2)
             if clean_features.dim() == 4:
                 clean_features = clean_features.squeeze(2)
-            
-            noisy_audio = wavtokenizer.decode(noisy_features, bandwidth_id=torch.tensor([0], device=device))
-            pred_audio = wavtokenizer.decode(pred_features, bandwidth_id=torch.tensor([0], device=device))
-            clean_audio = wavtokenizer.decode(clean_features, bandwidth_id=torch.tensor([0], device=device))
+
+            # 確保 bandwidth_id 在正確的設備上
+            bandwidth_id = torch.tensor([0], device=device)
+
+            noisy_audio = wavtokenizer.decode(noisy_features, bandwidth_id=bandwidth_id).cpu()
+            pred_audio = wavtokenizer.decode(pred_features, bandwidth_id=bandwidth_id).cpu()
+            clean_audio = wavtokenizer.decode(clean_features, bandwidth_id=bandwidth_id).cpu()
+
+            # 與 debug_single_sample.py 相同的維度檢查
+            if noisy_audio.dim() == 1:
+                noisy_audio = noisy_audio.unsqueeze(0)
+            if pred_audio.dim() == 1:
+                pred_audio = pred_audio.unsqueeze(0)
+            if clean_audio.dim() == 1:
+                clean_audio = clean_audio.unsqueeze(0)
             
             # 保存音頻
             torchaudio.save(
@@ -1211,7 +1228,7 @@ def main():
         logger.info(f"  Learning Rate: {current_lr:.2e}")
         
         # 保存 checkpoint (每 10 epochs)
-        if epoch % 10 == 0:
+        if epoch % 100 == 0:
             checkpoint_path = output_dir / f'checkpoint_epoch_{epoch}.pth'
             torch.save({
                 'epoch': epoch,
@@ -1252,31 +1269,90 @@ def main():
 
         # 每 100 epochs 保存音頻樣本和頻譜圖
         if epoch % 100 == 0 or epoch == args.num_epochs - 1:
-            logger.info(f"  保存音頻樣本...")
+            logger.info(f"  保存音頻樣本（訓練集 - inside test）...")
             try:
-                # 從驗證集取一個 batch
-                val_batch = next(iter(val_loader))
-                noisy_tokens, clean_tokens, _ = val_batch
-                noisy_tokens = noisy_tokens.to(device)
-                clean_tokens = clean_tokens.to(device)
-                
-                # 預測
+                # ⭐ 關鍵修正：使用 DataLoader 中的 tokens（訓練時模型看到的格式）
+                # 而不是重新 encode 音檔，這樣才能保證訓練和預測的數據一致性
                 model.eval()
-                with torch.no_grad():
-                    pred_logits = model(noisy_tokens, return_logits=True)
-                    pred_tokens = pred_logits.argmax(dim=-1)
-                
-                # 保存音頻和頻譜圖
-                save_audio_samples(
-                    wavtokenizer=wavtokenizer,
-                    noisy_tokens=noisy_tokens,
-                    pred_tokens=pred_tokens,
-                    clean_tokens=clean_tokens,
-                    epoch=epoch,
-                    output_dir=output_dir,
-                    device=device,
-                    num_samples=3
-                )
+
+                # 從訓練集 loader 取一個 batch（檢查 overfitting）
+                train_batch = next(iter(train_loader))
+                noisy_tokens_batch, clean_tokens_batch, content_ids = train_batch
+
+                # 取前 3 個樣本
+                num_save = min(3, noisy_tokens_batch.shape[0])
+
+                noisy_tokens_list = []
+                clean_tokens_list = []
+                pred_tokens_list = []
+
+                for i in range(num_save):
+                    # 使用 DataLoader 產生的 tokens（已經過 collate_fn 處理）
+                    noisy_tok = noisy_tokens_batch[i:i+1]  # [1, T_padded]
+                    clean_tok = clean_tokens_batch[i:i+1]  # [1, T_padded]
+
+                    # 預測（使用與訓練時相同格式的 tokens）
+                    with torch.no_grad():
+                        pred_logits = model(noisy_tok, return_logits=True)  # [1, T, vocab]
+                        pred_tok = pred_logits.argmax(dim=-1)  # [1, T]
+
+                    # 儲存 tokens
+                    noisy_tokens_list.append(noisy_tok)
+                    clean_tokens_list.append(clean_tok)
+                    pred_tokens_list.append(pred_tok)
+
+                # 直接傳入 list，逐個保存（避免 padding）
+                samples_dir = Path(output_dir) / 'audio_samples' / f'epoch_{epoch}'
+                samples_dir.mkdir(parents=True, exist_ok=True)
+
+                for idx in range(num_save):
+                    noisy_tok = noisy_tokens_list[idx]  # [1, T]
+                    clean_tok = clean_tokens_list[idx]  # [1, T]
+                    pred_tok = pred_tokens_list[idx]    # [1, T]
+
+                    # 解碼為音頻（⭐ 關鍵：與 debug_single_sample.py 完全相同的流程）
+                    with torch.no_grad():
+                        # ⭐ debug: [B,T] -> tokens[i] -> [T] -> unsqueeze(0) -> [1,T] -> codes_to_features
+                        # 這裡: [1,T] -> squeeze(0) -> [T] -> unsqueeze(0) -> [1,T] -> codes_to_features
+                        noisy_tok_2d = noisy_tok.squeeze(0).unsqueeze(0).to(device)  # [1,T] -> [T] -> [1,T]
+                        pred_tok_2d = pred_tok.squeeze(0).unsqueeze(0).to(device)
+                        clean_tok_2d = clean_tok.squeeze(0).unsqueeze(0).to(device)
+
+                        noisy_features = wavtokenizer.codes_to_features(noisy_tok_2d)
+                        pred_features = wavtokenizer.codes_to_features(pred_tok_2d)
+                        clean_features = wavtokenizer.codes_to_features(clean_tok_2d)
+
+                        if noisy_features.dim() == 4:
+                            noisy_features = noisy_features.squeeze(2)
+                        if pred_features.dim() == 4:
+                            pred_features = pred_features.squeeze(2)
+                        if clean_features.dim() == 4:
+                            clean_features = clean_features.squeeze(2)
+
+                        bandwidth_id = torch.tensor([0], device=device)
+                        noisy_audio = wavtokenizer.decode(noisy_features, bandwidth_id=bandwidth_id).cpu()
+                        pred_audio = wavtokenizer.decode(pred_features, bandwidth_id=bandwidth_id).cpu()
+                        clean_audio = wavtokenizer.decode(clean_features, bandwidth_id=bandwidth_id).cpu()
+
+                        if noisy_audio.dim() == 1:
+                            noisy_audio = noisy_audio.unsqueeze(0)
+                        if pred_audio.dim() == 1:
+                            pred_audio = pred_audio.unsqueeze(0)
+                        if clean_audio.dim() == 1:
+                            clean_audio = clean_audio.unsqueeze(0)
+
+                    # 保存音頻
+                    torchaudio.save(str(samples_dir / f'sample_{idx}_noisy.wav'), noisy_audio, 24000)
+                    torchaudio.save(str(samples_dir / f'sample_{idx}_predicted.wav'), pred_audio, 24000)
+                    torchaudio.save(str(samples_dir / f'sample_{idx}_clean.wav'), clean_audio, 24000)
+
+                    # 保存頻譜圖
+                    plot_spectrograms(
+                        noisy_audio.squeeze(0).numpy(),
+                        pred_audio.squeeze(0).numpy(),
+                        clean_audio.squeeze(0).numpy(),
+                        str(samples_dir / f'sample_{idx}_spectrogram.png')
+                    )
                 logger.info(f"  ✓ 已保存音頻樣本到: audio_samples/epoch_{epoch}/")
                 model.train()
             except Exception as e:

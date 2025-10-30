@@ -481,14 +481,15 @@ class AudioDataset(Dataset):
         pair = self.paired_files[idx]
         input_path = os.path.join(pair['input_dir'], pair['input'])
         target_path = os.path.join(self.target_dir, pair['target'])
-        
+
         # 取消語速相關的動態處理
         dynamic_mode = False
-        
-        # 讀取音頻，不啟用動態裁剪
-        input_wav = process_audio(input_path, normalize=True, dynamic_duration=False)
+
+        # ⭐ 重要修正：兩者都不正規化，保持原始音量（與 debug_single_sample.py 一致）
+        # 原因：WavTokenizer 對不同音量會產生不同的 tokens，必須保持一致性
+        input_wav = process_audio(input_path, normalize=False, dynamic_duration=False)
         target_wav = process_audio(target_path, normalize=False, dynamic_duration=False)
-        
+
         # 返回音頻數據和內容ID
         return input_wav, target_wav, pair['content_id']
 

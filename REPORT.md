@@ -5067,3 +5067,89 @@ Audio → Encoder → Tokens → [凍結 Codebook Lookup]
 - 頻譜相似度 (MSE, Correlation)
 
 ---
+
+---
+
+## 實驗: Token Denoising Simple & Efficient (simple_efficient_20251030_061347)
+**時間**: 2025-10-30 06:13:47  
+**實驗 ID**: `simple_efficient_20251030_061347`
+
+### 🎯 實驗目的
+解決嚴重過擬合問題，採用簡化高效的訓練策略。
+
+### 🔧 核心改進
+
+#### 1. 移除 Content Consistency Loss
+**實現方式**: `--content_weight 0.0`
+- 完全移除 Content Consistency Loss
+- 只保留 CE Loss 和 Embedding L2 Loss
+- 讓模型自然學習語者特徵和內容分離
+
+#### 2. 標準 DataLoader
+**實現方式**: `--content_ratio 0.0`
+- 使用標準 DataLoader with shuffle=True
+- 簡化數據流，減少潛在 bug
+- 保持數據隨機性，自然防止過擬合
+
+#### 3. 增強正則化
+**配置**:
+- Dropout: 0.3（從 0.2 提升）
+- Weight Decay: 0.1（從 0.05 提升）
+- num_layers: 4（中等容量）
+
+#### 4. 完整儲存邏輯
+**每 100 epoch**:
+- Checkpoint (模型權重 + 優化器狀態)
+- 音檔樣本 (noisy, enhanced, clean)
+- 頻譜圖 (3個音檔對比)
+
+**每 50 epoch**:
+- Loss 曲線圖
+
+### 📊 模型配置
+
+| 參數 | 值 | 說明 |
+|------|------|------|
+| d_model | 512 | 標準維度 |
+| num_layers | 4 | 中等容量 |
+| dropout | 0.3 | 高正則化 |
+| weight_decay | 0.1 | 高正則化 |
+| batch_size | 8 | 平衡速度與記憶體 |
+| learning_rate | 1e-4 | 標準學習率 |
+
+### 🔧 技術細節
+
+#### 損失函數
+```python
+loss = CE_loss + 0.3 * Embedding_L2_loss
+# Content_weight = 0.0 → 完全移除 Content Loss
+```
+
+#### DataLoader
+```python
+# content_ratio = 0.0 → 使用標準 DataLoader
+DataLoader(..., shuffle=True)  # 標準隨機打亂
+```
+
+### 📁 輸出路徑
+- 模型: `../results/token_denoising_simple_simple_efficient_20251030_061347`
+- 日誌: `../logs/token_denoising_simple_simple_efficient_20251030_061347.log`
+
+### 🔬 預期效果
+
+✅ **過擬合改善**:
+- Train/Val Accuracy Gap < 15%（epoch 200）
+- Val Accuracy > 30%（epoch 200）
+- Val Loss 穩定下降
+
+✅ **語者保留**:
+- 模型學習語者特徵而非忽略
+- Enhanced audio 保留原始語者特性
+
+### 📝 重現步驟
+1. 執行訓練: `bash try/run_simple_efficient.sh`
+2. 監控日誌: `tail -f ../logs/token_denoising_simple_simple_efficient_20251030_061347.log`
+3. 查看音檔: `../results/token_denoising_simple_simple_efficient_20251030_061347/audio_samples/epoch_*/`
+4. 查看曲線: `../results/token_denoising_simple_simple_efficient_20251030_061347/loss_curves_*.png`
+
+---
