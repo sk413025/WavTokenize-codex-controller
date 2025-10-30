@@ -97,9 +97,9 @@ def save_audio_samples(
             if clean_features.dim() == 4:
                 clean_features = clean_features.squeeze(2)
             
-            noisy_audio = wavtokenizer.decode(noisy_features, bandwidth_id=torch.tensor([0]))
-            pred_audio = wavtokenizer.decode(pred_features, bandwidth_id=torch.tensor([0]))
-            clean_audio = wavtokenizer.decode(clean_features, bandwidth_id=torch.tensor([0]))
+            noisy_audio = wavtokenizer.decode(noisy_features, bandwidth_id=torch.tensor([0], device=device))
+            pred_audio = wavtokenizer.decode(pred_features, bandwidth_id=torch.tensor([0], device=device))
+            clean_audio = wavtokenizer.decode(clean_features, bandwidth_id=torch.tensor([0], device=device))
             
             # 保存音頻
             torchaudio.save(
