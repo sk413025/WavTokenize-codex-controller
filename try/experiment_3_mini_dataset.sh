@@ -39,23 +39,31 @@ echo "✅ 使用 GPU: $AVAILABLE_GPUS"
 # 創建小資料集 (複製 debug_single_sample.py 使用的 14 個音檔)
 # ========================================
 echo ""
-echo "📦 準備小資料集 (14 個音檔)..."
+echo "📦 準備小資料集 (21 個音檔，確保有驗證集)..."
 
 # 定義要複製的音檔 (與 debug_single_sample.py 相同)
+# 增加更多語者以確保驗證集不為空（至少需要 20+ 個語者）
 SPEAKERS=(
     "nor_boy1"
+    "nor_boy2"
     "nor_boy3"
     "nor_boy4"
     "nor_boy5"
     "nor_boy6"
+    "nor_boy7"
+    "nor_boy8"
     "nor_boy9"
     "nor_boy10"
+    "nor_girl1"
     "nor_girl2"
     "nor_girl3"
     "nor_girl4"
+    "nor_girl5"
     "nor_girl6"
     "nor_girl7"
     "nor_girl8"
+    "nor_girl9"
+    "nor_girl10"
     "nor_girl11"
 )
 
@@ -82,12 +90,13 @@ for speaker in "${SPEAKERS[@]}"; do
     fi
 done
 
-echo "✅ 小資料集準備完成 ($(ls ${MINI_DATA_DIR}/noisy | wc -l) 個音檔)"
+ACTUAL_COUNT=$(ls ${MINI_DATA_DIR}/noisy | wc -l)
+echo "✅ 小資料集準備完成 ($ACTUAL_COUNT 個音檔)"
 
 # ========================================
 # 實驗參數設置
 # ========================================
-BATCH_SIZE=14          # 與樣本數相同，每個 epoch 只有 1 個 batch
+BATCH_SIZE=8           # 使用較小的 batch size，確保有多個 batches
 NUM_EPOCHS=200
 LEARNING_RATE=3e-4
 WEIGHT_DECAY=0.01      # 保持與原版一致
@@ -110,8 +119,8 @@ WARMUP_EPOCHS=10
 
 echo ""
 echo "📊 實驗配置:"
-echo "  資料集大小: 14 個音檔 (vs 原版 ~240+ 個) ⭐"
-echo "  Batch Size: $BATCH_SIZE (= 樣本數，每 epoch 1 個 batch)"
+echo "  資料集大小: $ACTUAL_COUNT 個音檔 (vs 原版 ~240+ 個) ⭐"
+echo "  Batch Size: $BATCH_SIZE"
 echo "  Dropout: $DROPOUT (促進過擬合)"
 echo "  Weight Decay: $WEIGHT_DECAY"
 echo "  Learning Rate: $LEARNING_RATE"
