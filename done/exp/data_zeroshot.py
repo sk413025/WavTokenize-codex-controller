@@ -43,20 +43,21 @@ class ZeroShotAudioDataset(BaseAudioDataset):
         """
         # 獲取文件路徑
         pair = self.paired_files[idx]
-        noisy_path = pair['input']
-        clean_path = pair['target']
+        noisy_path = os.path.join(pair['input_dir'], pair['input'])
+        clean_path = os.path.join(self.target_dir, pair['target'])
 
         # 載入音頻
         noisy_audio, sr_noisy = torchaudio.load(noisy_path)
         clean_audio, sr_clean = torchaudio.load(clean_path)
 
-        # Resample if needed
-        if sr_noisy != self.sample_rate:
-            resampler = torchaudio.transforms.Resample(sr_noisy, self.sample_rate)
+        # Resample if needed (target: 24kHz for WavTokenizer)
+        target_sr = 24000
+        if sr_noisy != target_sr:
+            resampler = torchaudio.transforms.Resample(sr_noisy, target_sr)
             noisy_audio = resampler(noisy_audio)
 
-        if sr_clean != self.sample_rate:
-            resampler = torchaudio.transforms.Resample(sr_clean, self.sample_rate)
+        if sr_clean != target_sr:
+            resampler = torchaudio.transforms.Resample(sr_clean, target_sr)
             clean_audio = resampler(clean_audio)
 
         # Squeeze to 1D (if stereo, take first channel)
@@ -194,6 +195,118 @@ def zeroshot_collate_fn(batch, wavtokenizer, device):
         clean_tokens_batch,
         content_ids_batch
     )
+
+
+def zeroshot_collate_fn_with_speaker(batch, wavtokenizer, speaker_encoder, device):
+    """
+    Collate function with speaker embedding extraction
+
+    Args:
+        batch: list of (noisy_audio, clean_audio, content_id)
+        wavtokenizer: WavTokenizer model
+        speaker_encoder: Speaker encoder model
+        device: torch.device
+
+    Returns:
+        dict with keys:
+            - noisy_tokens: (B, max_token_len)
+            - clean_tokens: (B, max_token_len)
+            - speaker_embeddings: (B, speaker_dim)
+            - content_ids: (B,)
+    """
+    noisy_audio_list = []
+    clean_audio_list = []
+    noisy_tokens_list = []
+    clean_tokens_list = []
+    content_ids_list = []
+
+    # Process each sample
+    for noisy_audio, clean_audio, content_id in batch:
+        # Move audio to device
+        noisy_audio = noisy_audio.to(device).unsqueeze(0)  # (1, T)
+        clean_audio = clean_audio.to(device).unsqueeze(0)  # (1, T)
+
+        # Encode to tokens
+        with torch.no_grad():
+            _, noisy_tokens = wavtokenizer.encode_infer(
+                noisy_audio,
+                bandwidth_id=torch.tensor([0], device=device)
+            )
+            _, clean_tokens = wavtokenizer.encode_infer(
+                clean_audio,
+                bandwidth_id=torch.tensor([0], device=device)
+            )
+
+        # Store
+        noisy_audio_list.append(noisy_audio.squeeze(0))  # (T,)
+        clean_audio_list.append(clean_audio.squeeze(0))  # (T,)
+        noisy_tokens_list.append(noisy_tokens[0])  # (1, seq_len)
+        clean_tokens_list.append(clean_tokens[0])  # (1, seq_len)
+        content_ids_list.append(content_id)
+
+    # Extract speaker embeddings from NOISY audio (not clean!)
+    # IMPORTANT: We must use noisy_audio to avoid data leakage
+    # In real inference, we only have noisy audio, so the model must learn
+    # to denoise based on speaker info extracted from noisy input
+    max_audio_len = max(audio.shape[0] for audio in noisy_audio_list)
+    padded_noisy_audio = []
+
+    for noisy_audio in noisy_audio_list:
+        if noisy_audio.shape[0] < max_audio_len:
+            pad_size = max_audio_len - noisy_audio.shape[0]
+            noisy_audio = torch.nn.functional.pad(noisy_audio, (0, pad_size), value=0)
+        padded_noisy_audio.append(noisy_audio)
+
+    noisy_audio_batch = torch.stack(padded_noisy_audio, dim=0)  # (B, max_audio_len)
+
+    # Extract speaker embeddings from noisy audio
+    with torch.no_grad():
+        speaker_embeddings = speaker_encoder(noisy_audio_batch)  # (B, speaker_dim)
+
+    # Pad tokens to max length in batch
+    max_token_len = max(
+        max(t.shape[1] for t in noisy_tokens_list),
+        max(t.shape[1] for t in clean_tokens_list)
+    )
+
+    padded_noisy_tokens = []
+    padded_clean_tokens = []
+
+    for noisy_t, clean_t in zip(noisy_tokens_list, clean_tokens_list):
+        curr_noisy = noisy_t.squeeze(0)  # (seq_len,)
+        curr_clean = clean_t.squeeze(0)  # (seq_len,)
+
+        if curr_noisy.shape[0] < max_token_len:
+            pad_size = max_token_len - curr_noisy.shape[0]
+            curr_noisy = torch.nn.functional.pad(curr_noisy, (0, pad_size), value=0)
+
+        if curr_clean.shape[0] < max_token_len:
+            pad_size = max_token_len - curr_clean.shape[0]
+            curr_clean = torch.nn.functional.pad(curr_clean, (0, pad_size), value=0)
+
+        padded_noisy_tokens.append(curr_noisy)
+        padded_clean_tokens.append(curr_clean)
+
+    noisy_tokens_batch = torch.stack(padded_noisy_tokens, dim=0)  # (B, max_token_len)
+    clean_tokens_batch = torch.stack(padded_clean_tokens, dim=0)  # (B, max_token_len)
+
+    # Content IDs (convert to numeric if needed)
+    numeric_ids = []
+    for cid in content_ids_list:
+        if isinstance(cid, str):
+            digits = ''.join(c for c in cid if c.isdigit())
+            numeric_ids.append(int(digits) if digits else hash(cid) % 1000)
+        else:
+            numeric_ids.append(int(cid))
+
+    content_ids_batch = torch.tensor(numeric_ids, dtype=torch.long)
+
+    return {
+        'noisy_tokens': noisy_tokens_batch,
+        'clean_tokens': clean_tokens_batch,
+        'speaker_embeddings': speaker_embeddings,
+        'content_ids': content_ids_batch
+    }
 
 
 # ============================================================================

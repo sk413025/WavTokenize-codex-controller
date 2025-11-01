@@ -173,6 +173,12 @@ Loss: CrossEntropy(Logits, Clean Tokens)
 ═══════════════════════════════════════════════════════════════════════
 ```
 
+組件	參數量	實際狀態	出現在 parameters()	會被訓練
+Codebook	2.1M	凍結 (buffer)	❌	❌
+ECAPA-TDNN	~22M	凍結 (外部)	❌	❌
+Speaker Proj	131K	可訓練	✅	✅
+Transformer	12.6M	可訓練	✅	✅
+Output Proj	2.1M	可訓練	✅	✅
 ---
 
 ## 詳細差異對比表
