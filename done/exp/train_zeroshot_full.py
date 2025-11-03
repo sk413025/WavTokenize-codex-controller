@@ -275,7 +275,7 @@ def main():
     parser.add_argument('--batch_size', type=int, default=14, help='Batch size (與 baseline 相同)')
     parser.add_argument('--num_epochs', type=int, default=100, help='訓練 epochs')
     parser.add_argument('--learning_rate', type=float, default=1e-4, help='學習率')
-    parser.add_argument('--weight_decay', type=float, default=0.05, help='Weight decay')
+    parser.add_argument('--weight_decay', type=float, default=0.00 help='Weight decay')
 
     # WavTokenizer 參數 (使用與 baseline 相同的配置)
     parser.add_argument('--wavtokenizer_config',
