@@ -73,14 +73,34 @@ class PretrainedSpeakerEncoder(nn.Module):
 
     def _init_ecapa(self):
         """初始化 ECAPA-TDNN encoder"""
+        import os
         try:
-            from speechbrain.pretrained import EncoderClassifier
+            # Try new import path first (SpeechBrain 1.0+)
+            try:
+                from speechbrain.inference.interfaces import EncoderClassifier
+            except ImportError:
+                # Fallback to old import path
+                from speechbrain.pretrained import EncoderClassifier
 
-            # 下載並載入預訓練的 ECAPA-TDNN
-            self.encoder = EncoderClassifier.from_hparams(
-                source="speechbrain/spkrec-ecapa-voxceleb",
-                savedir="pretrained_models/spkrec-ecapa-voxceleb"
-            )
+            # 優先使用本地已下載的模型（如果存在）
+            local_model_path = "pretrained_models/spkrec-ecapa-voxceleb"
+
+            # 檢查本地模型是否存在
+            if os.path.exists(local_model_path) and os.path.exists(os.path.join(local_model_path, "hyperparams.yaml")):
+                print(f"✓ 使用本地 ECAPA-TDNN 模型: {local_model_path}")
+                # 直接從本地目錄載入（使用原始方式，不指定 run_opts）
+                self.encoder = EncoderClassifier.from_hparams(
+                    source=local_model_path,
+                    savedir=local_model_path
+                )
+            else:
+                print(f"✓ 從 HuggingFace 下載 ECAPA-TDNN 模型...")
+                # 從 HuggingFace 下載
+                self.encoder = EncoderClassifier.from_hparams(
+                    source="speechbrain/spkrec-ecapa-voxceleb",
+                    savedir=local_model_path
+                )
+
             self.embed_dim = 192  # ECAPA-TDNN 輸出 192-dim
 
             # Projection layer
@@ -127,11 +147,13 @@ class PretrainedSpeakerEncoder(nn.Module):
                         wav = self._resample_to_16k(wav, orig_sr=24000)
 
                     # SpeechBrain 需要 tensor 輸入
-                    wav_tensor = torch.from_numpy(wav).float().unsqueeze(0).to(audio.device)
+                    # 注意: ECAPA encoder 預設在 CPU，我們傳入 CPU tensor
+                    wav_tensor = torch.from_numpy(wav).float().unsqueeze(0)
 
-                    # 提取 embedding
+                    # 提取 embedding (encoder 在 CPU 上處理)
                     emb = self.encoder.encode_batch(wav_tensor)  # (1, 1, 192)
                     emb = emb.squeeze()  # (192,)
+                    # 保持在 CPU，稍後統一處理設備轉換
 
                 embeddings.append(emb)
 
