@@ -155,13 +155,14 @@ def setup_logger(output_dir):
     return logging.getLogger(__name__)
 
 
-def collect_speaker_embeddings(dataset, device, max_samples_per_speaker=20):
+def collect_speaker_embeddings(dataset, device, audio_dataset_for_metadata, max_samples_per_speaker=20):
     """
     收集所有 speaker embeddings（按語者分組）
 
     Args:
         dataset: ZeroShotAudioDatasetCached
         device: torch device
+        audio_dataset_for_metadata: 原始ZeroShotAudioDataset，用於獲取檔名信息
         max_samples_per_speaker: 每位語者最多收集多少個樣本
 
     Returns:
@@ -169,6 +170,7 @@ def collect_speaker_embeddings(dataset, device, max_samples_per_speaker=20):
         speaker_ids: list of speaker IDs (e.g., 'girl1', 'boy2')
     """
     from collections import defaultdict
+    import os
 
     embeddings_by_speaker = defaultdict(list)
 
@@ -179,20 +181,19 @@ def collect_speaker_embeddings(dataset, device, max_samples_per_speaker=20):
         speaker_emb_tensor = sample.get('speaker_embedding', sample.get('speaker_embeddings'))
         speaker_emb = speaker_emb_tensor.cpu().numpy() if isinstance(speaker_emb_tensor, torch.Tensor) else speaker_emb_tensor
 
-        # 從 content_id 中提取 speaker ID
-        # content_id 格式: "ID_speaker_sentence" 如 "1_girl1_7"
-        content_id = sample.get('content_id', '')
-        if isinstance(content_id, (int, torch.Tensor)):
-            content_id = str(int(content_id))
-
-        # 解析 content_id 獲取 speaker
-        parts = content_id.split('_')
-        if len(parts) >= 2:
-            speaker_id = parts[1]  # 如 "girl1", "boy7"
+        # 從原始 audio_dataset 的 paired_files 獲取語者信息
+        if audio_dataset_for_metadata and idx < len(audio_dataset_for_metadata.paired_files):
+            noisy_path = audio_dataset_for_metadata.paired_files[idx]['input']
+            # 從檔名提取語者: 'ID_speaker_sentence.wav' -> speaker
+            filename = os.path.basename(noisy_path)
+            parts = filename.split('_')
+            if len(parts) >= 2:
+                speaker_id = parts[1]  # 如 "girl1", "boy7"
+            else:
+                speaker_id = f"unknown_{idx}"
         else:
-            # Fallback: 使用 embedding 哈希
-            emb_hash = hash(tuple(speaker_emb.flatten()[:10]))
-            speaker_id = f"speaker_{abs(emb_hash) % 18}"
+            # Fallback
+            speaker_id = f"unknown_{idx}"
 
         if len(embeddings_by_speaker[speaker_id]) < max_samples_per_speaker:
             embeddings_by_speaker[speaker_id].append(speaker_emb)

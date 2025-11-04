@@ -4,11 +4,29 @@
 
 你要求的兩個分析功能已經實現：
 
-### 1. Token 預測分布分析
+### 1. Token 預測分布分析 ✅
 **目的**：檢測模型是否總是預測同一種 token（過擬合信號）
+**狀態**：正常運作
 
-### 2. Speaker Embedding 記錄與視覺化
+### 2. Speaker Embedding 記錄與視覺化 ⚠️
 **目的**：看訓練集（14位）和驗證集（4位）語者是否在embedding空間中分開
+**狀態**：**部分功能受限**（見下方「已知問題」）
+
+## ⚠️ 已知問題
+
+### Speaker Visualization 無法正確識別語者
+
+**問題**：
+- 緩存數據中的 `content_id` 只是數字（"100", "099"），不包含 speaker 信息
+- t-SNE 可視化無法正確標註每個語者的編號
+
+**影響**：
+- ✅ **不影響**：訓練過程（Zero-Shot 分割是正確的：val_speakers = girl9, girl10, boy7, boy8）
+- ❌ **影響**：可視化圖表無法正確標註語者 ID
+
+**解決方案**：
+- 需要修改 `preprocess_zeroshot_cache.py`，在緩存時保存完整的 speaker 信息
+- 或使用 embedding 相似度聚類來推斷語者分組（但不夠準確）
 
 ---
 
