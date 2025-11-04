@@ -44,13 +44,15 @@ echo ""
 echo "✓ 緩存檢查通過"
 echo ""
 
-python train_zeroshot_full_cached.py \
+python train_zeroshot_full_cached_analysis.py \
     --cache_dir ./data \
     --output_dir ./results/zeroshot_full_cached_$(date +%Y%m%d_%H%M%S) \
     --num_epochs 100 \
     --batch_size 28 \
     --num_workers 4 \
-    --learning_rate 1e-4
+    --learning_rate 1e-4 \
+    --analyze_speakers \
+    --speaker_analysis_freq 50
 
 echo ""
 echo "========================================="
