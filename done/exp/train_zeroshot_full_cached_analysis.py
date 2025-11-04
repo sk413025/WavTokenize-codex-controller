@@ -175,13 +175,24 @@ def collect_speaker_embeddings(dataset, device, max_samples_per_speaker=20):
     # 遍歷數據集收集 speaker embeddings
     for idx in tqdm(range(len(dataset)), desc="Collecting speaker embeddings"):
         sample = dataset[idx]
-        speaker_emb = sample['speaker_embeddings'].cpu().numpy()
+        # Cached dataset 使用 'speaker_embedding' (單數)
+        speaker_emb_tensor = sample.get('speaker_embedding', sample.get('speaker_embeddings'))
+        speaker_emb = speaker_emb_tensor.cpu().numpy() if isinstance(speaker_emb_tensor, torch.Tensor) else speaker_emb_tensor
 
-        # 從緩存中提取 speaker ID
-        # 假設緩存格式包含 speaker_id 或可以從文件名推斷
-        # 這裡使用 embedding 哈希來分組相同語者
-        emb_hash = hash(tuple(speaker_emb.flatten()[:10]))  # 使用前10個值作為哈希
-        speaker_id = f"speaker_{abs(emb_hash) % 18}"  # 映射到 18 位語者
+        # 從 content_id 中提取 speaker ID
+        # content_id 格式: "ID_speaker_sentence" 如 "1_girl1_7"
+        content_id = sample.get('content_id', '')
+        if isinstance(content_id, (int, torch.Tensor)):
+            content_id = str(int(content_id))
+
+        # 解析 content_id 獲取 speaker
+        parts = content_id.split('_')
+        if len(parts) >= 2:
+            speaker_id = parts[1]  # 如 "girl1", "boy7"
+        else:
+            # Fallback: 使用 embedding 哈希
+            emb_hash = hash(tuple(speaker_emb.flatten()[:10]))
+            speaker_id = f"speaker_{abs(emb_hash) % 18}"
 
         if len(embeddings_by_speaker[speaker_id]) < max_samples_per_speaker:
             embeddings_by_speaker[speaker_id].append(speaker_emb)
