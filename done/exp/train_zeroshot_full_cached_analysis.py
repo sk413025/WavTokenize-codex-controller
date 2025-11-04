@@ -549,6 +549,20 @@ def main():
     logger.info(f"✓ 訓練集: {len(train_dataset)} 樣本")
     logger.info(f"✓ 驗證集: {len(val_dataset)} 樣本")
 
+    # 載入原始 dataset 以獲取檔名信息（僅用於 speaker 分析）
+    audio_dataset_for_metadata = None
+    if args.analyze_speakers:
+        logger.info("載入原始 dataset 以獲取檔名信息（不載入音頻）...")
+        from data_zeroshot import ZeroShotAudioDataset
+        # 讀取緩存配置獲取數據路徑
+        cache_config = torch.load(cache_dir / 'cache_config.pt')
+        audio_dataset_for_metadata = ZeroShotAudioDataset(
+            input_dirs=cache_config['input_dirs'],
+            target_dir=cache_config['target_dir'],
+            max_sentences_per_speaker=cache_config['max_sentences_per_speaker']
+        )
+        logger.info(f"✓ 原始 dataset 已載入 ({len(audio_dataset_for_metadata.paired_files)} 個檔案對)")
+
     # DataLoader
     train_loader = DataLoader(
         train_dataset,
@@ -612,8 +626,8 @@ def main():
         logger.info("收集 Speaker Embeddings...")
         logger.info("=" * 80)
 
-        train_embeddings, train_speaker_ids = collect_speaker_embeddings(train_dataset, device, max_samples_per_speaker=20)
-        val_embeddings, val_speaker_ids = collect_speaker_embeddings(val_dataset, device, max_samples_per_speaker=20)
+        train_embeddings, train_speaker_ids = collect_speaker_embeddings(train_dataset, device, audio_dataset_for_metadata, max_samples_per_speaker=20)
+        val_embeddings, val_speaker_ids = collect_speaker_embeddings(val_dataset, device, audio_dataset_for_metadata, max_samples_per_speaker=20)
 
         logger.info(f"訓練集 embeddings: {train_embeddings.shape}")
         logger.info(f"  - 語者數: {len(set(train_speaker_ids))}")
