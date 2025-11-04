@@ -43,12 +43,14 @@ def load_wavtokenizer(config_path, checkpoint_path, device):
     return wavtokenizer
 
 
-def preprocess_batch(batch_data, wavtokenizer, speaker_encoder, device):
+def preprocess_batch(batch_data, batch_indices, full_dataset, wavtokenizer, speaker_encoder, device):
     """
     批量處理一個 batch 的數據
 
     Args:
         batch_data: List of (noisy_audio, clean_audio, content_id)
+        batch_indices: List of dataset indices (用於提取 speaker_id)
+        full_dataset: ZeroShotAudioDataset (用於獲取檔名)
         wavtokenizer: WavTokenizer model
         speaker_encoder: ECAPA-TDNN model
         device: torch device
@@ -56,12 +58,28 @@ def preprocess_batch(batch_data, wavtokenizer, speaker_encoder, device):
     Returns:
         List of processed items
     """
+    import os
+
     noisy_audios = []
     clean_audios = []
     content_ids = []
+    speaker_ids = []
 
     # 收集數據
-    for noisy_audio, clean_audio, content_id in batch_data:
+    for i, (noisy_audio, clean_audio, content_id) in enumerate(batch_data):
+        # 從 paired_files 獲取檔名以提取 speaker_id
+        idx = batch_indices[i]
+        noisy_path = full_dataset.paired_files[idx]['input']
+        filename = os.path.basename(noisy_path)
+
+        # 從檔名提取 speaker: "ID_speaker_sentence.wav" -> "speaker"
+        parts = filename.split('_')
+        if len(parts) >= 2:
+            speaker_id = parts[1]  # 如 "girl1", "boy7"
+        else:
+            speaker_id = "unknown"
+
+        speaker_ids.append(speaker_id)
         # 確保音頻是 1D tensor (T,)
         if noisy_audio.dim() > 1:
             noisy_audio = noisy_audio.squeeze()
@@ -130,7 +148,8 @@ def preprocess_batch(batch_data, wavtokenizer, speaker_encoder, device):
             'noisy_tokens': noisy_tokens[i].cpu(),       # (T,)
             'clean_tokens': clean_tokens[i].cpu(),       # (T,)
             'speaker_embedding': speaker_embeddings[i].cpu(),  # (speaker_dim,)
-            'content_id': content_ids[i]
+            'content_id': content_ids[i],
+            'speaker_id': speaker_ids[i]  # ⭐ 新增: speaker ID (如 "girl1", "boy7")
         })
 
     return processed_items
@@ -243,7 +262,7 @@ def main():
         batch_indices = train_indices[i:i + args.batch_size]
         batch_data = [full_dataset[idx] for idx in batch_indices]
 
-        processed = preprocess_batch(batch_data, wavtokenizer, speaker_encoder, device)
+        processed = preprocess_batch(batch_data, batch_indices, full_dataset, wavtokenizer, speaker_encoder, device)
         train_data.extend(processed)
 
         # 每 100 batches 清理一次 GPU 緩存
@@ -266,7 +285,7 @@ def main():
         batch_indices = val_indices[i:i + args.batch_size]
         batch_data = [full_dataset[idx] for idx in batch_indices]
 
-        processed = preprocess_batch(batch_data, wavtokenizer, speaker_encoder, device)
+        processed = preprocess_batch(batch_data, batch_indices, full_dataset, wavtokenizer, speaker_encoder, device)
         val_data.extend(processed)
 
         # 每 100 batches 清理一次 GPU 緩存
