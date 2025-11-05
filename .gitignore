@@ -1,72 +1,11 @@
-# Audio files
-# *.wav  # 註解掉，改用 Git LFS 追蹤 WAV 檔案
-
-# Image files
-# *.png  # 註解掉，改用 Git LFS 追蹤 PNG 檔案
-
-# Model and checkpoint files
-*.pth
-*.pyc
-*.pkl
+results/**/best_model.pth
+results/**/checkpoint_epoch_*.pth
+done/exp/results/**/best_model.pth
+done/exp/results/**/checkpoint_epoch_*.pth
+data/*.pt
+done/exp/data/*.pt
 *.pt
-*.ckpt
+*.pth
 
-# Data files
-*.scp
-*.csv
-
-# Python cache
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-
-# Directories
-checkpoints/
-self_supervised_output/logs/
-WavTokenizer/result/
-lightning_logs/
-decoder/__pycache__/
-encoder/__pycache__/
-encoder/quantization/__pycache__/
-encoder/modules/__pycache__/
-fairseq/
-
-# Test data directories
-1b/
-1c/
-1n/
-1pa/
-1pl/
-data/
-
-# Temporary and output directories
-temp/
-logs/
-results/
-semantic_layer_tsne/
-
-# Downloaded files
-Miniconda3-*.sh*
-
-# Experimental and test files
-try*.py
-vvv.py
-rr.py
-ttdata.py
-exp_*.py
-test_*.py
-*_test.py
-
-# Analysis and experiment files
-*_experiment_*.md
-*_tool.py
-*_simplified.py
-
-# Shell scripts (optional - uncomment if you want to ignore)
-# run_*.sh
-
-# VS Code specific
-.vscode/mcp.json
-logs/
-*.log
+!results/**/analysis/**
+!done/exp/results/**/analysis/**
