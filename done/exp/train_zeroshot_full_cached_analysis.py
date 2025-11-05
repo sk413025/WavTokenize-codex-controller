@@ -346,8 +346,8 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch, logger):
         total_correct += correct
         total_tokens += B * T
 
-        # 收集預測用於分析
-        all_predictions.append(pred_tokens.detach())
+        # 收集預測用於分析 (flatten to 1D)
+        all_predictions.append(pred_tokens.detach().flatten())
 
         # Update progress bar
         current_acc = (total_correct / total_tokens) * 100
@@ -360,7 +360,7 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch, logger):
     accuracy = (total_correct / total_tokens) * 100
 
     # 分析 token 預測分布
-    all_predictions = torch.cat(all_predictions, dim=0)
+    all_predictions = torch.cat(all_predictions, dim=0)  # Already flattened
     token_stats = analyze_token_predictions(all_predictions)
 
     # 記錄到 log
@@ -410,14 +410,14 @@ def validate_epoch(model, dataloader, criterion, device, epoch, logger):
             total_correct += correct
             total_tokens += B * T
 
-            # 收集預測
-            all_predictions.append(pred_tokens)
+            # 收集預測 (flatten to 1D)
+            all_predictions.append(pred_tokens.flatten())
 
     avg_loss = total_loss / len(dataloader)
     accuracy = (total_correct / total_tokens) * 100
 
     # 分析 token 預測分布
-    all_predictions = torch.cat(all_predictions, dim=0)
+    all_predictions = torch.cat(all_predictions, dim=0)  # Already flattened
     token_stats = analyze_token_predictions(all_predictions)
 
     # 記錄到 log
