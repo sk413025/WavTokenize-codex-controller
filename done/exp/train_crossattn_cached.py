@@ -250,6 +250,7 @@ def main():
     parser.add_argument('--num_layers', type=int, default=4, help='Transformer 層數')
     parser.add_argument('--dim_feedforward', type=int, default=2048, help='FFN 維度')
     parser.add_argument('--dropout', type=float, default=0.1, help='Dropout rate')
+    parser.add_argument('--speaker_tokens', type=int, default=4, help='Speaker tokens K (>1 可避免注意力退化)')
 
     # 訓練參數
     parser.add_argument('--batch_size', type=int, default=64, help='Batch size')
@@ -396,7 +397,8 @@ def main():
         nhead=args.nhead,
         num_layers=args.num_layers,
         dim_feedforward=args.dim_feedforward,
-        dropout=args.dropout
+        dropout=args.dropout,
+        speaker_tokens=args.speaker_tokens
     ).to(device)
 
     # 計算參數量
@@ -414,6 +416,7 @@ def main():
     logger.info(f"  - num_layers: {args.num_layers}")
     logger.info(f"  - speaker_dim: {speaker_dim}")
     logger.info(f"  - fusion_type: Cross-Attention (NEW)")
+    logger.info(f"  - speaker_tokens (K): {args.speaker_tokens}")
     logger.info("")
     logger.info(f"模型總參數數量: {total_params:,}")
     logger.info(f"  - 可訓練參數: {trainable_params:,} ({trainable_params/total_params*100:.2f}%)")

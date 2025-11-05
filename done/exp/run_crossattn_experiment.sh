@@ -58,6 +58,7 @@ python -u train_crossattn_cached.py \
     --num_epochs 100 \
     --learning_rate 1e-4 \
     --dropout 0.1 \
+    --speaker_tokens 4 \
     --num_workers 4 \
     2>&1 | tee crossattn_training.log
 

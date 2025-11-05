@@ -42,12 +42,24 @@ class CrossAttentionFusion(nn.Module):
     
     輸出:
         fused_emb: (B, T, d_model) - Fusion 後的 embeddings
-        attn_weights: (B, T, 1) - 每個 token 對 speaker 的 attention 分數
+        attn_weights: (B, T, K) - 每個 token 對 K 個 speaker tokens 的注意力分數
     """
     
-    def __init__(self, d_model=512, nhead=8, dropout=0.1):
+    def __init__(self, d_model=512, nhead=8, dropout=0.1, speaker_tokens: int = 4):
         super().__init__()
         
+        self.speaker_tokens = speaker_tokens
+
+        # 將單一 speaker 向量擴展為 K 個 speaker tokens (K = speaker_tokens)
+        # 如此 Cross-Attention 的 Key/Value 長度 S = K (>1)，避免 softmax 退化
+        self.spk_expand = nn.Sequential(
+            nn.Linear(d_model, d_model * speaker_tokens),
+            nn.ReLU(inplace=True),
+        )
+
+        # 給 speaker tokens 加上可學習的位置嵌入，避免 K 個 token 完全同質
+        self.spk_pos = nn.Parameter(torch.randn(1, speaker_tokens, d_model) * 0.02)
+
         # Multi-Head Cross-Attention
         self.cross_attn = nn.MultiheadAttention(
             embed_dim=d_model,
@@ -70,26 +82,28 @@ class CrossAttentionFusion(nn.Module):
         
         Returns:
             fused_emb: (B, T, d_model) - Fused embeddings
-            attn_weights: (B, T, 1) - Attention weights
+            attn_weights: (B, T, K) - Attention weights
         """
         B, T, D = token_emb.shape
         
-        # Speaker embedding: (B, d_model) → (B, 1, d_model)
-        # Speaker 作為一個"全局" key/value
-        speaker_kv = speaker_emb.unsqueeze(1)  # (B, 1, d_model)
+        # Speaker embedding: (B, d_model) → (B, K, d_model)
+        # 生成 K 個 speaker tokens 作為 Key/Value，S = K (>1)
+        spk_tokens = self.spk_expand(speaker_emb)  # (B, K*D)
+        spk_tokens = spk_tokens.view(B, self.speaker_tokens, D)  # (B, K, D)
+        spk_tokens = spk_tokens + self.spk_pos  # (B, K, D)
         
         # Cross-Attention
         # Query: token_emb (B, T, d_model) - 每個 token 問: "我需要多少 speaker 資訊?"
         # Key:   speaker_kv (B, 1, d_model) - Speaker 提供的資訊維度
         # Value: speaker_kv (B, 1, d_model) - Speaker 提供的實際資訊
         attn_output, attn_weights = self.cross_attn(
-            query=token_emb,      # (B, T, d_model)
-            key=speaker_kv,       # (B, 1, d_model)
-            value=speaker_kv,     # (B, 1, d_model)
+            query=token_emb,      # (B, T, D)
+            key=spk_tokens,       # (B, K, D)
+            value=spk_tokens,     # (B, K, D)
             need_weights=True
         )
-        # attn_output: (B, T, d_model) - 每個 token 獲得的 speaker 資訊
-        # attn_weights: (B, T, 1) - 每個 token 對 speaker 的 attention 分數
+        # attn_output: (B, T, D)
+        # attn_weights: (B, T, K) - 每個 token 對 K 個 speaker tokens 的注意力
         
         # Residual Connection + Dropout + Layer Norm
         # 重要: 保留原始 token embedding, 只添加 speaker 資訊
@@ -126,7 +140,8 @@ class ZeroShotDenoisingTransformerCrossAttn(nn.Module):
         num_layers=4,
         dim_feedforward=2048,
         dropout=0.1,
-        max_seq_len=5000
+        max_seq_len=5000,
+        speaker_tokens: int = 4
     ):
         super().__init__()
 
@@ -154,7 +169,8 @@ class ZeroShotDenoisingTransformerCrossAttn(nn.Module):
         self.cross_attn_fusion = CrossAttentionFusion(
             d_model=d_model,
             nhead=nhead,
-            dropout=dropout
+            dropout=dropout,
+            speaker_tokens=speaker_tokens,
         )
 
         # ============================================================
@@ -293,7 +309,8 @@ if __name__ == '__main__':
         nhead=8,
         num_layers=4,
         dim_feedforward=2048,
-        dropout=0.1
+        dropout=0.1,
+        speaker_tokens=4
     )
 
     print(f"\n模型架構:")
@@ -334,7 +351,7 @@ if __name__ == '__main__':
     print(f"  - Shape: {pred_tokens.shape}")
 
     # Forward pass (with attention weights)
-    logits, attn_weights = model(noisy_tokens, speaker_emb, 
+    logits, attn_weights = model(noisy_tokens, speaker_emb,
                                   return_logits=True, return_attention=True)
     print(f"\n輸出 (with attention):")
     print(f"  - Logits shape: {logits.shape}")
