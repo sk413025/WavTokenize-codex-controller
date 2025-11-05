@@ -1,6 +1,125 @@
 # 實驗記錄報告
 
-## 🎯 最新實驗：Token Denoising with Hybrid Loss - 2025年1月23日
+## 🎯 最新實驗：訓練平台期診斷 - 2025年11月5日
+
+### 實驗編號：plateau_diagnosis_20251105
+
+#### 📋 實驗背景
+
+**前置實驗**: 100-epoch Zero-Shot Speaker Denoising (Commit fa1b686)  
+**觀察問題**: 
+1. Train Accuracy 在 Epoch 20 後卡在 54%（僅提升 0.77%）
+2. Val Accuracy 持續在 35-37% 徘徊
+3. Train Loss 持續下降但 Accuracy 不再提升
+4. Train-Val Gap 高達 17%
+
+**訓練狀態** (Epoch 38/100):
+- Train: Loss 2.78, Acc 54.70%
+- Val: Loss 4.93, Acc 36.75%
+
+#### 🔬 診斷實驗
+
+**分析方法**:
+1. **Token 分布分析**: 比較 Train/Val token distribution
+2. **Accuracy 數學反推**: 反推 token-specific accuracy
+3. **Padding 影響分析**: 檢查 padding 佔比
+4. **Noisy-Clean 差異**: 統計 token 改變率
+
+#### 📊 核心發現
+
+**發現 1: Token 453 是主要瓶頸** ✅
+```
+Train Set: Token 453 佔 13.57%
+Val Set:   Token 453 佔 18.65%
+差異:      +5.08% (絕對), +37.5% (相對)
+貢獻錯誤: Train 30%, Val 29.5%
+```
+
+**發現 2: Distribution Mismatch 廣泛存在** ✅
+```
+15 個 Top-20 tokens 有顯著差異 (>0.3%)
+累計差異: 10.94%
+結論: Val speakers 聲學特徵系統性不同
+```
+
+**發現 3: Mismatch 只解釋 30% 的 gap** ⚠️
+```
+Distribution mismatch: ~4-5% accuracy loss
+實際 gap: 17%
+未解釋部分: 12% (來自泛化能力不足)
+```
+
+**發現 4: Padding 不是問題** ✅
+```
+Val padding: <0.3%
+Val accuracy: 仍然僅 37%
+結論: Padding 非主因
+```
+
+#### 🧠 機轉模型
+
+```
+Val Speakers 聲學差異
+    ↓
+Token Distribution Mismatch
+    ├─ Token 453: +5.08%
+    └─ 14 tokens: +5.86%
+    ↓
+模型架構限制
+    ├─ Speaker Embedding 簡單相加
+    └─ 無 Speaker-Specific Prior
+    ↓
+訓練平台期
+    ├─ Train 54% (Token 453 拖累)
+    ├─ Val 37% (Mismatch + 泛化不足)
+    └─ Gap 17%
+```
+
+#### 🚀 改進方向
+
+1. **Speaker-Adaptive Token Distribution** (優先)
+   - 新增 Speaker → Token Prior 映射
+   - 預期: Val Acc 45-50%
+
+2. **Weighted Cross-Entropy**
+   - 根據 Val distribution 調整權重
+   - 預期: Val Acc 42-47%
+
+3. **Distribution-Aware Split**
+   - 重選 Val speakers
+   - 預期: Val Acc 48-52%
+
+#### 📁 相關檔案
+
+**分析工具**:
+- `done/exp/analyze_token_distribution.py`
+- `done/exp/analyze_token_accuracy_inference.py`
+
+**實驗報告**:
+- `PLATEAU_MECHANISM_ANALYSIS.md` (詳細機轉分析)
+- `PLATEAU_DIAGNOSIS_SUMMARY.md` (簡潔摘要)
+- `TRAINING_PLATEAU_DIAGNOSIS_20251105.md` (完整報告)
+- `EXPERIMENT_REPRODUCTION_GUIDE.md` (重現指南)
+
+#### 💡 關鍵洞察
+
+**這不是 Bug，是 Zero-Shot Task 的本質困難**
+
+- WavTokenizer Codebook 是 speaker-independent
+- 不同 speaker 使用 token 的頻率不同
+- 當前架構無法捕捉 speaker-specific token distribution
+- 需要改進模型架構，而非只調整數據
+
+#### ⏭️ 下一步
+
+1. ✅ 繼續訓練至 100 epochs（收集完整 baseline）
+2. 🔬 執行待驗證實驗（Speaker Embedding 有效性測試）
+3. 🚀 實作 Speaker-Adaptive Token Distribution Modeling
+4. 📊 驗證 Val Acc 是否提升至 45%+
+
+---
+
+## 📚 歷史實驗 1：Token Denoising with Hybrid Loss - 2025年1月23日
 
 ### 實驗編號：hybrid_loss_20250123
 
