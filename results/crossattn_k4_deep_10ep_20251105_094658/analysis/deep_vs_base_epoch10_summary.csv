@@ -1,0 +1,11 @@
+section,subset,run,metric1,metric2,metric3
+influence,zero,baseline_epoch10,38.1728,38.3902,0.2174
+influence,zero,deep_epoch10,37.8841,37.7656,-0.1185
+influence,random,baseline_epoch10,38.1728,38.3162,0.1434
+influence,random,deep_epoch10,37.8841,37.8037,-0.0804
+margins_zero,low,baseline,91.95224999999999,1.59635,16.60055
+margins_zero,low,deep,88.8189,0.52495,21.37305
+margins_zero,mid,baseline,34.6845,12.3416,79.104
+margins_zero,mid,deep,32.6078,2.8899,78.5588
+margins_zero,high,baseline,0.9034,0.1283,83.2311
+margins_zero,high,deep,0.9562,-0.0567,78.7913

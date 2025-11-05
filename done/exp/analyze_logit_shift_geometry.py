@@ -38,6 +38,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from model_zeroshot_crossattn import ZeroShotDenoisingTransformerCrossAttn
+from model_zeroshot_crossattn_deep import ZeroShotDenoisingTransformerCrossAttnDeep
 from data_zeroshot import ZeroShotAudioDatasetCached, cached_collate_fn
 
 
@@ -48,16 +49,30 @@ def load_model(results_dir: Path, epoch: int, device: torch.device):
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     state = ckpt['model_state_dict']
     codebook = state['codebook']
-    model = ZeroShotDenoisingTransformerCrossAttn(
-        codebook=codebook,
-        speaker_embed_dim=256,
-        d_model=512,
-        nhead=8,
-        num_layers=4,
-        dim_feedforward=2048,
-        dropout=0.1,
-        speaker_tokens=4,
-    ).to(device)
+    keys = list(state.keys())
+    if any(k.startswith('fusion0.') or k.startswith('layers.') for k in keys):
+        model = ZeroShotDenoisingTransformerCrossAttnDeep(
+            codebook=codebook,
+            speaker_embed_dim=256,
+            d_model=512,
+            nhead=8,
+            num_layers=4,
+            dim_feedforward=2048,
+            dropout=0.1,
+            speaker_tokens=4,
+            inject_layers=(1,3),
+        ).to(device)
+    else:
+        model = ZeroShotDenoisingTransformerCrossAttn(
+            codebook=codebook,
+            speaker_embed_dim=256,
+            d_model=512,
+            nhead=8,
+            num_layers=4,
+            dim_feedforward=2048,
+            dropout=0.1,
+            speaker_tokens=4,
+        ).to(device)
     model.load_state_dict(state)
     model.eval()
     return model
@@ -202,4 +217,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
