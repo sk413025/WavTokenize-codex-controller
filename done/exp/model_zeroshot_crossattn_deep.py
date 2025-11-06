@@ -94,7 +94,9 @@ class ZeroShotDenoisingTransformerCrossAttnDeep(nn.Module):
             hidden = layer(hidden)
 
         logits = self.output_proj(hidden)
+        if return_attention:
+            # 返回初始融合的注意力（後續 deep_fusion 的注意力此版不蒐集）
+            return logits, attn_w_all
         if return_logits:
             return logits
         return logits.argmax(dim=-1)
-
