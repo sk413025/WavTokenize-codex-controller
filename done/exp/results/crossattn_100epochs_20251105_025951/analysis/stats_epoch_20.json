@@ -1,0 +1,74 @@
+{
+  "epoch": 20,
+  "cross_attn": {
+    "attn_weights": {
+      "shape": [
+        8,
+        200,
+        1
+      ],
+      "min": 1.0,
+      "max": 1.0,
+      "mean": 1.0,
+      "std": 0.0
+    },
+    "attn_output_token_var_mean": 0.0,
+    "attn_output_token_var_mean_per_dim": 0.0,
+    "token_emb_token_var_mean": 0.2880430817604065,
+    "delta_fused_minus_token_l2_mean": 10.66463565826416
+  },
+  "encoder_layers": {
+    "encoder_layer_0": {
+      "shape": [
+        8,
+        200,
+        512
+      ],
+      "mean": -0.0017243889160454273,
+      "std": 1.0019817352294922,
+      "min": -4.040143966674805,
+      "max": 3.620248794555664
+    },
+    "encoder_layer_1": {
+      "shape": [
+        8,
+        200,
+        512
+      ],
+      "mean": -0.0004078040656168014,
+      "std": 1.0025789737701416,
+      "min": -4.366832733154297,
+      "max": 3.8041603565216064
+    },
+    "encoder_layer_2": {
+      "shape": [
+        8,
+        200,
+        512
+      ],
+      "mean": -0.00020943317213095725,
+      "std": 1.0114825963974,
+      "min": -4.132662296295166,
+      "max": 4.228530406951904
+    },
+    "encoder_layer_3": {
+      "shape": [
+        8,
+        200,
+        512
+      ],
+      "mean": 0.001337229972705245,
+      "std": 1.3047693967819214,
+      "min": -6.9357428550720215,
+      "max": 6.304478168487549
+    }
+  },
+  "param_group_norms": {
+    "speaker_proj": 11.436466217041016,
+    "cross_attn_in_proj": 26.72913932800293,
+    "cross_attn_out_proj": 10.946317672729492,
+    "encoder_layer_0": 54.594078063964844,
+    "encoder_layer_last": 63.43994140625,
+    "output_proj": 55.36308670043945
+  }
+}
