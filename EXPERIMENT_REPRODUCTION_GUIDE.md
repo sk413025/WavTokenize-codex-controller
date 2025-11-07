@@ -298,6 +298,20 @@ Noisy vs Clean Token 差異:
   - 深入報告：`CROSSATTN_GATED_100_200_ANALYSIS_20251106.md`
   - 原始訓練指令（建議）：將 Gated‑100 指令之 `--num_epochs 100` 調整為 `--num_epochs 200`，輸出路徑置為本 run 目錄
 
+- GateL2‑100（K=4，淺層門控，100 epoch）
+  - Run 目錄：`results/crossattn_k4_gateL2_100ep_20251106_000140`
+  - 行為重現：
+    - `bash done/exp/run_behavior_analysis.sh <gpu> results/crossattn_k4_gateL2_100ep_20251106_000140 "10 20 30 40 50 80 100" 5 16 /home/sbplab/ruizi/c_code/done/exp/data`
+  - 產物路徑（節錄）：
+    - E1：`analysis/influence_breakdown/epoch_100/breakdown_epoch_100.csv`
+    - E2：`analysis/margins_topk/epoch_100/margins_bins_epoch_100.csv`
+    - E3：`analysis/logit_geometry/epoch_100/geometry_epoch_100.csv`
+  - 指標摘要：
+    - 淨影響（zero）e100：約 −15.91 pp
+    - 高 margin（e100）：ΔAcc_zero ≈ −34.29 pp；`dmargin_mean ≈ +2.59`
+    - 中 margin（e100）：ΔAcc_zero ≈ −1.72/−4.81/−10.25 pp；`cos_mean ≈ −0.0081`、`dmargin_mean ≈ −1.89`
+  - 深入報告：`CROSSATTN_GATE_L2_100EP_REPORT_20251106.md:1`
+
 備註
 - 所有分析腳本皆使用同一資料快取：`/home/sbplab/ruizi/c_code/done/exp/data`（val_cache.pt）。
 - 若需只跑單一指標，請見對應腳本：
