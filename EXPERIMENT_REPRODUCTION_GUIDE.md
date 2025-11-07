@@ -238,6 +238,71 @@ Noisy vs Clean Token 差異:
    - 推算: Mismatch 導致 4-5% accuracy loss
    - 實際 gap 17%，說明 70% 來自模型泛化能力不足
 
+---
+
+## ⚡ Quick Repro Index（實驗對應表）
+
+以下彙整本輪 Cross‑Attention 機轉診斷的主要 run，包含類型、結果路徑、重現命令與關鍵指標（節錄）。路徑皆以專案根目錄為基準。
+
+- Deep‑100（K=4，多層注入，100 epoch）
+  - Run 目錄：`results/crossattn_k4_deep_100ep_20251105_221426`
+  - 行為重現（E1/E2/E3 一鍵）：
+    - `bash done/exp/run_behavior_analysis.sh <gpu> results/crossattn_k4_deep_100ep_20251105_221426 "10 20 30 40 50 80 100" 5 16 /home/sbplab/ruizi/c_code/done/exp/data`
+  - 產物路徑（節錄）：
+    - E2 分桶（e80/e100）：`analysis/margins_topk/epoch_{80,100}/margins_bins_epoch_*.csv`
+    - E3 幾何（e80/e100）：`analysis/logit_geometry/epoch_{80,100}/geometry_epoch_*.csv`
+  - 指標摘要：
+    - 高 margin ΔAcc_zero（e100）：約 −12.40 pp（移除更差 → 加入更好）
+    - 低 margin dmargin_mean（e100）：約 −3.48（方向性負）
+  - 深入報告：`CROSSATTN_DEEP_100_200_ANALYSIS_20251106.md`
+
+- Deep‑200（K=4，多層注入，200 epoch）
+  - Run 目錄：`results/crossattn_k4_deep_200ep_20251106_014239`
+  - 行為重現：
+    - `bash done/exp/run_behavior_analysis.sh <gpu> results/crossattn_k4_deep_200ep_20251106_014239 "10 20 30 40 50 80 100 150 200" 5 16 /home/sbplab/ruizi/c_code/done/exp/data`
+  - 產物路徑（節錄）：
+    - E1 影響分解：`analysis/influence_breakdown/epoch_{10..200}/breakdown_epoch_*.csv`
+    - E2 分桶（e10/20/30/40/50）：`analysis/margins_topk/epoch_*/margins_bins_epoch_*.csv`
+  - 指標摘要：
+    - 淨影響（zero）net_acc_delta：e80≈ −3.75 pp → e200≈ −9.56 pp
+  - 深入報告：`CROSSATTN_DEEP_100_200_ANALYSIS_20251106.md`
+
+- Gated‑100（K=4，門控，100 epoch）
+  - Run 目錄：`results/crossattn_k4_gate_100ep_20251105_221334`
+  - 行為重現：
+    - `bash done/exp/run_behavior_analysis.sh <gpu> results/crossattn_k4_gate_100ep_20251105_221334 "10 20 30 40 50 80 100" 5 16 /home/sbplab/ruizi/c_code/done/exp/data`
+  - 產物路徑（節錄）：
+    - E2 分桶（e80/e100）：`analysis/margins_topk/epoch_{80,100}/margins_bins_epoch_*.csv`
+    - E3 幾何（e80/e100）：`analysis/logit_geometry/epoch_{80,100}/geometry_epoch_*.csv`
+  - 指標摘要：
+    - 高 margin dmargin_mean（e80/e100）：≈ +0.535 / +0.536（強正向）
+    - 高 margin ΔAcc_zero（e100）：約 −18.75 pp（移除更差 → 加入更好）
+  - 深入報告：`CROSSATTN_GATED_100_200_ANALYSIS_20251106.md`
+
+- Gated‑200（K=4，門控，200 epoch）
+  - Run 目錄：`results/crossattn_k4_gate_200ep_20251106_014033`
+  - 行為重現：
+    - `bash done/exp/run_behavior_analysis.sh <gpu> results/crossattn_k4_gate_200ep_20251106_014033 "10 20 30 40 50 80 100 150 200" 5 16 /home/sbplab/ruizi/c_code/done/exp/data`
+  - 產物路徑（節錄）：
+    - E1 影響分解：`analysis/influence_breakdown/epoch_{10..200}/breakdown_epoch_*.csv`
+    - E3 幾何（e150/e200）：`analysis/logit_geometry/epoch_{150,200}/geometry_epoch_*.csv`
+    - 注意力熵：`analysis/attn_entropy/epoch_*/entropy_epoch_*.csv`
+    - 門控分布：`analysis/gate_distribution/epoch_*/gate_stats_epoch_*.csv`
+  - 指標摘要：
+    - 淨影響（zero）：e10≈ −0.53 pp → e100≈ −3.47 pp → e200≈ −9.80 pp
+    - 高 margin dmargin_mean：e150≈ +0.91、e200≈ +1.06
+    - 注意力熵均值：e10≈ 0.909 → e200≈ 0.726（peaked_frac_gt0.7 下降）
+  - 深入報告：`CROSSATTN_GATED_100_200_ANALYSIS_20251106.md`
+
+備註
+- 所有分析腳本皆使用同一資料快取：`/home/sbplab/ruizi/c_code/done/exp/data`（val_cache.pt）。
+- 若需只跑單一指標，請見對應腳本：
+  - E1：`done/exp/analyze_influence_breakdown.py`
+  - E2：`done/exp/analyze_margins_topk.py`
+  - E3：`done/exp/analyze_logit_shift_geometry.py`
+  - 熵：`done/exp/analyze_attention_entropy.py`
+  - 門控：`done/exp/analyze_gate_distribution.py`
+
 4. **Padding 不是問題** ✅
    - 數據: Val set padding <0.3%，但 accuracy 依然低
 
