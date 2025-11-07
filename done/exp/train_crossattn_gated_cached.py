@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from model_zeroshot_crossattn_deep import ZeroShotDenoisingTransformerCrossAttnDeep
+from model_zeroshot_crossattn_gated import ZeroShotDenoisingTransformerCrossAttnGated
 from data_zeroshot import ZeroShotAudioDatasetCached, cached_collate_fn
 from decoder.pretrained import WavTokenizer
 
@@ -66,26 +66,30 @@ def main():
     ap.add_argument('--dim_feedforward', type=int, default=2048)
     ap.add_argument('--dropout', type=float, default=0.1)
     ap.add_argument('--speaker_tokens', type=int, default=4)
-    ap.add_argument('--inject_layers', type=str, default='1,3')
     ap.add_argument('--batch_size', type=int, default=64)
     ap.add_argument('--num_epochs', type=int, default=10)
     ap.add_argument('--learning_rate', type=float, default=1e-4)
     args = ap.parse_args()
 
+    # env
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # dirs
     if args.output_dir is None:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        args.output_dir = f'results/crossattn_k4_deep_{args.num_epochs}ep_{timestamp}'
+        args.output_dir = f'results/crossattn_k4_gate_{args.num_epochs}ep_{timestamp}'
     outdir = Path(args.output_dir); outdir.mkdir(parents=True, exist_ok=True)
     logger = setup_logger(outdir)
-    logger.info('Cross-Attn Deep Injection Experiment (small run)')
+    logger.info('Cross-Attn Gated Experiment (small run)')
 
+    # cache
     cache_dir = Path(args.cache_dir)
     train_ds = ZeroShotAudioDatasetCached(str(cache_dir/'train_cache.pt'))
     val_ds = ZeroShotAudioDatasetCached(str(cache_dir/'val_cache.pt'))
     train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=4, collate_fn=cached_collate_fn, pin_memory=True)
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_workers=4, collate_fn=cached_collate_fn, pin_memory=True)
 
+    # wavtokenizer to get codebook
     # Keep WavTokenizer on CPU to save GPU memory; extract codebook then free
     wavtokenizer = WavTokenizer.from_pretrained0802(
         'config/wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml',
@@ -103,15 +107,16 @@ def main():
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    inject_layers = tuple(int(x) for x in args.inject_layers.split(',')) if args.inject_layers else tuple()
-    model = ZeroShotDenoisingTransformerCrossAttnDeep(
+    # model/opt
+    model = ZeroShotDenoisingTransformerCrossAttnGated(
         codebook=codebook, speaker_embed_dim=256, d_model=args.d_model, nhead=args.nhead,
         num_layers=args.num_layers, dim_feedforward=args.dim_feedforward, dropout=args.dropout,
-        speaker_tokens=args.speaker_tokens, inject_layers=inject_layers
+        speaker_tokens=args.speaker_tokens
     ).to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam([p for p in model.parameters() if p.requires_grad], lr=args.learning_rate)
 
+    # save config
     with open(outdir/'config.json','w') as f: json.dump(vars(args), f, indent=2)
 
     best_val = 0.0
