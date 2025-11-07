@@ -1,0 +1,6 @@
+epoch,w2c_minus_c2w_zero_pp,w2c_minus_c2w_rand_pp,net_delta_acc_zero_pp,net_delta_acc_rand_pp,mid_delta_acc_zero_pp,mid_delta_acc_rand_pp,mid_coverage_zero_pct,mid_coverage_rand_pct,cos_mean_mid,dmargin_mean_mid,have_influence,have_margins,have_geometry
+10,-0.48300000000000004,-0.508,-0.483,-0.508,,,,,,,1,0,0
+20,-0.9314,-0.9744,-0.9314,-0.9743,,,,,,,1,0,0
+30,-2.6229,-2.8803,-2.6229,-2.8803,,,,,,,1,0,0
+40,-3.3695,-3.6651999999999996,-3.3694,-3.6652,,,,,,,1,0,0
+50,-4.169899999999999,-4.5564,-4.17,-4.5563,,,,,,,1,0,0
