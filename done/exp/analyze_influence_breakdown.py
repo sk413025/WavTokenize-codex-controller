@@ -34,6 +34,22 @@ from model_zeroshot_crossattn_gated import ZeroShotDenoisingTransformerCrossAttn
 from data_zeroshot import ZeroShotAudioDatasetCached, cached_collate_fn
 
 
+def _infer_num_layers_from_state(state: dict, default_layers: int = 4) -> int:
+    """Infer transformer encoder depth from checkpoint keys."""
+    max_idx = -1
+    for k in state.keys():
+        if k.startswith('transformer_encoder.layers.'):
+            parts = k.split('.')
+            if len(parts) > 2:
+                try:
+                    idx = int(parts[2])
+                    if idx > max_idx:
+                        max_idx = idx
+                except Exception:
+                    pass
+    return (max_idx + 1) if max_idx >= 0 else default_layers
+
+
 def load_model(results_dir: Path, epoch: int, device: torch.device):
     ckpt_path = results_dir / f'checkpoint_epoch_{epoch}.pth'
     if not ckpt_path.exists():
@@ -43,6 +59,7 @@ def load_model(results_dir: Path, epoch: int, device: torch.device):
     codebook = state['codebook']
     # auto-detect deep injection checkpoints
     keys = list(state.keys())
+    inferred_layers = _infer_num_layers_from_state(state, default_layers=4)
     # Deep-injection checkpoints
     if any(k.startswith('fusion0.') or k.startswith('layers.') for k in keys):
         model = ZeroShotDenoisingTransformerCrossAttnDeep(
@@ -50,7 +67,7 @@ def load_model(results_dir: Path, epoch: int, device: torch.device):
             speaker_embed_dim=256,
             d_model=512,
             nhead=8,
-            num_layers=4,
+            num_layers=inferred_layers,
             dim_feedforward=2048,
             dropout=0.1,
             speaker_tokens=4,
@@ -63,7 +80,7 @@ def load_model(results_dir: Path, epoch: int, device: torch.device):
             speaker_embed_dim=256,
             d_model=512,
             nhead=8,
-            num_layers=4,
+            num_layers=inferred_layers,
             dim_feedforward=2048,
             dropout=0.1,
             speaker_tokens=4,
@@ -74,7 +91,7 @@ def load_model(results_dir: Path, epoch: int, device: torch.device):
             speaker_embed_dim=256,
             d_model=512,
             nhead=8,
-            num_layers=4,
+            num_layers=inferred_layers,
             dim_feedforward=2048,
             dropout=0.1,
             speaker_tokens=4,
