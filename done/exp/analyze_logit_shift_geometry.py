@@ -39,6 +39,7 @@ from torch.utils.data import DataLoader
 
 from model_zeroshot_crossattn import ZeroShotDenoisingTransformerCrossAttn
 from model_zeroshot_crossattn_deep import ZeroShotDenoisingTransformerCrossAttnDeep
+from model_zeroshot_crossattn_gated import ZeroShotDenoisingTransformerCrossAttnGated
 from data_zeroshot import ZeroShotAudioDatasetCached, cached_collate_fn
 
 
@@ -61,6 +62,17 @@ def load_model(results_dir: Path, epoch: int, device: torch.device):
             dropout=0.1,
             speaker_tokens=4,
             inject_layers=(1,3),
+        ).to(device)
+    elif any(k.startswith('cross_attn_fusion.gate') for k in keys):
+        model = ZeroShotDenoisingTransformerCrossAttnGated(
+            codebook=codebook,
+            speaker_embed_dim=256,
+            d_model=512,
+            nhead=8,
+            num_layers=4,
+            dim_feedforward=2048,
+            dropout=0.1,
+            speaker_tokens=4,
         ).to(device)
     else:
         model = ZeroShotDenoisingTransformerCrossAttn(
