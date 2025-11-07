@@ -44,7 +44,7 @@ class CrossAttentionFusionGated(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.norm = nn.LayerNorm(d_model)
 
-    def forward(self, token_emb, speaker_emb):
+    def forward(self, token_emb, speaker_emb, g_override=None):
         B, T, D = token_emb.shape
         spk_tokens = self.spk_expand(speaker_emb).view(B, self.speaker_tokens, D) + self.spk_pos
         attn_output, attn_weights = self.cross_attn(
@@ -53,9 +53,12 @@ class CrossAttentionFusionGated(nn.Module):
             value=spk_tokens,
             need_weights=True,
         )
-        g = self.gate(token_emb)  # (B,T,1)
-        fused = self.norm(token_emb + self.dropout(g * attn_output))
-        return fused, attn_weights, g
+        if g_override is None:
+            g_used = self.gate(token_emb)  # (B,T,1)
+        else:
+            g_used = g_override
+        fused = self.norm(token_emb + self.dropout(g_used * attn_output))
+        return fused, attn_weights, g_used
 
 
 class PositionalEncoding(nn.Module):
@@ -104,16 +107,64 @@ class ZeroShotDenoisingTransformerCrossAttnGated(nn.Module):
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.output_proj = nn.Linear(d_model, self.vocab_size)
 
-    def forward(self, noisy_token_ids, speaker_embedding, return_logits=False, return_attention=False):
+    def forward(
+        self,
+        noisy_token_ids,
+        speaker_embedding,
+        return_logits=False,
+        return_attention=False,
+        labels=None,
+        margin_cfg=None,
+        g_override=None,
+    ):
         B, T = noisy_token_ids.shape
         token_emb = self.codebook[noisy_token_ids]
         token_emb = self.pos_encoding(token_emb)
         speaker_emb = self.speaker_proj(speaker_embedding)
-        fused_emb, attn_weights, gate = self.cross_attn_fusion(token_emb, speaker_emb)
+
+        # Optional margin-aware gating schedule
+        g_sched = None
+        if g_override is not None:
+            g_sched = g_override
+        elif margin_cfg is not None:
+            # Base gate from token embedding
+            with torch.no_grad():
+                g_base = self.cross_attn_fusion.gate(token_emb)  # (B,T,1)
+            # Prefusion logits proxy from token-only path (detach to avoid gradients)
+            with torch.no_grad():
+                pre_logits = self.output_proj(token_emb.detach())  # (B,T,V)
+                probs = torch.softmax(pre_logits, dim=-1)
+                if labels is not None:
+                    # target prob and competitor prob (exclude target)
+                    tgt = labels.view(B, T, 1)
+                    p_t = probs.gather(-1, tgt).squeeze(-1)  # (B,T)
+                    probs_excl = probs.clone()
+                    probs_excl.scatter_(-1, tgt, float('-inf'))
+                    p_c2, _ = probs_excl.max(dim=-1)  # (B,T)
+                else:
+                    # Use top-1 and top-2 predicted probabilities
+                    top2 = torch.topk(probs, k=2, dim=-1).values  # (B,T,2)
+                    p_t = top2[..., 0]
+                    p_c2 = top2[..., 1]
+                margin = (p_t - p_c2)  # in probability space
+                low_thr = float(margin_cfg.get('low_thr', 0.02))
+                mid_thr = float(margin_cfg.get('mid_thr', 0.4))
+                mid_amp = float(margin_cfg.get('mid_amp', 1.5))
+                high_amp = float(margin_cfg.get('high_amp', 0.5))
+                # Broadcast base gate to (B,T)
+                g_base_bt = g_base.squeeze(-1)
+                g_low = torch.zeros_like(g_base_bt)
+                g_mid = torch.clamp(g_base_bt * mid_amp, 0.0, 1.0)
+                g_high = torch.clamp(g_base_bt * high_amp, 0.0, 1.0)
+                g_bt = torch.where(margin < low_thr, g_low,
+                                   torch.where(margin < mid_thr, g_mid, g_high))
+                g_sched = g_bt.unsqueeze(-1)
+
+        fused_emb, attn_weights, gate_used = self.cross_attn_fusion(token_emb, speaker_emb, g_override=g_sched)
         hidden = self.transformer_encoder(fused_emb)
         logits = self.output_proj(hidden)
         if return_attention:
-            return logits, attn_weights, gate
+            return logits, attn_weights, gate_used
         if return_logits:
             return logits
         return logits.argmax(dim=-1)
