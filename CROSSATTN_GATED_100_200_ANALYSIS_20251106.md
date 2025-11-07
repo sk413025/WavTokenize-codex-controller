@@ -31,12 +31,14 @@ Gated‑200（K=4，run=results/crossattn_k4_gate_200ep_20251106_014033）
 - 關鍵檔案
   - 影響分解：`results/crossattn_k4_gate_200ep_20251106_014033/analysis/influence_breakdown/epoch_200/breakdown_epoch_200.csv`
   - 幾何：`results/crossattn_k4_gate_200ep_20251106_014033/analysis/logit_geometry/epoch_150/geometry_epoch_150.csv`，`epoch_200/geometry_epoch_200.csv`
+  - 幾何（新增）：`epoch_80/geometry_epoch_80.csv`，`epoch_100/geometry_epoch_100.csv`
   - 注意力熵：`results/crossattn_k4_gate_200ep_20251106_014033/analysis/attn_entropy/epoch_XX/entropy_epoch_XX.csv`
   - 門控分佈：`results/crossattn_k4_gate_200ep_20251106_014033/analysis/gate_distribution/epoch_XX/gate_stats_epoch_XX.csv`
+  - 補充彙整（200ep）：`results/crossattn_k4_gate_200ep_20251106_014033/analysis/supplemental_summary_200ep.csv`
 - 觀察（E1 淨影響）
   - zero：e10 `≈-0.53pp` → e100 `≈-3.47pp` → e200 `≈-9.80pp`（移除更差，依賴度持續上升）。
 - 觀察（E3 幾何方向性）
-  - 高 margin：e150 `dmargin_mean≈+0.91`、e200 `≈+1.06`（強正向）；低 margin 仍為負。
+  - 高 margin：e80 `≈+0.12`、e100 `≈+0.54`、e150 `≈+0.91`、e200 `≈+1.06`（強正向增強）；低 margin 仍為負。
 - 觀察（熵與門控）
   - 熵均值隨 epoch 下降：e10 `~0.91` → e200 `~0.73`；`peaked_frac_gt0.7` 同步下降（注意力由極尖峰轉向「較集中但非單峰」的穩定模式）。
   - 門控在中 margin 的 `high_gate_frac` 隨 epoch 增長（見各 epoch gate_stats 與彙整表），對應中‑高 margin 貢獻提高。

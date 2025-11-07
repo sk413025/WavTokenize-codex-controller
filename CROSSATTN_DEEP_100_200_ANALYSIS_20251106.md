@@ -37,10 +37,15 @@ Deep‑200（K=4，run=results/crossattn_k4_deep_200ep_20251106_014239）
 - 關鍵檔案
   - 影響分解：`results/crossattn_k4_deep_200ep_20251106_014239/analysis/influence_breakdown/epoch_100/breakdown_epoch_100.csv`（與 e80/e150/e200 對照）
   - 分桶（早期）：`results/crossattn_k4_deep_200ep_20251106_014239/analysis/margins_topk/epoch_40/margins_bins_epoch_40.csv`
+  - 幾何（新增）：`analysis/logit_geometry/epoch_{80,100,150,200}/geometry_epoch_*.csv`
+  - 補充彙整（200ep；Deep 無熵/門控）：`analysis/supplemental_summary_200ep.csv`
 - 觀察（E1 淨影響曲線，以 zero 為例）
   - e80 `net_acc_delta≈-3.75pp`、e100 `≈-4.18pp`、e150 `≈-6.75pp`、e200 `≈-9.56pp`（移除 speaker 更差，顯示依賴度上升）。
 - 觀察（E2 分桶）
   - e40：高 margin `ΔAcc_zero≈-2.11pp` 已見正效益；低 margin `≈+0.06pp`、中 margin 小幅正負交替（不穩定）。
+ - 觀察（E3 幾何）
+   - 高 margin dmargin_mean：e80 `≈-1.10`、e100 `≈-0.71`、e150 `≈-0.71`、e200 `≈-0.71`（持續為負）
+   - 低 margin dmargin_mean：e80 `≈-2.59` → e200 `≈-4.60`（惡化）
 - 結論：長訓練強化了「高 margin 區的正向使用」，但低/中 margin 仍缺乏穩健方向性，成為停滯主因之一。
 
 小結與建議
