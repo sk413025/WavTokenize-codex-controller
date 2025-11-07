@@ -15,6 +15,10 @@
   - Margins/Top‑k：`python -u done/exp/analyze_margins_topk.py --results_dir <dir> --cache_dir <cache> --epochs 10 20 ... --k 5`
   - Geometry：`python -u done/exp/analyze_logit_shift_geometry.py --results_dir <dir> --cache_dir <cache> --epochs 10 20 ...`
 
+Quick Links
+- Repro Index：`EXPERIMENT_REPRODUCTION_GUIDE.md` 的「⚡ Quick Repro Index」
+- 原始訓練指令：見 `RUNNING_EXPERIMENTS_20251105.md`（Deep‑50/Deep‑100 範例與輸出路徑）
+
 Deep‑100（K=4，run=results/crossattn_k4_deep_100ep_20251105_221426）
 - 關鍵檔案
   - 幾何（e80）：`results/crossattn_k4_deep_100ep_20251105_221426/analysis/logit_geometry/epoch_80/geometry_epoch_80.csv`

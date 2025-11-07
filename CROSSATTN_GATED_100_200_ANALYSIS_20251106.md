@@ -10,6 +10,10 @@
 - 指令（自動跑 E1/E2/E3 + 熵 + 門控）：
   `bash done/exp/run_behavior_analysis.sh <gpu> <results_dir> "10 20 30 40 50 80 100 150 200" 5 16 /home/sbplab/ruizi/c_code/done/exp/data`
 
+Quick Links
+- Repro Index：`EXPERIMENT_REPRODUCTION_GUIDE.md` 的「⚡ Quick Repro Index」
+- 原始訓練指令：見 `RUNNING_EXPERIMENTS_20251105.md`（Gated‑100 範例與輸出路徑）
+
 Gated‑100（K=4，run=results/crossattn_k4_gate_100ep_20251105_221334）
 - 關鍵檔案
   - 幾何（e80）：`results/crossattn_k4_gate_100ep_20251105_221334/analysis/logit_geometry/epoch_80/geometry_epoch_80.csv`

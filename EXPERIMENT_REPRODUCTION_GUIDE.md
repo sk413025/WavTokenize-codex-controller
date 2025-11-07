@@ -255,6 +255,7 @@ Noisy vs Clean Token 差異:
     - 高 margin ΔAcc_zero（e100）：約 −12.40 pp（移除更差 → 加入更好）
     - 低 margin dmargin_mean（e100）：約 −3.48（方向性負）
   - 深入報告：`CROSSATTN_DEEP_100_200_ANALYSIS_20251106.md`
+  - 原始訓練指令（範例）：見 `RUNNING_EXPERIMENTS_20251105.md` Deep‑100 小節
 
 - Deep‑200（K=4，多層注入，200 epoch）
   - Run 目錄：`results/crossattn_k4_deep_200ep_20251106_014239`
@@ -266,6 +267,7 @@ Noisy vs Clean Token 差異:
   - 指標摘要：
     - 淨影響（zero）net_acc_delta：e80≈ −3.75 pp → e200≈ −9.56 pp
   - 深入報告：`CROSSATTN_DEEP_100_200_ANALYSIS_20251106.md`
+  - 原始訓練指令（範例）：對齊 Deep‑100 指令，將 `--num_epochs 200` 與輸出路徑替換為本 run 目錄
 
 - Gated‑100（K=4，門控，100 epoch）
   - Run 目錄：`results/crossattn_k4_gate_100ep_20251105_221334`
@@ -278,6 +280,7 @@ Noisy vs Clean Token 差異:
     - 高 margin dmargin_mean（e80/e100）：≈ +0.535 / +0.536（強正向）
     - 高 margin ΔAcc_zero（e100）：約 −18.75 pp（移除更差 → 加入更好）
   - 深入報告：`CROSSATTN_GATED_100_200_ANALYSIS_20251106.md`
+  - 原始訓練指令（範例）：見 `RUNNING_EXPERIMENTS_20251105.md` Gated‑100 小節
 
 - Gated‑200（K=4，門控，200 epoch）
   - Run 目錄：`results/crossattn_k4_gate_200ep_20251106_014033`
@@ -293,6 +296,7 @@ Noisy vs Clean Token 差異:
     - 高 margin dmargin_mean：e150≈ +0.91、e200≈ +1.06
     - 注意力熵均值：e10≈ 0.909 → e200≈ 0.726（peaked_frac_gt0.7 下降）
   - 深入報告：`CROSSATTN_GATED_100_200_ANALYSIS_20251106.md`
+  - 原始訓練指令（建議）：將 Gated‑100 指令之 `--num_epochs 100` 調整為 `--num_epochs 200`，輸出路徑置為本 run 目錄
 
 備註
 - 所有分析腳本皆使用同一資料快取：`/home/sbplab/ruizi/c_code/done/exp/data`（val_cache.pt）。
