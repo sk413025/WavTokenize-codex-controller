@@ -1,11 +1,193 @@
-results/**/best_model.pth
-results/**/checkpoint_epoch_*.pth
-done/exp/results/**/best_model.pth
-done/exp/results/**/checkpoint_epoch_*.pth
-data/*.pt
-done/exp/data/*.pt
-*.pt
-*.pth
+# ============================================
+# Python
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-!results/**/analysis/**
-!done/exp/results/**/analysis/**
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+env.bak/
+venv.bak/
+
+# ============================================
+# 数据和缓存
+# ============================================
+data/
+*/data/
+done/exp/data/
+**/cache/
+*.cache
+*.pt.cache
+*_cache.pt
+
+# Large data files (use Git LFS instead if needed)
+*.h5
+*.hdf5
+
+# ============================================
+# 训练日志和输出（更精確忽略）
+# ============================================
+# 全域常見日志/目錄
+logs/
+wandb/
+runs/
+*.txt.log
+
+# 實驗結果中的即時日志（保留分析產物 CSV/PNG）
+results/**/training.log
+results/**/console.log
+results/**/analysis/*job.log
+
+# 模型權重（避免誤入版控）
+results/**/**/*.pth
+results/**/checkpoint_epoch_*.pth
+results/**/best_model.pth
+
+# ============================================
+# 临时文件
+# ============================================
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+*~
+
+# Editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ============================================
+# 符号链接（本项目特定）
+# ============================================
+config/config
+pretrained_models/pretrained_models
+models
+
+# ============================================
+# 实验生成的输出（可重现，不需要 commit）
+# ============================================
+# 模型/資料大檔（由上游/環境提供，不進版控）
+*.pth
+*.ckpt
+*.pt
+
+# 所有图片输出
+*.png
+*.jpg
+*.jpeg
+
+# 实验分析结果（可通过脚本重新生成）
+# 保留分析 CSV/PNG：因此不整個忽略 analysis 目錄，只忽略特定暫存日志（上方已列）
+done/exp/analysis_outputs/
+
+# 实验配置输出
+results/**/config.json
+done/exp/results/**/config.json
+
+# ============================================
+# 测试和临时实验
+# ============================================
+# 临时测试运行
+done/exp/results/test_run_*/
+results/test_*/
+scratch/
+tmp/
+
+# 旧实验（已完成分析）
+done/exp/results/crossattn_100epochs_20251105_024631/
+done/exp/results/crossattn_100epochs_20251105_024904/
+done/exp/results/crossattn_100epochs_20251105_024951/
+done/exp/results/crossattn_100epochs_20251105_025042/
+done/exp/results/crossattn_100epochs_20251105_025320/
+done/exp/results/crossattn_100epochs_20251105_025825/
+done/exp/results/zeroshot_100epochs_20251105_002137/
+done/exp/results/zeroshot_100epochs_20251105_002300/
+
+# 临时实验
+results/crossattn_100epochs_20251105_050328/
+results/crossattn_100epochs_20251105_050340/
+results/crossattn_k4_gate_10ep_*/
+
+# done/results 整个目录（旧的结果）
+done/results/
+
+# ============================================
+# 临时文档（分析过程产生的）
+# ============================================
+# 这些是分析过程中产生的临时文档，不是最终研究产出
+ASYMMETRIC_CONDITIONING_ANALYSIS.md
+COMMIT_EXECUTION_REPORT.md
+COMMIT_PLAN_CROSSATTN.md
+CROSSATTN_ANALYSIS_FINDINGS.md
+CROSSATTN_DEEP_ANALYSIS_PROGRESS.md
+CROSSATTN_MECHANISM_ANALYSIS.md
+CROSSATTN_PLATEAU_HYPOTHESES.md
+EMPIRICAL_VALIDATION_REPORT.md
+EXTENDED_ASYMMETRIC_ANALYSIS.md
+MATHEMATICAL_PHYSICAL_ANALYSIS.md
+TRAINING_PLAN_5f56583.md
+ZERO_SHOT_DEEP_REASONING.md
+ZERO_SHOT_DETAILED_EXPLANATION.md
+ZERO_SHOT_GENERALIZATION_ANALYSIS.md
+
+# 保留真正重要的文档（通过 ! 取消忽略）
+!CROSSATTN_5_COMMITS_DEEP_DIVE.md
+!CROSSATTN_COMMITS_EXPLAINED.md
+!CROSSATTN_MECHANISM_SYNTHESIS_EXPLAINED.md
+!CROSSATTN_INFLUENCE_BREAKDOWN_20251105.md
+!CROSSATTN_MARGINS_TOPK_20251105.md
+!CROSSATTN_LOGIT_GEOMETRY_20251105.md
+!CROSSATTN_MECHANISM_SYNTHESIS_20251105.md
+!CROSSATTN_COMPARISON_20251105.md
+!CROSSATTN_K4_RUN1_ANALYSIS_20251105.md
+!CROSSATTN_K4_FIX_SMOKETEST_20251105.md
+!CROSSATTN_DEGENERACY_DIAGNOSIS_20251105.md
+!GIT_MANAGEMENT_STRATEGY.md
+!GIT_SETUP_GUIDE.md
+!COMMIT_CHECKLIST.md
+
+# ============================================
+# Jupyter Notebooks
+# ============================================
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# ============================================
+# 操作系统
+# ============================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ============================================
+# Git LFS
+# ============================================
+# 大文件用 Git LFS 管理，不要直接忽略
+# 见 .gitattributes 文件
