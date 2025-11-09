@@ -115,7 +115,15 @@ def safe_top2(probs: torch.Tensor):
     return p, idx  # shapes: (B,T,3)
 
 
-def analyze_epoch(results_dir: Path, cache_dir: Path, epoch: int, batch_size: int = 32):
+def analyze_epoch(results_dir: Path, cache_dir: Path, epoch: int, batch_size: int = 32,
+                  eval_gate_mode: str = 'none', gate_min: float = 0.1, gate_max: float = 0.9,
+                  margin_p_low: float = 0.2, margin_p_mid: float = 0.6,
+                  dir_tau: float = 0.0, dir_k: float = 5.0, dir_mid_off_warmup_epochs: int = 0,
+                  hard_thr: float = 0.5, hard_temp_start: float = 1.0, hard_temp_end: float = 0.1,
+                  hard_temp_anneal_epochs: int = 50,
+                  eval_gate_mid_min: float | None = None,
+                  eval_gate_mid_max: float | None = None,
+                  eval_gate_hi_max: float | None = None):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = load_model(results_dir, epoch, device)
 
@@ -149,8 +157,65 @@ def analyze_epoch(results_dir: Path, cache_dir: Path, epoch: int, batch_size: in
             spk = batch['speaker_embeddings'].to(device)
             mask = (clean != 0)
 
+            # Optional eval gate override for normal path
+            g_sched = None
+            if isinstance(model, ZeroShotDenoisingTransformerCrossAttnGated) and eval_gate_mode in ('quantile','dir','hard'):
+                B, T = noisy.shape
+                zeros_gate = torch.zeros(B, T, 1, device=device)
+                logits_off = model(noisy, spk, return_logits=True, g_override=zeros_gate)
+                top2_off = torch.topk(logits_off, k=2, dim=-1).values
+                margin_off = (top2_off[...,0] - top2_off[...,1])
+                mvec = margin_off[mask]
+                if mvec.numel() >= 8:
+                    thr_low = torch.quantile(mvec, margin_p_low)
+                    thr_mid = torch.quantile(mvec, margin_p_mid)
+                else:
+                    thr_low = torch.tensor(0.02, device=device); thr_mid = torch.tensor(0.40, device=device)
+                _log, _attn_w, base_gate = model(noisy, spk, return_logits=True, return_attention=True)
+                if eval_gate_mode == 'quantile':
+                    g_sched = base_gate.clamp(min=gate_min, max=gate_max)
+                elif eval_gate_mode == 'dir':
+                    _log2, attn_vec, token_vec, g_base2 = model(noisy, spk, return_logits=True, return_fusion=True)
+                    tgt = clean.view(B, T, 1)
+                    probs_off = torch.softmax(logits_off, dim=-1)
+                    probs_off_excl = probs_off.clone(); probs_off_excl.scatter_(-1, tgt, 0.0)
+                    c2_idx = probs_off_excl.argmax(dim=-1)
+                    W = model.output_proj.weight
+                    delta = W.index_select(0, clean.view(-1)).view(B, T, -1) - W.index_select(0, c2_idx.view(-1)).view(B, T, -1)
+                    attn_unit = attn_vec / (attn_vec.norm(dim=-1, keepdim=True) + 1e-8)
+                    delta_unit = delta / (delta.norm(dim=-1, keepdim=True) + 1e-8)
+                    cos_sim = (attn_unit * delta_unit).sum(dim=-1)
+                    g_dir = torch.sigmoid(dir_k * (cos_sim - dir_tau))
+                    g_new = (g_base2.squeeze(-1) * g_dir).clamp(min=gate_min, max=gate_max).unsqueeze(-1)
+                    if dir_mid_off_warmup_epochs > 0 and epoch <= dir_mid_off_warmup_epochs:
+                        mid_mask = (margin_off >= thr_low) & (margin_off < thr_mid) & mask
+                        if mid_mask.any():
+                            g_new[mid_mask] = 0.0
+                    g_sched = g_new
+                elif eval_gate_mode == 'hard':
+                    gb = base_gate
+                    frac = min(1.0, max(0.0, (max(1, epoch)-1)/max(1, hard_temp_anneal_epochs)))
+                    temp = hard_temp_start * (hard_temp_end / max(1e-6, hard_temp_start)) ** frac
+                    g_soft = torch.sigmoid((gb - hard_thr) / max(1e-6, temp))
+                    g_hard = (g_soft > 0.5).float(); g_st = g_hard + (g_soft - g_soft.detach())
+                    g_bin = gate_min * (1.0 - g_st) + gate_max * g_st
+                    if dir_mid_off_warmup_epochs > 0 and epoch <= dir_mid_off_warmup_epochs:
+                        mid_mask = (margin_off >= thr_low) & (margin_off < thr_mid) & mask
+                        if mid_mask.any():
+                            g_bin[mid_mask] = 0.0
+                    if eval_gate_mid_min is not None or eval_gate_mid_max is not None or eval_gate_hi_max is not None:
+                        mid_mask2 = (margin_off >= thr_low) & (margin_off < thr_mid) & mask
+                        hi_mask2  = (margin_off >= thr_mid) & mask
+                        if mid_mask2.any() and (eval_gate_mid_min is not None or eval_gate_mid_max is not None):
+                            lo = float(eval_gate_mid_min) if eval_gate_mid_min is not None else 0.0
+                            hi = float(eval_gate_mid_max) if eval_gate_mid_max is not None else 1.0
+                            g_bin[mid_mask2] = g_bin[mid_mask2].clamp(min=lo, max=hi)
+                        if hi_mask2.any() and (eval_gate_hi_max is not None):
+                            g_bin[hi_mask2] = g_bin[hi_mask2].clamp(max=float(eval_gate_hi_max))
+                    g_sched = g_bin
+
             # Normal & Zero logits
-            logits_n = model(noisy, spk, return_logits=True)
+            logits_n = model(noisy, spk, return_logits=True, g_override=g_sched)
             logits_z = model(noisy, torch.zeros_like(spk), return_logits=True)
             probs_n = torch.softmax(logits_n, dim=-1)
             probs_z = torch.softmax(logits_z, dim=-1)
@@ -235,12 +300,33 @@ def main():
     ap.add_argument('--cache_dir', required=True)
     ap.add_argument('--epochs', type=int, nargs='+', required=True)
     ap.add_argument('--batch_size', type=int, default=32)
+    ap.add_argument('--eval_gate_mode', type=str, default='none', choices=['none','quantile','dir','hard'])
+    ap.add_argument('--gate_min', type=float, default=0.1)
+    ap.add_argument('--gate_max', type=float, default=0.9)
+    ap.add_argument('--margin_p_low', type=float, default=0.2)
+    ap.add_argument('--margin_p_mid', type=float, default=0.6)
+    ap.add_argument('--dir_tau', type=float, default=0.0)
+    ap.add_argument('--dir_k', type=float, default=5.0)
+    ap.add_argument('--dir_mid_off_warmup_epochs', type=int, default=0)
+    ap.add_argument('--hard_thr', type=float, default=0.5)
+    ap.add_argument('--hard_temp_start', type=float, default=1.0)
+    ap.add_argument('--hard_temp_end', type=float, default=0.1)
+    ap.add_argument('--hard_temp_anneal_epochs', type=int, default=50)
+    ap.add_argument('--eval_gate_mid_min', type=float, default=None)
+    ap.add_argument('--eval_gate_mid_max', type=float, default=None)
+    ap.add_argument('--eval_gate_hi_max', type=float, default=None)
     args = ap.parse_args()
 
     results_dir = Path(args.results_dir)
     cache_dir = Path(args.cache_dir)
     for e in args.epochs:
-        analyze_epoch(results_dir, cache_dir, e, batch_size=args.batch_size)
+        analyze_epoch(results_dir, cache_dir, e, batch_size=args.batch_size,
+                      eval_gate_mode=args.eval_gate_mode, gate_min=args.gate_min, gate_max=args.gate_max,
+                      margin_p_low=args.margin_p_low, margin_p_mid=args.margin_p_mid,
+                      dir_tau=args.dir_tau, dir_k=args.dir_k, dir_mid_off_warmup_epochs=args.dir_mid_off_warmup_epochs,
+                      hard_thr=args.hard_thr, hard_temp_start=args.hard_temp_start, hard_temp_end=args.hard_temp_end,
+                      hard_temp_anneal_epochs=args.hard_temp_anneal_epochs,
+                      eval_gate_mid_min=args.eval_gate_mid_min, eval_gate_mid_max=args.eval_gate_mid_max, eval_gate_hi_max=args.eval_gate_hi_max)
 
 
 if __name__ == '__main__':

@@ -44,7 +44,7 @@ class CrossAttentionFusionGated(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.norm = nn.LayerNorm(d_model)
 
-    def forward(self, token_emb, speaker_emb, g_override=None):
+    def forward(self, token_emb, speaker_emb, g_override=None, return_fusion_vectors: bool = False):
         B, T, D = token_emb.shape
         spk_tokens = self.spk_expand(speaker_emb).view(B, self.speaker_tokens, D) + self.spk_pos
         attn_output, attn_weights = self.cross_attn(
@@ -58,6 +58,8 @@ class CrossAttentionFusionGated(nn.Module):
         else:
             g_used = g_override
         fused = self.norm(token_emb + self.dropout(g_used * attn_output))
+        if return_fusion_vectors:
+            return fused, attn_weights, g_used, attn_output, token_emb
         return fused, attn_weights, g_used
 
 
@@ -113,6 +115,7 @@ class ZeroShotDenoisingTransformerCrossAttnGated(nn.Module):
         speaker_embedding,
         return_logits=False,
         return_attention=False,
+        return_fusion=False,
         labels=None,
         margin_cfg=None,
         g_override=None,
@@ -160,11 +163,22 @@ class ZeroShotDenoisingTransformerCrossAttnGated(nn.Module):
                                    torch.where(margin < mid_thr, g_mid, g_high))
                 g_sched = g_bt.unsqueeze(-1)
 
-        fused_emb, attn_weights, gate_used = self.cross_attn_fusion(token_emb, speaker_emb, g_override=g_sched)
+        if return_fusion:
+            fused_emb, attn_weights, gate_used, attn_vec, token_vec = self.cross_attn_fusion(
+                token_emb, speaker_emb, g_override=g_sched, return_fusion_vectors=True
+            )
+        else:
+            fused_emb, attn_weights, gate_used = self.cross_attn_fusion(
+                token_emb, speaker_emb, g_override=g_sched, return_fusion_vectors=False
+            )
         hidden = self.transformer_encoder(fused_emb)
         logits = self.output_proj(hidden)
         if return_attention:
+            if return_fusion:
+                return logits, attn_weights, gate_used, attn_vec, token_vec
             return logits, attn_weights, gate_used
         if return_logits:
+            if return_fusion:
+                return logits, attn_vec, token_vec, gate_used
             return logits
         return logits.argmax(dim=-1)
