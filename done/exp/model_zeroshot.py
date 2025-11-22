@@ -99,7 +99,9 @@ class ZeroShotDenoisingTransformer(nn.Module):
         # ============================================================
         # Step 1: Token Embedding (Frozen Codebook Lookup)
         # ============================================================
-        token_emb = self.codebook[noisy_token_ids]  # (B, T, 512)
+        # 防止 PAD_TOKEN=4096 導致 index 越界
+        valid_token_ids = torch.clamp(noisy_token_ids, 0, self.vocab_size - 1)
+        token_emb = self.codebook[valid_token_ids]  # (B, T, 512)
 
         # ============================================================
         # Step 2: Speaker Embedding Projection & Broadcasting

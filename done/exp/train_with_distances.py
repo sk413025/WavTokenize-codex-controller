@@ -548,8 +548,7 @@ def main():
         nhead=args.nhead,
         num_layers=args.num_layers,
         dim_feedforward=args.dim_feedforward,
-        dropout=args.dropout,
-        fusion_method=args.fusion_method
+        dropout=args.dropout
     ).to(device)
     
     # 統計參數量
