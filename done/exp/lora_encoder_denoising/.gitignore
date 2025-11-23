@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Training outputs
+checkpoints/
+logs/
+runs/
+*.pt
+*.pth
+*.ckpt
+
+# Tensorboard
+events.out.tfevents.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+debug_output/
+*.log
+
+# Commit planning (temporary)
+COMMIT_PLAN.md
