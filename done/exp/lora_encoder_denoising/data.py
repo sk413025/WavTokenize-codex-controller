@@ -4,8 +4,10 @@ Dataset for Noisy-Clean Audio Pairs
 
 import torch
 import torch.nn.functional as F
+import torchaudio
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
+import os
 
 
 class NoisyCleanPairDataset(Dataset):
@@ -41,21 +43,66 @@ class NoisyCleanPairDataset(Dataset):
     def __getitem__(self, idx):
         sample = self.samples[idx]
 
-        # 返回 noisy 和 clean audio
-        # 確保是 1D tensor (T,)
+        # 策略 1: 如果 cache 中已有 audio waveforms，直接使用
         noisy_audio = sample.get('noisy_audio', sample.get('audio', None))
         clean_audio = sample.get('clean_audio', sample.get('audio', None))
 
+        # 策略 2: 如果沒有 audio，嘗試從 file paths 載入
+        if noisy_audio is None and 'noisy_path' in sample:
+            noisy_audio = self._load_audio_from_path(sample['noisy_path'])
+
+        if clean_audio is None and 'clean_path' in sample:
+            clean_audio = self._load_audio_from_path(sample['clean_path'])
+
+        # 策略 3: Fallback - 使用相同音頻（smoke test）
         if noisy_audio is None or clean_audio is None:
-            # 如果沒有配對，使用相同音頻（smoke test 可以接受）
-            audio = sample['audio'] if 'audio' in sample else sample['waveform']
-            noisy_audio = audio
-            clean_audio = audio
+            audio = sample.get('audio', sample.get('waveform', None))
+            if audio is not None:
+                noisy_audio = audio if noisy_audio is None else noisy_audio
+                clean_audio = audio if clean_audio is None else clean_audio
+            else:
+                raise ValueError(f"Sample {idx} has no audio data or valid paths")
 
         return {
             'noisy_audio': noisy_audio.squeeze(),  # (T,)
             'clean_audio': clean_audio.squeeze(),  # (T,)
         }
+
+    def _load_audio_from_path(self, audio_path):
+        """
+        從檔案路徑載入音訊
+
+        Args:
+            audio_path: str or Path, 可能是相對路徑
+
+        Returns:
+            audio: torch.Tensor (T,) @ 24kHz
+        """
+        # 處理相對路徑（從 cache 所在目錄解析）
+        audio_path = Path(audio_path)
+
+        if not audio_path.is_absolute():
+            # 嘗試從 cache 目錄的父目錄解析
+            base_dir = self.cache_path.parent.parent  # data_with_distances/../..
+            audio_path = base_dir / audio_path
+
+        if not audio_path.exists():
+            raise FileNotFoundError(f"Audio file not found: {audio_path}")
+
+        # 載入音訊
+        waveform, sr = torchaudio.load(str(audio_path))
+
+        # Resample to 24kHz if needed
+        target_sr = 24000
+        if sr != target_sr:
+            resampler = torchaudio.transforms.Resample(sr, target_sr)
+            waveform = resampler(waveform)
+
+        # Squeeze to 1D (取第一個 channel)
+        if waveform.dim() > 1:
+            waveform = waveform[0]
+
+        return waveform
 
 
 def collate_fn(batch):
@@ -72,7 +119,12 @@ def collate_fn(batch):
         noisy = item['noisy_audio']
         clean = item['clean_audio']
 
-        # Pad to max_len
+        # Truncate or pad to max_len
+        # First truncate if longer
+        noisy = noisy[:max_len]
+        clean = clean[:max_len]
+
+        # Then pad if shorter
         if noisy.shape[0] < max_len:
             noisy = F.pad(noisy, (0, max_len - noisy.shape[0]))
         if clean.shape[0] < max_len:

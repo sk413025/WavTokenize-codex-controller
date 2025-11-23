@@ -11,7 +11,7 @@ from typing import List, Optional
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
-DATA_ROOT = PROJECT_ROOT / "done" / "exp" / "data3"
+DATA_ROOT = PROJECT_ROOT / "done" / "exp" / "data_with_distances"  # 使用真實數據
 RESULTS_ROOT = Path(__file__).parent / "checkpoints"
 LOGS_ROOT = Path(__file__).parent / "logs"
 
@@ -19,13 +19,15 @@ LOGS_ROOT = Path(__file__).parent / "logs"
 WAVTOK_CONFIG = "/home/sbplab/ruizi/WavTokenizer-main/configs/wavtokenizer_smalldata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
 WAVTOK_CKPT = "/home/sbplab/ruizi/WavTokenizer-main/wavtokenizer_large_speech_320_24k.ckpt"
 
-# 數據路徑
-TRAIN_CACHE = DATA_ROOT / "train_cache.pt"
-VAL_CACHE = DATA_ROOT / "val_cache.pt"
+# 數據路徑 - 使用 commit 927880a 的預處理數據
+TRAIN_CACHE = DATA_ROOT / "train_cache_with_distances.pt"
+VAL_CACHE = DATA_ROOT / "val_cache_with_distances.pt"
 
-# HDF5 數據（如果使用 commit 927880a 的格式）
-HDF5_TRAIN = DATA_ROOT / "train_preprocessed.h5"
-HDF5_VAL = DATA_ROOT / "val_preprocessed.h5"
+# HDF5 數據
+HDF5_CACHE = DATA_ROOT / "cache_with_distances.h5"
+
+# Distance Matrix (VQ codebook pairwise distances)
+DISTANCE_MATRIX = Path(__file__).parent.parent / "wavtok_distance_mat.pt"
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -47,6 +49,7 @@ class SmokeTestConfig:
     num_epochs: int = 3             # 只訓練幾個 epoch
     learning_rate: float = 1e-4     # 較大 LR，快速收斂
     weight_decay: float = 0.01
+    warmup_ratio: float = 0.0       # Smoke test 不用 warmup
 
     # LoRA
     lora_rank: int = 8              # 小 rank
@@ -66,8 +69,13 @@ class SmokeTestConfig:
 
     # 日誌
     log_every_n_batches: int = 1    # 每個 batch 都 log
+    log_interval: int = 1           # Same as log_every_n_batches (for train.py compatibility)
     save_checkpoint: bool = True
     checkpoint_dir: Path = RESULTS_ROOT / "smoke_test"
+
+    # Validation
+    val_interval: int = 1           # Validate every N epochs
+    save_interval: int = 1          # Save every N epochs
 
     # 設備
     device: str = "cuda"
@@ -101,6 +109,7 @@ class TrainConfig:
 
     # 學習率調度
     warmup_epochs: int = 5
+    warmup_ratio: float = 0.1       # Warmup steps = total_steps * warmup_ratio
     scheduler: str = "cosine"       # "cosine" or "step" or "none"
     min_lr: float = 1e-6
 
@@ -126,11 +135,16 @@ class TrainConfig:
 
     # Checkpoint
     save_every_n_epochs: int = 5
+    save_interval: int = 5          # Same as save_every_n_epochs (for train.py compatibility)
     save_top_k: int = 3             # 保存最好的 k 個模型
     checkpoint_dir: Optional[Path] = None
 
+    # Validation
+    val_interval: int = 1           # Validate every N epochs
+
     # 日誌
     log_every_n_batches: int = 50
+    log_interval: int = 50          # Same as log_every_n_batches (for train.py compatibility)
     use_tensorboard: bool = True
     log_dir: Optional[Path] = None
 
