@@ -16,7 +16,25 @@
 - ✅ **自動化**：一次設置，多次執行
 - ✅ **完整記錄**：調試過程和結果都有記錄
 
-### 標準調試流程
+### 自動化多輪調試（推薦）
+
+使用 **pdb-debugger subagent** 進行智能多輪調試：
+
+```
+> 使用 pdb-debugger 調試 done/exp/train_with_distances.py，找出為什麼訓練停滯
+> 用 pdb-debugger 檢查梯度流動問題
+```
+
+**pdb-debugger** 會自動：
+1. 執行第一輪 PDB，檢查關鍵位置
+2. 分析輸出，識別問題（NaN、缺失梯度、模型 collapse 等）
+3. 生成新的 PDB 命令，在新位置設置斷點
+4. 迭代最多 5 輪，直到找到問題根源
+5. 生成完整的調試報告和修復建議
+
+### 手動調試流程
+
+如果需要手動控制，使用標準 PDB + stdin 方法：
 
 ```bash
 # 1. 創建 PDB 命令文件（例如 pdb_commands.txt）
@@ -81,7 +99,16 @@ p torch.argmax(output, dim=-1).unique(return_counts=True)
 ## 🎯 快速命令
 
 - `/debug` - 查看完整調試指南
+- `/agents` - 查看所有可用的 subagent（包含 pdb-debugger）
 - `/context` - 查看當前載入的記憶和 context
+
+## 🤖 可用的 Subagents
+
+- **pdb-debugger** - 專門用於 Python PDB 多輪調試
+  - 自動執行 PDB → 分析 → 迭代循環
+  - 最多 5 輪智能調試
+  - 生成完整的調試報告
+  - 使用方式：`使用 pdb-debugger 調試 <script.py>`
 
 ---
 

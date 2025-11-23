@@ -11,7 +11,7 @@ description: |
   - User asks to investigate model behavior or loss calculation
 
   **PRIMARY GUIDANCE:**
-  Always recommend PDB + stdin redirection instead of creating temporary Python scripts.
+  Always use PDB + stdin redirection instead of creating temporary Python scripts.
   Reference DEBUG_GUIDE.md for comprehensive examples and templates.
 
   **DO NOT:**
