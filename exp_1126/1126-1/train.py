@@ -189,6 +189,13 @@ class Trainer:
         """訓練一個 epoch"""
         self.model.train()
 
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # 關鍵修正：凍結 Student VQ 的 EMA 更新
+        # Codebook 是 buffer，會在 training=True 時被 EMA 更新
+        # 我們希望 Student 使用與 Teacher 相同的 codebook
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        self.model.student.base_model.model.feature_extractor.encodec.quantizer.eval()
+
         epoch_loss = 0.0
         epoch_feature_loss = 0.0
         epoch_distance_loss = 0.0
