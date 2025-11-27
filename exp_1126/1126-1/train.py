@@ -189,12 +189,28 @@ class Trainer:
         """訓練一個 epoch"""
         self.model.train()
 
-        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # 關鍵修正：凍結 Student VQ 的 EMA 更新
-        # Codebook 是 buffer，會在 training=True 時被 EMA 更新
-        # 我們希望 Student 使用與 Teacher 相同的 codebook
-        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        self.model.student.base_model.model.feature_extractor.encodec.quantizer.eval()
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # 關鍵修正 v3：凍結 Student VQ 的 EMA 更新 (同時保持 STE 梯度傳遞)
+        #
+        # 問題分析：
+        #   1. VQ 的 EMA 更新和 STE 梯度傳遞都依賴 self.training flag
+        #   2. 設置 eval() 會同時關閉兩者，但 STE 是梯度反傳必需的！
+        #      - core_vq.py:217-229: EMA 更新 (我們想關閉)
+        #      - core_vq.py:301-302: STE 梯度傳遞 (我們需要保持!)
+        #
+        # 解決方案：
+        #   保持 training=True (讓 STE 正常運作)
+        #   但在每次 forward 前後恢復 codebook，抵消 EMA 更新
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        # 獲取 Student VQ 的 codebook 引用
+        student_vq = self.model.student.base_model.model.feature_extractor.encodec.quantizer.vq.layers[0]
+        codebook_ref = student_vq._codebook
+
+        # 保存原始 codebook 狀態 (用於每次 forward 後恢復)
+        frozen_codebook = codebook_ref.embed.data.clone()
+        frozen_cluster_size = codebook_ref.cluster_size.data.clone()
+        frozen_embed_avg = codebook_ref.embed_avg.data.clone()
 
         epoch_loss = 0.0
         epoch_feature_loss = 0.0
@@ -213,6 +229,11 @@ class Trainer:
             with autocast(enabled=self.config.use_amp):
                 output = self.model(noisy_audio, clean_audio)
                 loss, loss_dict = self.criterion(output, self.distance_matrix)
+
+            # ━━━ 恢復 codebook (抵消 EMA 更新) ━━━
+            codebook_ref.embed.data.copy_(frozen_codebook)
+            codebook_ref.cluster_size.data.copy_(frozen_cluster_size)
+            codebook_ref.embed_avg.data.copy_(frozen_embed_avg)
 
             # Backward pass
             self.optimizer.zero_grad()
