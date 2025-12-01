@@ -8,7 +8,7 @@
 
 cd /home/sbplab/ruizi/WavTokenize-self-supervised/exp_1128
 
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=1
 
 nohup python train.py \
     --exp_name lora_r64_dist0.1 \
