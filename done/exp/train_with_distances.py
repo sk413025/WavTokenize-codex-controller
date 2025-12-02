@@ -109,55 +109,95 @@ def get_loss_weight_schedule(epoch, args):
         return {'alpha': 0.0, 'beta': 1.0, 'gamma': 0.0}
 
 
-def create_loss_function(args, epoch):
+def create_class_weights(majority_token=453, majority_weight=0.01, device='cuda'):
+    """
+    創建類別權重，降低 majority class 權重以防止 model collapse
+
+    Args:
+        majority_token: 需要降權的 token ID
+        majority_weight: majority token 的權重（<1 表示降權）
+        device: torch device
+
+    Returns:
+        class_weights: (4096,) tensor
+    """
+    weights = torch.ones(CODEBOOK_SIZE, device=device)
+    weights[majority_token] = majority_weight
+    return weights
+
+
+def create_loss_function(args, epoch, device='cuda'):
     """
     根據配置創建 loss function
-    
+
     Args:
         args: 命令行參數
         epoch: 當前 epoch（用於 warm-up）
-    
+        device: torch device
+
     Returns:
         criterion: Loss function
         use_distances: 是否需要 distances
     """
     weights = get_loss_weight_schedule(epoch, args)
-    
+
+    # 創建 class weights（降低 token 453 權重）
+    class_weights = None
+    if args.use_class_weights:
+        class_weights = create_class_weights(
+            majority_token=453,
+            majority_weight=args.majority_weight,
+            device=device
+        )
+
     if args.loss_type == 'ce':
         # Baseline: 只用 Cross-Entropy
-        criterion = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN)
+        criterion = nn.CrossEntropyLoss(
+            ignore_index=PAD_TOKEN,
+            weight=class_weights
+        )
         use_distances = False
-        
+
     elif args.loss_type == 'soft':
         # Soft Target Loss
         if weights['alpha'] == 0.0:
             # Warm-up 階段：使用 CE
-            criterion = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN)
+            criterion = nn.CrossEntropyLoss(
+                ignore_index=PAD_TOKEN,
+                weight=class_weights
+            )
             use_distances = False
         else:
             criterion = SoftTargetLoss(
                 temperature=args.temperature,
-                alpha=weights['alpha']
+                alpha=weights['alpha'],
+                class_weights=class_weights,
+                entropy_weight=args.entropy_weight
             )
             use_distances = True
-            
+
     elif args.loss_type == 'hybrid':
         # Hybrid Loss
         if weights['alpha'] == 0.0:
             # Warm-up 階段：使用 CE
-            criterion = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN)
+            criterion = nn.CrossEntropyLoss(
+                ignore_index=PAD_TOKEN,
+                weight=class_weights
+            )
             use_distances = False
         else:
             criterion = HybridDistanceLoss(
                 alpha=weights['alpha'],
                 beta=weights['beta'],
                 gamma=weights['gamma'],
-                temperature=args.temperature
+                temperature=args.temperature,
+                class_weights=class_weights,
+                entropy_weight=args.entropy_weight
             )
             use_distances = True
     else:
         raise ValueError(f"Unknown loss_type: {args.loss_type}")
-    
+
     return criterion, use_distances
 
 
@@ -206,7 +246,7 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch, logger, 
     all_predictions = []
     
     # 確定是否需要 distances
-    _, use_distances = create_loss_function(args, epoch)
+    _, use_distances = create_loss_function(args, epoch, device)
     
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch}")
     
@@ -323,7 +363,7 @@ def validate_epoch(model, dataloader, criterion, device, epoch, logger, args):
     all_predictions = []
     
     # 確定是否需要 distances
-    _, use_distances = create_loss_function(args, epoch)
+    _, use_distances = create_loss_function(args, epoch, device)
     
     with torch.no_grad():
         for batch in tqdm(dataloader, desc="Validation"):
@@ -426,7 +466,15 @@ def main():
     parser.add_argument('--alpha', type=float, default=0.5, help='Soft target weight (for soft loss)')
     parser.add_argument('--beta', type=float, default=0.3, help='Hard target weight (for hybrid loss)')
     parser.add_argument('--gamma', type=float, default=0.4, help='Wasserstein weight (for hybrid loss)')
-    
+
+    # Class Weights & Regularization 配置 (防止 model collapse)
+    parser.add_argument('--use_class_weights', action='store_true',
+                       help='使用類別權重（降低 Token 453 權重）防止 collapse')
+    parser.add_argument('--majority_weight', type=float, default=0.01,
+                       help='Majority token (453) 的權重（<1 表示降權）')
+    parser.add_argument('--entropy_weight', type=float, default=0.01,
+                       help='熵正則化權重（鼓勵多樣化預測，防止集中）')
+
     # Warm-up 配置
     parser.add_argument('--use_warmup', action='store_true', help='使用 loss weight warm-up')
     parser.add_argument('--warmup_epochs', type=int, default=50, help='Warm-up epochs')
@@ -595,7 +643,7 @@ def main():
         logger.info(f"{'='*80}")
         
         # 創建本 epoch 的 loss function
-        criterion, use_distances = create_loss_function(args, epoch)
+        criterion, use_distances = create_loss_function(args, epoch, device)
         
         # 如果在 warm-up 階段，記錄
         if args.use_warmup and epoch <= args.warmup_epochs:

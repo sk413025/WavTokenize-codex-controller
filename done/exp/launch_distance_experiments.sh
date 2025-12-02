@@ -41,7 +41,7 @@ DROPOUT=0.1
 FUSION_METHOD="add"
 
 # 訓練配置
-LEARNING_RATE=1e-4
+LEARNING_RATE=1e-3  # 提高 10 倍以加快學習
 WEIGHT_DECAY=0.01
 GRADIENT_CLIP=1.0
 
@@ -58,7 +58,12 @@ SAVE_CHECKPOINT_FREQ=50
 
 # Warm-up 配置
 USE_WARMUP="--use_warmup"
-WARMUP_EPOCHS=50
+WARMUP_EPOCHS=5  # 縮短至 5 epochs 防止 early collapse
+
+# 防止 Model Collapse 配置
+USE_CLASS_WEIGHTS="--use_class_weights"  # 降低 Token 453 權重
+MAJORITY_WEIGHT=0.01  # Token 453 的權重 (1% of normal)
+ENTROPY_WEIGHT=0.01  # 熵正則化權重
 
 # WavTokenizer 配置
 WAVTOKENIZER_CONFIG="../../config/wavtokenizer_mediumdata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
@@ -89,6 +94,9 @@ function run_baseline() {
         --batch_size ${BATCH_SIZE} \
         --num_workers ${NUM_WORKERS} \
         --loss_type ce \
+        ${USE_CLASS_WEIGHTS} \
+        --majority_weight ${MAJORITY_WEIGHT} \
+        --entropy_weight ${ENTROPY_WEIGHT} \
         --d_model ${D_MODEL} \
         --nhead ${NHEAD} \
         --num_layers ${NUM_LAYERS} \
@@ -129,6 +137,9 @@ function run_exp1() {
         --loss_type soft \
         --temperature 2.0 \
         --alpha 0.5 \
+        ${USE_CLASS_WEIGHTS} \
+        --majority_weight ${MAJORITY_WEIGHT} \
+        --entropy_weight ${ENTROPY_WEIGHT} \
         ${USE_WARMUP} \
         --warmup_epochs ${WARMUP_EPOCHS} \
         --d_model ${D_MODEL} \
@@ -171,6 +182,9 @@ function run_exp2() {
         --loss_type soft \
         --temperature 2.0 \
         --alpha 0.7 \
+        ${USE_CLASS_WEIGHTS} \
+        --majority_weight ${MAJORITY_WEIGHT} \
+        --entropy_weight ${ENTROPY_WEIGHT} \
         ${USE_WARMUP} \
         --warmup_epochs ${WARMUP_EPOCHS} \
         --d_model ${D_MODEL} \
@@ -215,6 +229,9 @@ function run_exp3() {
         --alpha 0.3 \
         --beta 0.3 \
         --gamma 0.4 \
+        ${USE_CLASS_WEIGHTS} \
+        --majority_weight ${MAJORITY_WEIGHT} \
+        --entropy_weight ${ENTROPY_WEIGHT} \
         ${USE_WARMUP} \
         --warmup_epochs ${WARMUP_EPOCHS} \
         --d_model ${D_MODEL} \

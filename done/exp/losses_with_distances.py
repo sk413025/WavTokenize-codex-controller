@@ -17,48 +17,62 @@ import torch.nn.functional as F
 class SoftTargetLoss(nn.Module):
     """
     Soft Target Loss (Knowledge Distillation from VQ distances)
-    
+
     使用 VQ-VAE 的 distance 分佈作為 soft target
     相比 hard token，soft target 包含了"接近但未選中"的 tokens 資訊
-    
+
     優勢:
       - 保留了 VQ 量化過程中的相似度信息
       - 比 one-hot target 更豐富
       - 類似 Knowledge Distillation，但 teacher 是 VQ-VAE
-    
+
+    新增 (v2):
+      - Class weights: 降低 majority class (token 453) 的權重，防止 collapse
+      - Entropy regularization: 鼓勵多樣化預測，防止過度集中
+
     使用:
-      loss_fn = SoftTargetLoss(temperature=2.0, alpha=0.5)
+      loss_fn = SoftTargetLoss(temperature=2.0, alpha=0.5,
+                               class_weights=weights, entropy_weight=0.01)
       loss = loss_fn(pred_logits, clean_distances, clean_tokens)
     """
-    
-    def __init__(self, temperature=2.0, alpha=0.5, ignore_index=4096):
+
+    def __init__(self, temperature=2.0, alpha=0.5, ignore_index=4096,
+                 class_weights=None, entropy_weight=0.0):
         """
         Args:
             temperature: Softmax 溫度（越高越平滑）
             alpha: soft target 的權重 (1-alpha 給 hard target)
             ignore_index: 忽略的 token index (用於 padding)
+            class_weights: (C,) tensor，類別權重（降低 majority class 權重）
+            entropy_weight: 熵正則化權重（>0 鼓勵多樣化預測）
         """
         super().__init__()
         self.temperature = temperature
         self.alpha = alpha
-        self.ce_loss = nn.CrossEntropyLoss(ignore_index=ignore_index)
-    
+        self.entropy_weight = entropy_weight
+
+        # Cross Entropy with class weights
+        self.ce_loss = nn.CrossEntropyLoss(
+            ignore_index=ignore_index,
+            weight=class_weights
+        )
+
     def forward(self, pred_logits, target_distances, target_tokens):
         """
         Args:
             pred_logits: (B, T, 4096) - 模型預測的 logits
             target_distances: (B, T, 4096) - VQ-VAE 的 distances
             target_tokens: (B, T) - hard tokens (用於混合 loss)
-        
+
         Returns:
             loss: scalar
         """
         B, T, C = pred_logits.shape
-        
+
         # Soft target from distances
         # distances 越大 = 越接近，所以直接 softmax
         soft_targets = F.softmax(target_distances / self.temperature, dim=-1)  # (B, T, 4096)
-        
+
         # Soft loss (KL divergence)
         pred_log_probs = F.log_softmax(pred_logits / self.temperature, dim=-1)
         soft_loss = F.kl_div(
@@ -66,13 +80,22 @@ class SoftTargetLoss(nn.Module):
             soft_targets.reshape(-1, C),
             reduction='batchmean'
         ) * (self.temperature ** 2)  # 溫度補償
-        
-        # Hard loss (Cross Entropy)
+
+        # Hard loss (Cross Entropy with class weights)
         hard_loss = self.ce_loss(pred_logits.reshape(-1, C), target_tokens.reshape(-1))
-        
+
+        # Entropy regularization (鼓勵多樣化預測)
+        entropy_reg = 0.0
+        if self.entropy_weight > 0:
+            # 計算預測分佈的熵（熵越高 = 越多樣化）
+            pred_probs = F.softmax(pred_logits, dim=-1)  # (B, T, C)
+            entropy = -(pred_probs * torch.log(pred_probs + 1e-10)).sum(dim=-1).mean()
+            # 負熵作為懲罰（最大化熵 = 最小化負熵）
+            entropy_reg = -self.entropy_weight * entropy
+
         # 混合
-        total_loss = self.alpha * soft_loss + (1 - self.alpha) * hard_loss
-        
+        total_loss = self.alpha * soft_loss + (1 - self.alpha) * hard_loss + entropy_reg
+
         return total_loss
 
 
@@ -155,34 +178,43 @@ class DistanceBasedWassersteinLoss(nn.Module):
 class HybridDistanceLoss(nn.Module):
     """
     混合 Loss：Soft Target + Hard Target + Wasserstein
-    
+
     結合三種 loss 的優勢:
       1. Soft Target: 豐富的相似度信息
       2. Hard Target: 確保準確預測
       3. Wasserstein: 考慮 token 間的語義距離
-    
+
+    新增 (v2):
+      - Class weights: 降低 majority class (token 453) 的權重，防止 collapse
+      - Entropy regularization: 鼓勵多樣化預測，防止過度集中
+
     使用:
-      loss_fn = HybridDistanceLoss(alpha=0.3, beta=0.3, gamma=0.4)
+      loss_fn = HybridDistanceLoss(alpha=0.3, beta=0.3, gamma=0.4,
+                                   class_weights=weights, entropy_weight=0.01)
       loss = loss_fn(pred_logits, clean_distances, clean_tokens)
     """
-    
-    def __init__(self, alpha=0.3, beta=0.3, gamma=0.4, temperature=2.0):
+
+    def __init__(self, alpha=0.3, beta=0.3, gamma=0.4, temperature=2.0,
+                 class_weights=None, entropy_weight=0.0):
         """
         Args:
             alpha: Soft target 權重
             beta: Hard target 權重
             gamma: Wasserstein 權重
             temperature: Soft target 溫度
+            class_weights: (C,) tensor，類別權重（降低 majority class 權重）
+            entropy_weight: 熵正則化權重（>0 鼓勵多樣化預測）
         """
         super().__init__()
         assert abs(alpha + beta + gamma - 1.0) < 1e-6, "權重總和必須為 1"
-        
+
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma
         self.temperature = temperature
-        
-        self.ce_loss = nn.CrossEntropyLoss()
+        self.entropy_weight = entropy_weight
+
+        self.ce_loss = nn.CrossEntropyLoss(weight=class_weights)
     
     def forward(self, pred_logits, target_distances, target_tokens):
         """
@@ -212,19 +244,27 @@ class HybridDistanceLoss(nn.Module):
         pred_probs = F.softmax(pred_logits, dim=-1)
         target_probs = F.softmax(target_distances, dim=-1)
         wasserstein_loss = F.mse_loss(pred_probs, target_probs)
-        
+
+        # 4. Entropy regularization (鼓勵多樣化預測)
+        entropy_reg = 0.0
+        if self.entropy_weight > 0:
+            entropy = -(pred_probs * torch.log(pred_probs + 1e-10)).sum(dim=-1).mean()
+            entropy_reg = -self.entropy_weight * entropy
+
         # 總 Loss
         total_loss = (
             self.alpha * soft_loss +
             self.beta * hard_loss +
-            self.gamma * wasserstein_loss
+            self.gamma * wasserstein_loss +
+            entropy_reg
         )
-        
+
         return {
             'total_loss': total_loss,
             'soft_loss': soft_loss.item(),
             'hard_loss': hard_loss.item(),
-            'wasserstein_loss': wasserstein_loss.item()
+            'wasserstein_loss': wasserstein_loss.item(),
+            'entropy_reg': entropy_reg if isinstance(entropy_reg, float) else entropy_reg.item()
         }
 
 
