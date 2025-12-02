@@ -196,3 +196,8 @@ Thumbs.db
 # ============================================
 # 大文件用 Git LFS 管理，不要直接忽略
 # 见 .gitattributes 文件
+
+# Training logs and test results
+training_small_test.log
+exp_*/training_output.log
+exp_*/test/results/
