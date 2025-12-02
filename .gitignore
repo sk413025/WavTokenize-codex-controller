@@ -40,6 +40,7 @@ done/exp/data/
 *.cache
 *.pt.cache
 *_cache.pt
+*.wav
 
 # Large data files (use Git LFS instead if needed)
 *.h5
@@ -89,6 +90,10 @@ models
 # ============================================
 # 实验生成的输出（可重现，不需要 commit）
 # ============================================
+# 實驗輸出目錄（包含 checkpoints, audio, logs 等）
+**/experiments/
+exp_*/experiments/
+
 # 模型/資料大檔（由上游/環境提供，不進版控）
 *.pth
 *.ckpt

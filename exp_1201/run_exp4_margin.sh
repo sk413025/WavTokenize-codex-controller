@@ -29,7 +29,7 @@
 #   - margin_satisfied_rate 逐漸增加
 
 # 設定 GPU
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=2
 
 # 實驗名稱
 EXP_NAME="margin_tuned"

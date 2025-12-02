@@ -72,13 +72,18 @@ class Trainer:
         # 載入 codebook (for Soft Distance Loss)
         self.codebook = self.load_codebook()
 
-        # 創建 loss function (使用 Soft Distance Loss!)
+        # 創建 loss function (支持 soft/gumbel/ste/ce/margin 模式)
         self.criterion = EncoderDistillationLoss(
             feature_loss_weight=config.feature_loss_weight,
             soft_dist_loss_weight=config.soft_dist_loss_weight,
             vq_loss_weight=config.vq_loss_weight,
             temperature=config.temperature,
+            distance_loss_mode=getattr(config, 'distance_loss_mode', 'gumbel'),
+            gumbel_hard=getattr(config, 'gumbel_hard', True),
+            margin=getattr(config, 'margin', 1.0),
+            label_smoothing=getattr(config, 'label_smoothing', 0.0),
         )
+        print(f"Distance loss mode: {getattr(config, 'distance_loss_mode', 'gumbel')}")
 
         # 創建 optimizer
         self.optimizer = torch.optim.AdamW(
@@ -526,20 +531,26 @@ class Trainer:
                 torchaudio.save(str(clean_path), clean_audio.cpu(), sample_rate)
 
                 # 3. Student prediction: noisy → student encoder → decoder
-                # encodec 需要 3D input: (B, C, T)
-                noisy_3d = noisy_audio.unsqueeze(1) if noisy_audio.dim() == 2 else noisy_audio
-                student_features = self.model.student.feature_extractor.encodec(noisy_3d)[0]
+                # 使用正確的 API: feature_extractor(audio, bandwidth_id=0)
+                # 輸入是 (B, T) 格式
+                noisy_input = noisy_audio.squeeze(0) if noisy_audio.shape[0] == 1 else noisy_audio
+                if noisy_input.dim() == 1:
+                    noisy_input = noisy_input.unsqueeze(0)  # (1, T)
+                student_features, _, _ = self.model.student.feature_extractor(noisy_input, bandwidth_id=0)
                 # 使用 teacher 的 decoder (因為 student 只有 encoder 有 LoRA)
-                student_pred_audio = self.model.teacher.decode(student_features)
+                # decode 需要 bandwidth_id 參數
+                student_pred_audio = self.model.teacher.decode(student_features, bandwidth_id=torch.tensor([0]).to(self.device))
                 if student_pred_audio.dim() == 3:
                     student_pred_audio = student_pred_audio.squeeze(1)
                 student_pred_path = epoch_audio_dir / f'{prefix}_{i+1}_student_pred.wav'
                 torchaudio.save(str(student_pred_path), student_pred_audio.cpu(), sample_rate)
 
                 # 4. Teacher reconstruction: clean → teacher encoder → decoder
-                clean_3d = clean_audio.unsqueeze(1) if clean_audio.dim() == 2 else clean_audio
-                teacher_features = self.model.teacher.feature_extractor.encodec(clean_3d)[0]
-                teacher_recon_audio = self.model.teacher.decode(teacher_features)
+                clean_input = clean_audio.squeeze(0) if clean_audio.shape[0] == 1 else clean_audio
+                if clean_input.dim() == 1:
+                    clean_input = clean_input.unsqueeze(0)  # (1, T)
+                teacher_features, _, _ = self.model.teacher.feature_extractor(clean_input, bandwidth_id=0)
+                teacher_recon_audio = self.model.teacher.decode(teacher_features, bandwidth_id=torch.tensor([0]).to(self.device))
                 if teacher_recon_audio.dim() == 3:
                     teacher_recon_audio = teacher_recon_audio.squeeze(1)
                 teacher_recon_path = epoch_audio_dir / f'{prefix}_{i+1}_teacher_recon.wav'
@@ -634,15 +645,19 @@ class Trainer:
                 noisy_audio = batch['noisy_audio'][:1].to(self.device)
                 clean_audio = batch['clean_audio'][:1].to(self.device)
 
-                # Student prediction
-                noisy_input = noisy_audio.unsqueeze(1) if noisy_audio.dim() == 2 else noisy_audio
-                student_features = self.model.student.feature_extractor.encodec(noisy_input)[0]
-                student_pred = self.model.teacher.decode(student_features)
+                # 確保格式為 (B, T)
+                if noisy_audio.dim() == 1:
+                    noisy_audio = noisy_audio.unsqueeze(0)
+                if clean_audio.dim() == 1:
+                    clean_audio = clean_audio.unsqueeze(0)
+
+                # Student prediction: 使用正確的 feature_extractor API
+                student_features, _, _ = self.model.student.feature_extractor(noisy_audio, bandwidth_id=0)
+                student_pred = self.model.teacher.decode(student_features, bandwidth_id=torch.tensor([0]).to(self.device))
 
                 # Teacher reconstruction
-                clean_input = clean_audio.unsqueeze(1) if clean_audio.dim() == 2 else clean_audio
-                teacher_features = self.model.teacher.feature_extractor.encodec(clean_input)[0]
-                teacher_recon = self.model.teacher.decode(teacher_features)
+                teacher_features, _, _ = self.model.teacher.feature_extractor(clean_audio, bandwidth_id=0)
+                teacher_recon = self.model.teacher.decode(teacher_features, bandwidth_id=torch.tensor([0]).to(self.device))
 
                 # 保存頻譜圖
                 spec_path = epoch_spec_dir / f'{prefix}_{i+1}_comparison.png'
@@ -780,11 +795,26 @@ def main():
     parser.add_argument('--feature_loss_weight', type=float, default=1.0,
                        help='Feature loss weight')
     parser.add_argument('--soft_dist_loss_weight', type=float, default=0.1,
-                       help='Soft distance loss weight (可微!)')
+                       help='Distance loss weight (可微!)')
     parser.add_argument('--vq_loss_weight', type=float, default=0.0,
                        help='VQ loss weight (保持 0，codebook 凍結)')
     parser.add_argument('--temperature', type=float, default=1.0,
-                       help='Softmax temperature for soft distance loss')
+                       help='Softmax temperature for distance loss')
+    parser.add_argument('--distance_loss_mode', type=str, default='gumbel',
+                       choices=['soft', 'gumbel', 'ste', 'ce', 'margin'],
+                       help='Distance loss mode: soft, gumbel, ste, ce (Cross-Entropy), margin')
+    parser.add_argument('--gumbel_hard', type=bool, default=True,
+                       help='Use hard codes in Gumbel mode (only for gumbel mode)')
+    parser.add_argument('--margin', type=float, default=1.0,
+                       help='Margin for margin loss mode')
+    parser.add_argument('--label_smoothing', type=float, default=0.0,
+                       help='Label smoothing for CE loss mode')
+
+    # Logging and Saving
+    parser.add_argument('--save_interval', type=int, default=10,
+                       help='Save checkpoint every N epochs')
+    parser.add_argument('--log_interval', type=int, default=50,
+                       help='Log every N batches')
 
     # Misc
     parser.add_argument('--num_workers', type=int, default=4,

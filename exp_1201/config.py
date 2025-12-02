@@ -128,15 +128,24 @@ class TrainConfig:
         "feature_extractor.encodec.encoder.model.9.conv.conv",
     ])
 
-    # Loss 權重 - 使用 Soft Distance Loss!
+    # Loss 權重
     feature_loss_weight: float = 1.0
-    soft_dist_loss_weight: float = 0.1   # Soft distance loss 權重 (可微!)
+    soft_dist_loss_weight: float = 0.1   # Distance loss 權重 (可微!)
     vq_loss_weight: float = 0.0          # 保持 0 (VQ 已凍結)
 
-    # Soft Distance Loss 參數
+    # Distance Loss 參數
+    distance_loss_mode: str = 'gumbel'   # 'soft', 'gumbel', 'ste', 'ce', 'margin'
+                                          # - soft: 期望距離 (所有 codes 加權平均)
+                                          # - gumbel: Gumbel-Softmax (隨機 + ST)
+                                          # - ste: Straight-Through Estimator
+                                          # - ce: Cross-Entropy (直接監督 token 選擇)
+                                          # - margin: Margin Loss (決策邊界優化)
     temperature: float = 1.0             # Softmax temperature (τ)
                                           # τ → 0: 接近 hard (one-hot)
                                           # τ → ∞: 接近 uniform
+    gumbel_hard: bool = True             # 只在 gumbel 模式有效
+    margin: float = 1.0                  # 只在 margin 模式有效
+    label_smoothing: float = 0.0         # 只在 ce 模式有效
 
     # 驗證
     val_every_n_epochs: int = 1
@@ -211,21 +220,31 @@ def get_smoke_test_config() -> SmokeTestConfig:
 
 
 def get_train_config(
-    exp_name: str = "soft_dist_baseline",
+    exp_name: str = "gumbel_baseline",
     lora_rank: int = 64,
     lora_alpha: int = 128,
     soft_dist_loss_weight: float = 0.1,
     temperature: float = 1.0,
+    distance_loss_mode: str = 'gumbel',
+    gumbel_hard: bool = True,
+    margin: float = 1.0,
+    label_smoothing: float = 0.0,
     **kwargs
 ) -> TrainConfig:
     """
     獲取訓練配置
 
-    預設實驗配置 (exp_1201):
-    - exp_1: soft_dist_baseline (soft_dist=0.1, τ=1.0)
-    - exp_2: soft_dist_high     (soft_dist=0.5, τ=1.0) 更強的 code 對齊
-    - exp_3: soft_dist_sharp    (soft_dist=0.1, τ=0.5) 更 sharp 的分布
-    - exp_4: soft_dist_soft     (soft_dist=0.1, τ=2.0) 更 soft 的分布
+    實驗配置 (exp_1201):
+    - exp_1: gumbel_baseline  (Gumbel-Softmax, τ=1.0) 可微 + 隨機探索
+    - exp_2: ste_baseline     (STE, τ=1.0) 可微 + 確定性
+    - exp_3: ce_baseline      (Cross-Entropy) 直接監督 token
+    - exp_4: margin_baseline  (Margin Loss) 決策邊界優化
+
+    比較目的：
+    - Gumbel: 引入隨機性，可能幫助逃離局部最優
+    - STE: 確定性，訓練更穩定，但可能陷入局部最優
+    - CE: 直接優化 Token Accuracy (本質問題)
+    - Margin: 確保正確 token 和錯誤 token 有足夠距離
     """
     config = TrainConfig(
         exp_name=exp_name,
@@ -233,6 +252,10 @@ def get_train_config(
         lora_alpha=lora_alpha,
         soft_dist_loss_weight=soft_dist_loss_weight,
         temperature=temperature,
+        distance_loss_mode=distance_loss_mode,
+        gumbel_hard=gumbel_hard,
+        margin=margin,
+        label_smoothing=label_smoothing,
     )
 
     for key, value in kwargs.items():
