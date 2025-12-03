@@ -272,7 +272,7 @@ def main():
     model = load_checkpoint(ckpt_path, device=args.device)
 
     # 獲取 codebook
-    codebook = model.teacher.feature_extractor.encodec.quantizer.layers[0]._codebook.embed
+    codebook = model.teacher.feature_extractor.encodec.quantizer.vq.layers[0]._codebook.embed
     codebook = codebook.to(args.device)
     print(f"Codebook shape: {codebook.shape}")
 

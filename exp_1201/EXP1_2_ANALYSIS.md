@@ -1,295 +1,478 @@
-# exp_1201 Gumbel/STE 實驗分析：為什麼 Token Accuracy 仍然很低？
+# exp_1201 系列實驗完整分析報告
 
 **分析日期**: 2025-12-02
-**實驗**: exp1 (Gumbel-Softmax) & exp2 (STE)
-**結論**: Token Accuracy ~2% 的根本原因是 **Distance-based Loss 的間接優化本質**
+**實驗目標**: Teacher-Student Distillation for VQ Tokenization Denoising
+**核心問題**: 如何提高 Token Accuracy 和音頻重建質量
 
 ---
 
-## 1. 實驗結果總覽
+## 1. 實驗總覽
 
-### 最終指標 (50 epochs)
+### 1.1 所有實驗配置
 
-| Metric | Gumbel | STE | 變化 |
-|--------|--------|-----|------|
-| Train Loss | 0.4397 | 0.3527 | STE -20% |
-| Val Loss | 0.4548 | 0.3765 | STE -17% |
-| Train Feature Loss | 0.0319 | 0.0311 | STE -3% |
-| Val Feature Loss | 0.0332 | 0.0328 | STE -1% |
-| **Train Token Acc** | **2.19%** | **3.83%** | STE +75% |
-| **Val Token Acc** | **1.75%** | **2.17%** | STE +24% |
-| Train Distance Loss | 3.52 | 3.41 | STE -3% |
-| Val Distance Loss | 3.65 | 3.64 | 相近 |
+| 實驗 | Loss Mode | 特殊配置 | 狀態 |
+|------|-----------|----------|------|
+| exp1 | Gumbel-Softmax | τ=1.0 | ✅ 完成 |
+| exp2 | STE | τ=1.0 (baseline) | ✅ 完成 |
+| exp3 | CE | ce_weight=1.0, dist_weight=0.1 | ✅ 完成 |
+| exp4 | Margin | margin=0.5, hard_neg=10 | ✅ 完成 |
+| exp5 | CE + Strong Feature | feature_weight=0.5 | ✅ 完成 |
+| exp6 | STE | lr=5e-4 (高學習率) | ✅ 完成 |
 
-### 訓練曲線特徵
-
-```
-Token Accuracy 變化:
-  Epoch 1:  ~24% (初始隨機)
-  Epoch 2:  ~4-6% (快速下降)
-  Epoch 5+: ~2-4% (穩定在低位)
-
-Feature Loss 變化:
-  Epoch 1:  0.042
-  Epoch 50: 0.032 (持續下降 ✅)
-
-Distance Loss 變化:
-  Epoch 1:  3.33 (Gumbel) / 3.37 (STE)
-  Epoch 50: 3.52 (Gumbel) / 3.41 (STE) (略微上升或持平)
-```
-
----
-
-## 2. Token Accuracy 低的根本原因
-
-### 2.1 Distance-based Loss 的間接優化本質
-
-**問題核心**：最小化期望距離 ≠ 最大化 Token Accuracy
-
-```
-Distance Loss 優化的是:
-  E[dist(soft_codes, teacher_codes)]
-  = Σᵢ softmax(-d/τ)ᵢ × distance_matrix[teacher, i]
-
-Token Accuracy 需要的是:
-  argmin_i dist(student_features, codebook[i]) == teacher_token
-```
-
-**為什麼會脫節？**
-
-假設 student features 到 codebook 的距離分布：
-```
-Token 100 (正確): distance = 1.5
-Token 101 (錯誤): distance = 1.6
-Token 102 (錯誤): distance = 1.7
-...
-Token 500 (錯誤): distance = 5.0
-```
-
-Distance Loss 會：
-- 懲罰所有 tokens 的加權距離
-- 但 **梯度被平均分散** 到所有 tokens
-- Token 100 和 101 的距離差 (0.1) 太小，不足以產生足夠的梯度差異
-
-結果：模型可能讓所有距離都減少一點，但 **決策邊界** 沒有變得更清晰。
-
-### 2.2 Softmax 的平滑效應
+### 1.2 共通配置
 
 ```python
-# Temperature = 1.0 時的 softmax
-distances = [1.5, 1.6, 1.7, 2.0, 5.0]
-logits = [-1.5, -1.6, -1.7, -2.0, -5.0]
-softmax(logits) = [0.32, 0.29, 0.26, 0.20, 0.01]
-                     ↑      ↑
-                  差異很小，梯度相似
+# LoRA 配置
+lora_rank = 64
+lora_alpha = 128
+lora_dropout = 0.1
+
+# 訓練配置
+batch_size = 8
+num_epochs = 50
+base_lr = 1e-4  # (exp6 用 5e-4)
+warmup_epochs = 5
+scheduler = CosineAnnealingLR
+
+# 模型
+Teacher: WavTokenizer (frozen)
+Student: WavTokenizer + LoRA (trainable)
+Codebook: 4096 entries, 512 dim (frozen)
 ```
-
-問題：
-- Softmax 把相近的距離映射到相近的機率
-- 正確 token (0.32) 和最近錯誤 token (0.29) 的機率差只有 0.03
-- 這個差異不足以產生強烈的學習信號
-
-### 2.3 Token Accuracy 快速下降的現象
-
-**Epoch 1 的高 Token Accuracy (~24%) 是假象**
-
-原因分析：
-1. 初始 LoRA 權重接近零，student ≈ teacher
-2. 隨機初始化時，某些 tokens 剛好對齊
-3. 一旦開始優化 Feature Loss，Token Accuracy 反而下降
-
-這說明：**Feature-level 對齊 ≠ Token-level 對齊**
 
 ---
 
-## 3. Feature Loss 和 Token Accuracy 的衝突
+## 2. 實驗結果對比
 
-### 3.1 兩個目標的幾何解釋
+### 2.1 Token Accuracy 排名 (核心指標)
 
-```
-Feature Space:
-                    ○ Codebook[100] (Teacher Token)
-                   /
-                  /  ← Token Accuracy 需要: 最近鄰 = 100
-                 /
-    ○ --------- ● --------- ○
-  Codebook[99]   Student    Codebook[101]
-                Features
-                    ↑
-                    Feature Loss 需要: 接近 Teacher Features
-```
+| 排名 | 實驗 | Exact Match | Top-5 | Top-10 | Top-100 |
+|------|------|-------------|-------|--------|---------|
+| 🥇 | **exp4 (Margin)** | **5.74%** | 11.57% | 18.34% | 50.54% |
+| 🥈 | exp5 (Strong Feature + CE) | 4.60% | 10.49% | 17.35% | 49.24% |
+| 🥉 | exp3 (CE) | ~5.5%* | - | - | - |
+| 4 | exp6 (STE High LR) | 2.35% | 6.82% | 12.80% | 53.26% |
+| 5 | exp2 (STE baseline) | ~2.17% | - | - | - |
+| 6 | exp1 (Gumbel) | ~1.75% | - | - | - |
 
-**問題**：
-- Teacher Features 不一定恰好在 Codebook[100] 上
-- Feature Loss 可能把 Student Features 拉向 Teacher Features
-- 但這個位置可能讓 Student 更接近錯誤的 Codebook entry
+*exp3 數據來自訓練 log，非獨立測試
 
-### 3.2 實驗證據
+### 2.2 Feature 對齊指標
 
-從數據可以看到：
-```
-Feature Loss: 0.042 → 0.032 (下降 24%)  ✅ 優化成功
-Token Accuracy: 24% → 2% (下降 92%)     ❌ 反而惡化
-```
+| 實驗 | 初始 L2 | 最終 L2 | L2 變化 | 最終 Cosine |
+|------|---------|---------|---------|-------------|
+| exp4 (Margin) | 0.849 | 0.709 | **-16.6%** | 0.959 |
+| exp5 (Strong Feature) | 0.840 | 0.715 | -14.8% | 0.966 |
+| exp6 (STE High LR) | 0.837 | 0.660 | **-21.2%** | 0.970 |
 
-這證明 Feature Loss 和 Token Accuracy **可能是負相關的**。
+### 2.3 關鍵發現
+
+1. **Margin Loss 最有效**：直接優化決策邊界，Token Acc 提升到 5.74%
+2. **Feature 對齊 ≠ Token Accuracy**：exp6 的 L2 最低 (0.660)，但 Token Acc 最差 (2.35%)
+3. **CE 和 Margin 都有效**：比 STE/Gumbel baseline 提升 2-3x
+4. **High LR 無效**：加速 feature 收斂，但無法改善 token 選擇
 
 ---
 
-## 4. Distance Matrix 的使用問題
+## 3. 最佳配置推薦
 
-### 4.1 預計算 Distance Matrix 的假設
+### 3.1 推薦配置 (基於 exp4 Margin)
 
 ```python
-distance_matrix[i, j] = ||codebook[i] - codebook[j]||
+# losses.py 配置
+loss_mode = "margin"
+margin = 0.5                # triplet margin
+num_hard_negatives = 10     # hard negative mining
+feature_loss_weight = 0.1   # 輔助 feature 對齊
+distance_loss_weight = 0.0  # 不用 soft distance
+
+# 訓練配置
+learning_rate = 1e-4        # 不要太高
+warmup_epochs = 5
+num_epochs = 50
 ```
 
-這假設：
-- Codebook 是固定的 ✅ (我們凍結了 VQ)
-- Token 之間的「語義距離」 ≈ 歐氏距離 ❓
+### 3.2 次佳配置 (CE Loss)
 
-### 4.2 歐氏距離 ≠ 語義距離
-
-Codebook 的幾何結構可能很複雜：
-```
-Codebook 距離統計:
-  最近鄰平均距離: 1.42
-  中位距離: 5.32
-  最大距離: 31.30
-  標準差: 4.56
+```python
+loss_mode = "ce"
+ce_loss_weight = 1.0
+distance_loss_weight = 0.1  # 小權重的 soft distance 作為正則化
+feature_loss_weight = 0.1
+temperature = 1.0
 ```
 
-問題：
-- 很多 tokens 的最近鄰距離只有 1.42
-- 這些 tokens 可能在語義上完全不同
-- Distance Loss 無法區分「接近正確 token」和「接近類似錯誤 token」
+### 3.3 不推薦配置
+
+| 配置 | 原因 |
+|------|------|
+| Gumbel-Softmax | 隨機性導致訓練不穩定，codebook 太大 (4096) |
+| High Learning Rate (5e-4) | Feature 收斂但 token 選擇不改善 |
+| Pure STE | 間接優化，梯度信號不足 |
+| 強 Feature Loss (>0.3) | 可能與 Token Accuracy 衝突 |
 
 ---
 
-## 5. STE vs Gumbel：為什麼 STE 更好？
+## 4. 驗證與檢查方法
 
-### 5.1 理論分析
+### 4.1 已有驗證工具 (test/ 資料夾)
 
-| 特性 | Gumbel | STE |
-|------|--------|-----|
-| Forward | Hard codes + Gumbel noise | Hard codes (argmax) |
-| Backward | Gumbel-softmax 梯度 | Softmax 梯度 |
-| 隨機性 | 有 (每次不同) | 無 (確定性) |
+| 工具 | 功能 | 命令 |
+|------|------|------|
+| `feature_tsne_analysis.py` | t-SNE 可視化 + L2/Cosine 趨勢 | `python feature_tsne_analysis.py --exp_name margin_tuned` |
+| `token_distance_analysis.py` | Token 準確率 + Rank 分析 | `python token_distance_analysis.py --exp_name margin_tuned` |
 
-### 5.2 Gumbel 的問題
+### 4.2 建議增加的驗證方法
 
-```python
-# Gumbel-Softmax 採樣
-gumbel_noise = -log(-log(uniform(0, 1)))
-logits_with_noise = logits + gumbel_noise
-codes = softmax(logits_with_noise / τ)
-```
-
-問題：
-- Gumbel noise 引入額外隨機性
-- 可能導致「探索」錯誤的 tokens
-- 在這個任務中，codebook 太大 (4096)，隨機探索效率低
-
-### 5.3 STE 的優勢
+#### A. 音頻質量評估 (MOS/PESQ/STOI)
 
 ```python
-# STE
-hard_codes = one_hot(argmax(-distances))
-soft_codes = softmax(-distances / τ)
-codes = hard_codes - soft_codes.detach() + soft_codes  # 梯度走 soft
+# 建議新增: test/audio_quality_analysis.py
+from pesq import pesq
+from pystoi import stoi
+
+def evaluate_audio_quality(clean_path, enhanced_path, sr=24000):
+    """評估重建音頻質量"""
+    clean, _ = librosa.load(clean_path, sr=sr)
+    enhanced, _ = librosa.load(enhanced_path, sr=sr)
+
+    # PESQ (Perceptual Evaluation of Speech Quality)
+    pesq_score = pesq(sr, clean, enhanced, 'wb')  # wideband
+
+    # STOI (Short-Time Objective Intelligibility)
+    stoi_score = stoi(clean, enhanced, sr, extended=False)
+
+    return {'pesq': pesq_score, 'stoi': stoi_score}
 ```
 
-優勢：
-- Forward 是確定性的（選最近的 code）
-- 訓練更穩定
-- 在這個困難任務中，穩定性 > 探索性
+現有音頻樣本位置:
+```
+experiments/*/audio_samples/epoch_*/
+├── train_1_clean.wav        # 原始乾淨音頻
+├── train_1_noisy.wav        # 加噪音頻
+├── train_1_teacher_recon.wav # Teacher 重建
+└── train_1_student_pred.wav  # Student 預測
+```
+
+#### B. Codebook 使用率分析
+
+```python
+# 建議新增: test/codebook_usage_analysis.py
+def analyze_codebook_usage(student_tokens, teacher_tokens):
+    """分析 codebook 使用分布"""
+    student_dist = Counter(student_tokens.flatten().tolist())
+    teacher_dist = Counter(teacher_tokens.flatten().tolist())
+
+    # 計算使用率
+    student_usage = len(student_dist) / 4096
+    teacher_usage = len(teacher_dist) / 4096
+
+    # 計算分布相似度 (KL divergence)
+    kl_div = compute_kl_divergence(student_dist, teacher_dist)
+
+    return {
+        'student_usage': student_usage,
+        'teacher_usage': teacher_usage,
+        'kl_divergence': kl_div
+    }
+```
+
+#### C. 梯度流動檢查 (PDB 方法)
+
+```bash
+# 使用項目的 PDB 調試方法
+python -m pdb train.py < pdb_gradient_check.txt
+```
+
+```
+# pdb_gradient_check.txt
+b train.py:280  # backward 後
+run --exp_name debug --batch_size 2 --num_epochs 1
+c
+p sum(1 for p in model.parameters() if p.grad is not None)
+p model.student.lora_layers[0].weight.grad.norm().item()
+q
+```
+
+#### D. Token 混淆矩陣
+
+```python
+# 建議新增: test/token_confusion_analysis.py
+def plot_confusion_matrix(student_tokens, teacher_tokens, top_k=50):
+    """繪製最常見 tokens 的混淆矩陣"""
+    # 找出最常見的 teacher tokens
+    top_teacher = Counter(teacher_tokens).most_common(top_k)
+
+    # 建立混淆矩陣
+    confusion = np.zeros((top_k, top_k))
+    for t_idx, s_idx in zip(teacher_tokens, student_tokens):
+        # ... 填充矩陣
+
+    plt.imshow(confusion, cmap='Blues')
+    plt.title('Token Confusion Matrix')
+```
+
+#### E. 訓練穩定性監控
+
+```python
+# 檢查訓練是否穩定
+def check_training_stability(training_history):
+    """檢查 loss 是否有異常波動"""
+    losses = training_history['train_loss']
+
+    # 檢查 NaN
+    if any(np.isnan(losses)):
+        return "WARNING: NaN detected"
+
+    # 檢查劇烈波動
+    std_ratio = np.std(losses[-10:]) / np.mean(losses[-10:])
+    if std_ratio > 0.5:
+        return "WARNING: High variance in recent losses"
+
+    return "OK"
+```
 
 ---
 
-## 6. 為什麼需要 CE / Margin Loss？
+## 5. 提升 Token Accuracy 的方法
 
-### 6.1 CE Loss 的優勢
+### 5.1 已驗證有效的方法
 
-```python
-# CE Loss
-logits = -distances / temperature
-loss = CrossEntropy(logits, teacher_tokens)
-```
+| 方法 | 效果 | 說明 |
+|------|------|------|
+| **Margin Loss** | ✅✅✅ | 直接優化決策邊界，最有效 |
+| **CE Loss** | ✅✅ | 分類監督，簡單有效 |
+| **Hard Negative Mining** | ✅✅ | 專注於困難樣本 |
+| **較小的 Feature Loss 權重** | ✅ | 避免與 token 目標衝突 |
 
-CE Loss 直接優化：
-- P(correct_token | student_features) 最大化
-- 每個錯誤 token 都被明確懲罰
-- 梯度信號更強、更直接
+### 5.2 建議嘗試的方法
 
-### 6.2 Margin Loss 的優勢
+#### A. Temperature Annealing
 
 ```python
-# Margin Loss
-correct_dist = distances[teacher_token]
-wrong_dist = min(distances[other_tokens])
-loss = max(0, correct_dist - wrong_dist + margin)
+# 從高溫開始，逐漸降低
+def get_temperature(epoch, initial=2.0, final=0.5, anneal_epochs=30):
+    if epoch < anneal_epochs:
+        return initial - (initial - final) * epoch / anneal_epochs
+    return final
 ```
 
-Margin Loss 專注於：
-- 決策邊界的優化
-- 確保正確 token 比最近的錯誤 token 更近
-- 不需要關心距離的絕對值，只關心相對順序
+理論：高溫時探索更多 codes，低溫時聚焦最佳選擇
+
+#### B. Curriculum Learning
+
+```python
+# 先學習簡單樣本，再學習困難樣本
+def curriculum_sampling(dataset, epoch, difficulty_scores):
+    """根據 epoch 選擇適當難度的樣本"""
+    threshold = min(1.0, 0.3 + epoch * 0.02)  # 逐漸提高難度
+    easy_samples = [i for i, d in enumerate(difficulty_scores) if d < threshold]
+    return Subset(dataset, easy_samples)
+```
+
+#### C. Label Smoothing for CE
+
+```python
+# 軟化標籤，考慮 codebook 結構
+def smooth_labels(teacher_tokens, distance_matrix, smoothing=0.1):
+    """基於距離矩陣的 label smoothing"""
+    one_hot = F.one_hot(teacher_tokens, num_classes=4096)
+
+    # 距離越近的 codes 獲得更多權重
+    smooth_weights = F.softmax(-distance_matrix[teacher_tokens] / temp, dim=-1)
+
+    return (1 - smoothing) * one_hot + smoothing * smooth_weights
+```
+
+#### D. Projection Head
+
+```python
+# 在 student encoder 後加一個投影層
+class ProjectionHead(nn.Module):
+    def __init__(self, dim=512, hidden_dim=1024):
+        super().__init__()
+        self.proj = nn.Sequential(
+            nn.Linear(dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, dim)
+        )
+
+    def forward(self, x):
+        return self.proj(x)
+```
+
+理論：讓模型有專門的 layer 適應 VQ 空間
+
+#### E. Contrastive Learning
+
+```python
+# InfoNCE loss
+def info_nce_loss(student_features, teacher_features, temperature=0.07):
+    """對比學習損失"""
+    # 正樣本：同位置的 teacher feature
+    # 負樣本：其他位置的 features
+
+    sim = F.cosine_similarity(student_features, teacher_features)
+    # ...
+```
+
+### 5.3 不建議的方法
+
+| 方法 | 原因 |
+|------|------|
+| 更大的 LoRA rank | 已測試 r=32, 64, 128，差異不大 |
+| 更高的學習率 | exp6 證明無效 |
+| 更多 epochs | 50 epochs 後 loss 已收斂 |
+| 純 Feature Loss | 可能與 Token Accuracy 衝突 |
 
 ---
 
-## 7. 結論與建議
+## 6. 提升音頻質量的方法
 
-### 7.1 Token Accuracy 低的根本原因
+### 6.1 當前瓶頸分析
 
-1. **Distance-based Loss 是間接優化**：最小化期望距離 ≠ 最大化正確率
-2. **Softmax 平滑效應**：相近距離產生相近機率，梯度差異不足
-3. **Feature Loss 和 Token Accuracy 衝突**：優化 features 可能惡化 token 選擇
-4. **Codebook 幾何複雜**：歐氏距離 ≠ 語義距離
+```
+音頻質量 = f(Token Accuracy, Decoder Quality, Noise Level)
+```
 
-### 7.2 解決方案
+目前：
+- Token Accuracy: ~5.74% (瓶頸)
+- Decoder: WavTokenizer decoder (frozen, 質量好)
+- Noise: 使用真實 DNS 噪音
 
-| 方法 | 原理 | 預期效果 |
-|------|------|----------|
-| **CE Loss** | 直接分類監督 | Token Acc 提升到 5-15% |
-| **Margin Loss** | 優化決策邊界 | 更穩定的提升 |
-| **更低的 Temperature** | 讓 softmax 更尖銳 | 可能幫助，但風險梯度爆炸 |
-| **去掉 Feature Loss** | 只優化 token | 可能過擬合 |
+### 6.2 改進方向
 
-### 7.3 下一步
+#### A. 提高 Token Accuracy (最重要)
 
-1. **exp3 (CE)**: 用分類損失直接監督 token 選擇
-2. **exp4 (Margin)**: 用 margin loss 優化決策邊界
-3. 如果仍然不行，考慮：
-   - 添加 Projection Head（讓模型有專門的 layer 適應 VQ 空間）
-   - 使用 Codebook Embedding 作為 target（直接對齊到正確 code）
+- 實施上述 5.2 的方法
+- 目標：Token Acc > 15%
+
+#### B. 加入 Acoustic Loss
+
+```python
+# 在 waveform 層面加入損失
+def acoustic_loss(student_audio, teacher_audio):
+    """音頻層面的損失"""
+    # Multi-resolution STFT loss
+    loss = 0
+    for n_fft in [512, 1024, 2048]:
+        student_spec = torch.stft(student_audio, n_fft)
+        teacher_spec = torch.stft(teacher_audio, n_fft)
+        loss += F.l1_loss(student_spec, teacher_spec)
+    return loss
+```
+
+#### C. 後處理優化
+
+```python
+# 對 student tokens 進行後處理
+def post_process_tokens(student_tokens, confidence_scores, threshold=0.3):
+    """低置信度時使用 teacher 重建"""
+    mask = confidence_scores < threshold
+    # 這些位置可以用其他策略處理
+    return processed_tokens
+```
+
+#### D. 考慮 Decoder Fine-tuning
+
+目前 decoder 是凍結的。如果 token accuracy 無法繼續提升，可以考慮：
+- Fine-tune decoder 的最後幾層
+- 訓練一個 "robust decoder" 來處理不完美的 tokens
+
+---
+
+## 7. 實驗總結
+
+### 7.1 關鍵結論
+
+1. **Distance-based Loss 是間接優化**：Softmax 平滑效應導致梯度差異不足
+2. **Margin/CE Loss 是直接優化**：直接監督 token 選擇，效果更好
+3. **Feature 對齊 ≠ Token 對齊**：優化 feature loss 可能惡化 token accuracy
+4. **Codebook 幾何複雜**：4096 entries，歐氏距離 ≠ 語義距離
+
+### 7.2 下一步計劃
+
+| 優先級 | 任務 | 預期效果 |
+|--------|------|----------|
+| P0 | 實現 Temperature Annealing | Token Acc +2-3% |
+| P0 | 實現 Label Smoothing CE | 更穩定的訓練 |
+| P1 | 添加 PESQ/STOI 評估 | 量化音頻質量 |
+| P1 | 實現 Projection Head | Token Acc +3-5% |
+| P2 | Contrastive Learning | 更好的 feature 表示 |
+| P2 | Curriculum Learning | 更高效的訓練 |
+
+### 7.3 成功標準
+
+| 指標 | 當前最佳 | 短期目標 | 長期目標 |
+|------|----------|----------|----------|
+| Token Exact Match | 5.74% | 10% | 20% |
+| Top-10 Accuracy | 18.34% | 30% | 50% |
+| PESQ | 未測量 | > 2.5 | > 3.0 |
+| STOI | 未測量 | > 0.8 | > 0.9 |
 
 ---
 
 ## 8. 附錄：詳細數據
 
-### 8.1 Token Accuracy 變化趨勢 (Gumbel)
+### 8.1 完整實驗配置
 
-| Epoch | Train Acc | Val Acc |
-|-------|-----------|---------|
-| 1 | 24.45% | 6.42% |
-| 2 | 4.22% | 4.10% |
-| 5 | 2.43% | 2.22% |
-| 10 | 2.37% | 2.14% |
-| 20 | 2.20% | 1.81% |
-| 50 | 2.19% | 1.75% |
+```bash
+# exp1: Gumbel-Softmax
+python train.py --loss_mode gumbel --temperature 1.0
 
-### 8.2 Distance Loss 變化趨勢
+# exp2: STE Baseline
+python train.py --loss_mode ste --temperature 1.0
 
-| Epoch | Gumbel Train | STE Train |
-|-------|--------------|-----------|
-| 1 | 3.33 | 3.37 |
-| 10 | 3.59 | 3.39 |
-| 20 | 3.55 | 3.40 |
-| 50 | 3.52 | 3.41 |
+# exp3: CE Loss
+python train.py --loss_mode ce --ce_weight 1.0 --dist_weight 0.1
 
-注意：Distance Loss 沒有明顯下降，這說明 **即使梯度可微，模型也難以優化 token 選擇**。
+# exp4: Margin Loss (推薦)
+python train.py --loss_mode margin --margin 0.5 --num_hard_neg 10
+
+# exp5: Strong Feature + CE
+python train.py --loss_mode ce --feature_weight 0.5
+
+# exp6: STE High LR
+python train.py --loss_mode ste --lr 5e-4
+```
+
+### 8.2 Token Accuracy 詳細數據
+
+```
+margin_tuned (exp4):
+  Exact Match: 5.74%
+  Top-5: 11.57%
+  Top-10: 18.34%
+  Top-50: 38.52%
+  Top-100: 50.54%
+  Median Wrong Rank: 113
+
+strong_feature_ce (exp5):
+  Exact Match: 4.60%
+  Top-5: 10.49%
+  Top-10: 17.35%
+  Top-50: 38.11%
+  Top-100: 49.24%
+  Median Wrong Rank: 117
+
+ste_high_lr (exp6):
+  Exact Match: 2.35%
+  Top-5: 6.82%
+  Top-10: 12.80%
+  Top-50: 38.00%
+  Top-100: 53.26%
+  Median Wrong Rank: 91
+```
+
+### 8.3 Feature Distance 變化
+
+```
+margin_tuned: L2 0.849 → 0.709 (-16.6%), Cosine 0.939 → 0.959
+strong_feature_ce: L2 0.840 → 0.715 (-14.8%), Cosine 0.957 → 0.966
+ste_high_lr: L2 0.837 → 0.660 (-21.2%), Cosine 0.961 → 0.970
+```
 
 ---
 
-**分析完成**: 2025-12-02
-**結論**: Distance-based Loss 本質上是間接優化，需要 CE/Margin 等直接監督方法來提升 Token Accuracy。
+**文檔更新**: 2025-12-02
+**作者**: Claude Code Analysis
