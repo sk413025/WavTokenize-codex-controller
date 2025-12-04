@@ -194,20 +194,20 @@ class TeacherStudentModel(nn.Module):
             'vq_loss': vq_loss,                    # scalar
         }
 
-    def forward_with_emb(self, noisy_audio, clean_audio):
+    def forward_with_emb(self, noisy_audio, clean_audio, compute_vq_features=False):
         """
         Forward pass，返回 encoder 原始輸出用於 EmbDistillationLoss
-        
+
         這是記憶體優化版本：
         - 只計算必要的輸出
-        - Teacher: 只需要 codes
-        - Student: 只需要 encoder 原始輸出 (不需要 VQ)
-        
+        - Teacher: 只需要 codes (+ features 用於監控)
+        - Student: 需要 encoder 原始輸出 (+ VQ 後 features 用於監控)
+
         問題根源：
         - 原本的 forward 只返回 quantized features (量化後)
         - 這導致 Loss 無法直接監督 encoder 輸出
         - encoder 輸出可能移動到錯誤的 Voronoi 區域
-        
+
         解決方案：
         - 返回 encoder 原始輸出 (student_emb)
         - 使用 student_emb 計算 Loss，讓 encoder 輸出往 codebook[teacher_codes] 移動
@@ -215,12 +215,15 @@ class TeacherStudentModel(nn.Module):
         Args:
             noisy_audio: (B, T_audio) 或 (B, 1, T_audio)
             clean_audio: (B, T_audio) 或 (B, 1, T_audio)
+            compute_vq_features: 是否計算 VQ 後的 features (用於監控，不參與 loss)
 
         Returns:
             dict:
-                - student_emb: (B, 512, T_frame) - Student encoder 原始輸出
+                - student_emb: (B, 512, T_frame) - Student encoder 原始輸出 (VQ 前)
                 - teacher_codes: (n_q, B, T_frame) - Teacher 選的 codes
                 - vq_loss: scalar (0.0，因為不使用 VQ)
+                - student_features: (B, 512, T_frame) - Student VQ 後 features (如果 compute_vq_features=True)
+                - teacher_features: (B, 512, T_frame) - Teacher VQ 後 features (如果 compute_vq_features=True)
         """
         # Ensure audio shape: (B, T)
         if noisy_audio.dim() == 3:
@@ -229,26 +232,38 @@ class TeacherStudentModel(nn.Module):
             clean_audio = clean_audio.squeeze(1)
 
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # Teacher: Clean audio → codes (只需要 codes)
+        # Teacher: Clean audio → codes (+ features 用於監控)
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         with torch.no_grad():
-            # 只獲取 codes (不需要 emb 和 features)
-            _, teacher_codes, _ = self.teacher.feature_extractor(
+            teacher_features, teacher_codes, _ = self.teacher.feature_extractor(
                 clean_audio, bandwidth_id=0
             )
 
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # Student: Noisy audio → emb (只需要 encoder 輸出)
+        # Student: Noisy audio → emb (VQ 前)
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # 只獲取 encoder 原始輸出 (不調用 feature_extractor！)
         student_audio = noisy_audio.unsqueeze(1)  # (B, 1, T)
         student_emb = self.student.feature_extractor.encodec.encoder(student_audio)  # (B, C, T_frame)
 
-        return {
-            'student_emb': student_emb,            # (B, 512, T_frame) - encoder 原始輸出
+        result = {
+            'student_emb': student_emb,            # (B, 512, T_frame) - encoder 原始輸出 (VQ 前)
             'teacher_codes': teacher_codes,        # (n_q, B, T_frame)
-            'vq_loss': torch.tensor(0.0, device=student_emb.device),  # 不使用 VQ loss
+            'teacher_features': teacher_features,  # (B, 512, T_frame) - VQ 後 (用於監控)
+            'vq_loss': torch.tensor(0.0, device=student_emb.device),
         }
+
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # Student VQ 後 features (用於監控，不參與 loss)
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        if compute_vq_features:
+            with torch.no_grad():
+                student_features, student_codes, _ = self.student.feature_extractor(
+                    noisy_audio, bandwidth_id=0
+                )
+                result['student_features'] = student_features  # VQ 後
+                result['student_codes'] = student_codes
+
+        return result
 
     def student_forward(self, audio):
         """

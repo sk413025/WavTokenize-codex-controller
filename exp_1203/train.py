@@ -275,7 +275,8 @@ class Trainer:
             with autocast(enabled=self.config.use_amp):
                 # 根據模式選擇 forward 方法
                 if self.use_emb_distillation:
-                    output = self.model.forward_with_emb(noisy_audio, clean_audio)
+                    # compute_vq_features=True 用於監控 VQ 後的特徵差異
+                    output = self.model.forward_with_emb(noisy_audio, clean_audio, compute_vq_features=True)
                 else:
                     output = self.model(noisy_audio, clean_audio)
                 # 計算 Loss
@@ -330,6 +331,8 @@ class Trainer:
                 self.writer.add_scalar('train/token_acc', loss_dict['code_match_rate'], self.global_step)
                 self.writer.add_scalar('train/soft_code_entropy', loss_dict.get('soft_code_entropy', 0.0), self.global_step)
                 self.writer.add_scalar('train/lr', self.scheduler.get_last_lr()[0], self.global_step)
+                # VQ 後特徵差異監控 (不參與訓練，僅用於觀察)
+                self.writer.add_scalar('monitor/vq_feature_loss', loss_dict.get('vq_feature_loss_monitor', 0.0), self.global_step)
 
             self.global_step += 1
 
@@ -353,6 +356,7 @@ class Trainer:
         val_distance_loss = 0.0
         val_vq_loss = 0.0
         val_token_acc = 0.0
+        val_vq_feature_loss_monitor = 0.0
 
         for batch in tqdm(self.val_loader, desc="Validating"):
             noisy_audio = batch['noisy_audio'].to(self.device)
@@ -361,7 +365,8 @@ class Trainer:
             with autocast(enabled=self.config.use_amp):
                 # 根據模式選擇 forward 方法
                 if self.use_emb_distillation:
-                    output = self.model.forward_with_emb(noisy_audio, clean_audio)
+                    # compute_vq_features=True 用於監控 VQ 後的特徵差異
+                    output = self.model.forward_with_emb(noisy_audio, clean_audio, compute_vq_features=True)
                 else:
                     output = self.model(noisy_audio, clean_audio)
                 # 計算 Loss
@@ -374,6 +379,7 @@ class Trainer:
                                                             loss_dict.get('hard_distance_loss', 0.0)))
             val_vq_loss += loss_dict.get('vq_loss', 0.0)
             val_token_acc += loss_dict['code_match_rate']
+            val_vq_feature_loss_monitor += loss_dict.get('vq_feature_loss_monitor', 0.0)
 
         n_batches = len(self.val_loader)
 
@@ -388,6 +394,8 @@ class Trainer:
         # Tensorboard logging
         for key, value in metrics.items():
             self.writer.add_scalar(f'val/{key}', value, epoch)
+        # VQ 後特徵差異監控 (不參與訓練)
+        self.writer.add_scalar('monitor/val_vq_feature_loss', val_vq_feature_loss_monitor / n_batches, epoch)
 
         return metrics
 

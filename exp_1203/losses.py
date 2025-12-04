@@ -844,13 +844,33 @@ class EmbDistillationLoss(nn.Module):
             )
         
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # 3. Feature Loss (可選，監控用)
+        # 3. Feature Loss (VQ 後特徵差異 - 用於監控)
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         feature_loss = torch.tensor(0.0, device=student_emb.device)
-        if self.feature_loss_weight > 0 and 'student_features' in model_output:
+        vq_feature_loss_monitor = torch.tensor(0.0, device=student_emb.device)  # 監控用
+
+        if 'student_features' in model_output and 'teacher_features' in model_output:
             student_features = model_output['student_features']
             teacher_features = model_output['teacher_features']
-            feature_loss = F.mse_loss(student_features, teacher_features)
+
+            # 對齊時間維度
+            T_sf = student_features.shape[-1]
+            T_tf = teacher_features.shape[-1]
+            T_feat = min(T_sf, T_tf)
+
+            # 計算 VQ 後的 feature loss (監控用，不參與訓練)
+            with torch.no_grad():
+                vq_feature_loss_monitor = F.mse_loss(
+                    student_features[:, :, :T_feat],
+                    teacher_features[:, :, :T_feat]
+                )
+
+            # 如果權重 > 0，則參與 loss 計算
+            if self.feature_loss_weight > 0:
+                feature_loss = F.mse_loss(
+                    student_features[:, :, :T_feat],
+                    teacher_features[:, :, :T_feat]
+                )
         
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         # 4. VQ Loss (原始 commitment loss)
@@ -899,6 +919,7 @@ class EmbDistillationLoss(nn.Module):
             'emb_to_codebook_loss': emb_to_codebook_loss.item(),
             'ce_loss': ce_loss.item() if isinstance(ce_loss, torch.Tensor) else ce_loss,
             'feature_loss': feature_loss.item() if isinstance(feature_loss, torch.Tensor) else feature_loss,
+            'vq_feature_loss_monitor': vq_feature_loss_monitor.item(),  # VQ後特徵差異 (監控用)
             'vq_loss': vq_loss.item() if isinstance(vq_loss, torch.Tensor) else vq_loss,
             'hard_distance_loss': hard_distance_loss.item(),
             'code_match_rate': token_accuracy.item(),
