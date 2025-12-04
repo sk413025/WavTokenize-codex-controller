@@ -60,7 +60,7 @@ python train.py \
     --vq_loss_weight 0.0 \
     --correct_vq_loss_weight 0.0 \
     --ce_token_weight 0.0 \
-    --batch_size 16 \
+    --batch_size 8 \
     --num_epochs 50 \
     --learning_rate 5e-5 \
     --save_interval 10 \

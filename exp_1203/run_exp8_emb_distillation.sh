@@ -2,39 +2,42 @@
 # exp_1203/run_exp8_emb_distillation.sh
 #
 # ================================================================
-# 實驗目的: 使用 Encoder 原始輸出 (emb) 計算 Loss
+# 實驗目的: EmbDistillation (連續域) + VQ Loss (離散域)
 # ================================================================
 #
 # 問題診斷 (VQ_LOSS_TOKEN_ACC_DIAGNOSIS.md):
 #   原本的 feature_extractor 返回 quantized (量化後特徵)
 #   而不是 encoder 原始輸出 (emb)
-#   
+#
 #   這導致:
-#   1. Loss 無法直接監督 encoder 輸出
+#   1. Feature Loss 無法直接監督 encoder 輸出（梯度無法回傳）
 #   2. encoder 輸出移動到錯誤的 Voronoi 區域
 #   3. VQ Loss 上升 + Token Acc 下降
 #
 # 解決方案:
-#   使用新的 EmbDistillationLoss
-#   直接讓 student_emb → codebook[teacher_codes]
-#   
-#   Loss = MSE(student_emb, codebook[teacher_codes])
-#   
-#   這樣 encoder 輸出會被訓練成「等於」Teacher 選的 codebook embedding
-#   從而保證 argmin 會選對 token
+#   1. EmbDistillationLoss (連續域對齊)
+#      - 直接讓 student_emb → codebook[teacher_codes]
+#      - Loss = MSE(student_emb, codebook[teacher_codes])
+#      - encoder 輸出被訓練成「靠近」Teacher 選的 codebook embedding
+#
+#   2. VQ Loss (離散域穩定)
+#      - Loss = MSE(quantize.detach(), x)
+#      - 讓 encoder 輸出穩定在當前選擇的 codebook embedding 附近
+#      - 防止 encoder 輸出在 Voronoi 邊界附近震盪
 #
 # 配置:
-#   - distance_loss_mode: emb_distillation (新模式！)
-#   - emb_to_codebook_weight: 1.0 (主要 Loss)
-#   - ce_token_weight: 0.0 (可選的 CE 輔助 Loss)
-#   - feature_loss_weight: 0.0 (量化後特徵對齊，不使用)
+#   - distance_loss_mode: emb_distillation
+#   - emb_to_codebook_weight: 1.0 (連續域：拉向 teacher 的 code)
+#   - vq_loss_weight: 1.0 (離散域：穩定當前選擇)
+#   - ce_token_weight: 0.0
+#   - feature_loss_weight: 0.0 (有架構缺陷，不使用)
 #
 # 預期結果:
-#   - VQ Loss 下降或穩定
+#   - EmbDistillation: 讓 encoder 輸出接近正確的 codebook embedding
+#   - VQ Loss: 穩定離散選擇，減少震盪
 #   - Token Accuracy 上升或維持高水平
-#   - 修正 Token Acc 暴跌問題
 #
-# ================================================================
+# ===========================u=====================================
 
 # 設定 GPU
 export CUDA_VISIBLE_DEVICES=1
@@ -44,20 +47,21 @@ EXP_NAME="emb_distillation"
 
 echo "=========================================="
 echo "Running exp_1203: ${EXP_NAME}"
-echo "Strategy: Direct Encoder Output Supervision"
+echo "Strategy: EmbDistillation (連續域) + VQ Loss (離散域)"
 echo "GPU: ${CUDA_VISIBLE_DEVICES}"
 echo ""
 echo "Problem solved:"
-echo "  - Original: Loss uses quantized features (after VQ)"
-echo "  - Fixed: Loss uses encoder raw output (emb)"
+echo "  - Original: Feature Loss uses quantized (gradient cannot flow back)"
+echo "  - Fixed: EmbDistillation uses encoder raw output (emb)"
 echo ""
-echo "Key insight:"
-echo "  - student_emb → codebook[teacher_codes]"
-echo "  - This ensures argmin selects the correct token"
+echo "Loss combination:"
+echo "  - EmbDistillation: student_emb → codebook[teacher_codes] (連續域對齊)"
+echo "  - VQ Loss: encoder output → current codebook embedding (離散域穩定)"
 echo ""
 echo "Config:"
 echo "  - distance_loss_mode: emb_distillation"
-echo "  - emb_to_codebook_weight: 1.0"
+echo "  - emb_to_codebook_weight: 1.0 (連續域)"
+echo "  - vq_loss_weight: 1.0 (離散域)"
 echo "  - ce_token_weight: 0.0"
 echo "  - feature_loss_weight: 0.0"
 echo "=========================================="
