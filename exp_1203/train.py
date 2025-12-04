@@ -131,8 +131,10 @@ class Trainer:
         self.history = {
             'train_loss': [], 'train_feature_loss': [], 'train_distance_loss': [],
             'train_vq_loss': [], 'train_token_acc': [],
+            'train_vq_feature_monitor': [],  # VQ後特徵差異監控
             'val_loss': [], 'val_feature_loss': [], 'val_distance_loss': [],
             'val_vq_loss': [], 'val_token_acc': [],
+            'val_vq_feature_monitor': [],  # VQ後特徵差異監控
             'epochs': [], 'learning_rates': []
         }
 
@@ -263,6 +265,7 @@ class Trainer:
         epoch_distance_loss = 0.0
         epoch_vq_loss = 0.0
         epoch_token_acc = 0.0
+        epoch_vq_feature_monitor = 0.0  # VQ後特徵差異監控
 
         pbar = tqdm(self.train_loader, desc=f"Epoch {epoch+1}/{self.config.num_epochs}")
 
@@ -307,11 +310,12 @@ class Trainer:
             # 統計 (兼容 emb_distillation 和舊模式)
             epoch_loss += loss.item()
             epoch_feature_loss += loss_dict.get('feature_loss', loss_dict.get('emb_to_codebook_loss', 0.0))
-            epoch_distance_loss += loss_dict.get('soft_distance_loss', 
+            epoch_distance_loss += loss_dict.get('soft_distance_loss',
                                                   loss_dict.get('emb_to_codebook_loss',
                                                                loss_dict.get('hard_distance_loss', 0.0)))
             epoch_vq_loss += loss_dict.get('vq_loss', 0.0)
             epoch_token_acc += loss_dict['code_match_rate']
+            epoch_vq_feature_monitor += loss_dict.get('vq_feature_loss_monitor', 0.0)  # 監控值
 
             # 更新進度條
             pbar.set_postfix({
@@ -344,6 +348,7 @@ class Trainer:
             'distance_loss': epoch_distance_loss / n_batches,
             'vq_loss': epoch_vq_loss / n_batches,
             'token_acc': epoch_token_acc / n_batches,
+            'vq_feature_monitor': epoch_vq_feature_monitor / n_batches,  # VQ後特徵差異監控
         }
 
     @torch.no_grad()
@@ -389,6 +394,7 @@ class Trainer:
             'distance_loss': val_distance_loss / n_batches,
             'vq_loss': val_vq_loss / n_batches,
             'token_acc': val_token_acc / n_batches,
+            'vq_feature_monitor': val_vq_feature_loss_monitor / n_batches,  # VQ後特徵差異監控
         }
 
         # Tensorboard logging
@@ -484,13 +490,13 @@ class Trainer:
         ax.legend()
         ax.grid(True)
         
-        # VQ Loss
+        # VQ Feature Monitor (VQ後特徵差異 - 監控用)
         ax = axes[1, 0]
-        ax.plot(epochs, self.history['train_vq_loss'], 'b-', label='Train')
-        ax.plot(epochs, self.history['val_vq_loss'], 'r-', label='Val')
+        ax.plot(epochs, self.history['train_vq_feature_monitor'], 'b-', label='Train')
+        ax.plot(epochs, self.history['val_vq_feature_monitor'], 'r-', label='Val')
         ax.set_xlabel('Epoch')
-        ax.set_ylabel('VQ Loss')
-        ax.set_title('VQ Loss')
+        ax.set_ylabel('VQ Feature Loss')
+        ax.set_title('VQ Feature Monitor (不參與訓練)')
         ax.legend()
         ax.grid(True)
         
@@ -750,11 +756,13 @@ class Trainer:
                 self.history['train_distance_loss'].append(train_metrics['distance_loss'])
                 self.history['train_vq_loss'].append(train_metrics['vq_loss'])
                 self.history['train_token_acc'].append(train_metrics['token_acc'])
+                self.history['train_vq_feature_monitor'].append(train_metrics['vq_feature_monitor'])  # 監控值
                 self.history['val_loss'].append(val_metrics['loss'])
                 self.history['val_feature_loss'].append(val_metrics['feature_loss'])
                 self.history['val_distance_loss'].append(val_metrics['distance_loss'])
                 self.history['val_vq_loss'].append(val_metrics['vq_loss'])
                 self.history['val_token_acc'].append(val_metrics['token_acc'])
+                self.history['val_vq_feature_monitor'].append(val_metrics['vq_feature_monitor'])  # 監控值
                 # 確保 learning rate 是 float 而非 Tensor
                 lr = self.scheduler.get_last_lr()[0]
                 self.history['learning_rates'].append(float(lr) if hasattr(lr, 'item') else lr)
@@ -765,7 +773,7 @@ class Trainer:
                 print(f"  Val Loss: {val_metrics['loss']:.4f} | Token Acc: {val_metrics['token_acc']*100:.2f}%")
                 print(f"  Val Feature Loss: {val_metrics['feature_loss']:.4f}")
                 print(f"  Val Distance Loss: {val_metrics['distance_loss']:.4f}")
-                print(f"  Val VQ Loss: {val_metrics['vq_loss']:.4f}")
+                print(f"  Val VQ Feature Monitor: {val_metrics['vq_feature_monitor']:.4f} (不參與訓練)")
 
                 # 保存 checkpoint
                 is_best = val_metrics['loss'] < self.best_val_loss
