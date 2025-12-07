@@ -439,6 +439,110 @@ def save_audio_samples(model, val_loader, device, exp_dir, epoch, num_samples=3)
     print(f"  🔊 Saved {min(num_samples, len(val_loader))} audio samples to {audio_dir}")
 
 
+def plot_spectrogram(waveform, sample_rate, title, ax):
+    """繪製單個頻譜圖"""
+    import numpy as np
+
+    # 確保是 numpy array
+    if torch.is_tensor(waveform):
+        waveform = waveform.cpu().numpy()
+
+    # 確保是 1D
+    if waveform.ndim > 1:
+        waveform = waveform.squeeze()
+
+    # 計算 spectrogram
+    n_fft = 1024
+    hop_length = 256
+
+    # 使用 matplotlib 的 specgram
+    ax.specgram(waveform, NFFT=n_fft, Fs=sample_rate, noverlap=n_fft-hop_length,
+                cmap='viridis', scale='dB')
+    ax.set_title(title)
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Frequency (Hz)')
+
+
+@torch.no_grad()
+def save_spectrogram_comparison(model, val_loader, device, exp_dir, epoch, num_samples=3):
+    """
+    保存頻譜圖比較
+
+    每個樣本生成一張圖，包含 4 個子圖：
+    - noisy: 原始噪音音頻
+    - clean: 目標乾淨音頻
+    - student_recon: Student encoder → Teacher decoder
+    - teacher_recon: Teacher encoder → Teacher decoder
+    """
+    model.eval()
+    spec_dir = exp_dir / 'spectrograms' / f'epoch_{epoch:03d}'
+    spec_dir.mkdir(parents=True, exist_ok=True)
+
+    sample_rate = 24000
+    val_iter = iter(val_loader)
+
+    torch.cuda.empty_cache()
+
+    for i in range(min(num_samples, len(val_loader))):
+        try:
+            batch = next(val_iter)
+        except StopIteration:
+            break
+
+        noisy_audio = batch['noisy_audio'][:1].to(device)
+        clean_audio = batch['clean_audio'][:1].to(device)
+
+        if noisy_audio.dim() == 1:
+            noisy_audio = noisy_audio.unsqueeze(0)
+        if clean_audio.dim() == 1:
+            clean_audio = clean_audio.unsqueeze(0)
+
+        # 創建 2x2 子圖
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+        fig.suptitle(f'Spectrogram Comparison - Sample {i+1} (Epoch {epoch})', fontsize=14)
+
+        # 1. Noisy
+        plot_spectrogram(noisy_audio[0], sample_rate, 'Noisy Input', axes[0, 0])
+
+        # 2. Clean
+        plot_spectrogram(clean_audio[0], sample_rate, 'Clean Target', axes[0, 1])
+
+        try:
+            # 3. Student reconstruction
+            student_features, _, _ = model.student.feature_extractor(noisy_audio, bandwidth_id=0)
+            student_recon = model.teacher.decode(student_features, bandwidth_id=torch.tensor([0]).to(device))
+            if student_recon.dim() == 3:
+                student_recon = student_recon.squeeze(1)
+            plot_spectrogram(student_recon[0], sample_rate, 'Student Recon (noisy→student→decoder)', axes[1, 0])
+            del student_features, student_recon
+            torch.cuda.empty_cache()
+
+            # 4. Teacher reconstruction
+            teacher_features, _, _ = model.teacher.feature_extractor(clean_audio, bandwidth_id=0)
+            teacher_recon = model.teacher.decode(teacher_features, bandwidth_id=torch.tensor([0]).to(device))
+            if teacher_recon.dim() == 3:
+                teacher_recon = teacher_recon.squeeze(1)
+            plot_spectrogram(teacher_recon[0], sample_rate, 'Teacher Recon (clean→teacher→decoder)', axes[1, 1])
+            del teacher_features, teacher_recon
+            torch.cuda.empty_cache()
+
+        except RuntimeError as e:
+            if "out of memory" in str(e):
+                print(f"  ⚠️ OOM when generating spectrogram {i+1}")
+                axes[1, 0].text(0.5, 0.5, 'OOM', ha='center', va='center', transform=axes[1, 0].transAxes)
+                axes[1, 1].text(0.5, 0.5, 'OOM', ha='center', va='center', transform=axes[1, 1].transAxes)
+                torch.cuda.empty_cache()
+            else:
+                raise e
+
+        plt.tight_layout()
+        spec_path = spec_dir / f'sample_{i+1}_spectrogram.png'
+        plt.savefig(spec_path, dpi=150, bbox_inches='tight')
+        plt.close()
+
+    print(f"  📊 Saved {min(num_samples, len(val_loader))} spectrograms to {spec_dir}")
+
+
 def main():
     parser = argparse.ArgumentParser(description='exp_1207: Pure Feature Loss Training')
 
@@ -624,9 +728,10 @@ def main():
         if epoch % args.plot_interval == 0 or epoch == args.num_epochs:
             plot_training_curves(history, exp_dir, epoch)
 
-        # Save audio samples
+        # Save audio samples and spectrograms
         if epoch % args.audio_interval == 0 or epoch == args.num_epochs:
             save_audio_samples(model, val_loader, device, exp_dir, epoch, args.num_audio_samples)
+            save_spectrogram_comparison(model, val_loader, device, exp_dir, epoch, args.num_audio_samples)
 
         # Save history
         with open(exp_dir / 'training_history.json', 'w') as f:
