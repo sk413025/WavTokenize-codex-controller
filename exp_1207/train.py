@@ -368,9 +368,18 @@ def plot_training_curves(history, exp_dir, epoch):
 
 
 @torch.no_grad()
-def save_audio_samples(model, val_loader, device, exp_dir, epoch, num_samples=3):
+def save_audio_samples(model, dataloader, device, exp_dir, epoch, num_samples=3, split='val'):
     """
     保存音檔樣本
+
+    Args:
+        model: 模型
+        dataloader: 資料載入器
+        device: 裝置
+        exp_dir: 實驗目錄
+        epoch: 當前 epoch
+        num_samples: 樣本數量
+        split: 'train' 或 'val'，用於分開儲存
 
     每個樣本包含：
     - noisy: 原始噪音音頻
@@ -379,18 +388,18 @@ def save_audio_samples(model, val_loader, device, exp_dir, epoch, num_samples=3)
     - teacher_recon: Teacher encoder → Teacher decoder
     """
     model.eval()
-    audio_dir = exp_dir / 'audio_samples' / f'epoch_{epoch:03d}'
+    audio_dir = exp_dir / 'audio_samples' / split / f'epoch_{epoch:03d}'
     audio_dir.mkdir(parents=True, exist_ok=True)
 
     sample_rate = 24000
-    val_iter = iter(val_loader)
+    data_iter = iter(dataloader)
 
     # 清理 GPU 記憶體
     torch.cuda.empty_cache()
 
-    for i in range(min(num_samples, len(val_loader))):
+    for i in range(min(num_samples, len(dataloader))):
         try:
-            batch = next(val_iter)
+            batch = next(data_iter)
         except StopIteration:
             break
 
@@ -723,7 +732,8 @@ def main():
 
         # Save audio samples and spectrograms
         if epoch % args.audio_interval == 0 or epoch == args.num_epochs:
-            save_audio_samples(model, val_loader, device, exp_dir, epoch, args.num_audio_samples)
+            save_audio_samples(model, train_loader, device, exp_dir, epoch, args.num_audio_samples, split='train')
+            save_audio_samples(model, val_loader, device, exp_dir, epoch, args.num_audio_samples, split='val')
             save_spectrogram_comparison(model, val_loader, device, exp_dir, epoch, args.num_audio_samples)
 
         # Save history
