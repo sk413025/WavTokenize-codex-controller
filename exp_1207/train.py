@@ -96,10 +96,10 @@ class SimpleTeacherStudent(nn.Module):
 
     def forward(self, noisy_audio, clean_audio):
         """
-        Forward pass
+        Forward pass - 分離 encoder 和 VQ 步驟，以獲取 VQ前 特徵
 
         Returns:
-            dict with features and codes
+            dict with features, codes, and encoder outputs (VQ前)
         """
         # 確保格式
         if noisy_audio.dim() == 1:
@@ -107,22 +107,37 @@ class SimpleTeacherStudent(nn.Module):
         if clean_audio.dim() == 1:
             clean_audio = clean_audio.unsqueeze(0)
 
-        # Teacher: clean audio
+        # Teacher: clean audio (frozen, no grad)
         with torch.no_grad():
-            teacher_features, teacher_codes, _ = self.teacher.feature_extractor(
-                clean_audio, bandwidth_id=0
-            )
+            # 分步執行以獲取 VQ前 特徵
+            clean_audio_3d = clean_audio.unsqueeze(1) if clean_audio.dim() == 2 else clean_audio
+            teacher_encoder_out = self.teacher.feature_extractor.encodec.encoder(clean_audio_3d)
+            # VQ
+            quantizer = self.teacher.feature_extractor.encodec.quantizer
+            teacher_vq_result = quantizer(teacher_encoder_out, frame_rate=75, bandwidth=0.075)
+            teacher_features = teacher_vq_result.quantized  # VQ後
+            teacher_codes = teacher_vq_result.codes
 
-        # Student: noisy audio
-        student_features, student_codes, vq_loss = self.student.feature_extractor(
-            noisy_audio, bandwidth_id=0
-        )
+        # Student: noisy audio - 手動分步執行
+        # Step 1: Encoder (VQ前)
+        noisy_audio_3d = noisy_audio.unsqueeze(1) if noisy_audio.dim() == 2 else noisy_audio
+        student_encoder_out = self.student.feature_extractor.encodec.encoder(noisy_audio_3d)
+        # shape: (B, C, T) where C=512
+
+        # Step 2: VQ
+        quantizer = self.student.feature_extractor.encodec.quantizer
+        student_vq_result = quantizer(student_encoder_out, frame_rate=75, bandwidth=0.075)
+        student_features = student_vq_result.quantized  # VQ後
+        student_codes = student_vq_result.codes
+        vq_loss = student_vq_result.penalty
 
         return {
-            'student_features': student_features,
-            'teacher_features': teacher_features,
+            'student_features': student_features,      # VQ後
+            'teacher_features': teacher_features,      # VQ後
             'student_codes': student_codes,
             'teacher_codes': teacher_codes,
+            'student_encoder_out': student_encoder_out,  # VQ前
+            'teacher_encoder_out': teacher_encoder_out,  # VQ前
             'vq_loss': vq_loss,
         }
 
@@ -133,19 +148,21 @@ def compute_metrics(output, distance_matrix):
 
     Returns:
         dict with:
-        - feature_loss: MSE(z_noisy, z_clean)
+        - feature_loss: MSE(z_noisy, z_clean) - 使用 VQ前 特徵！
         - distance_loss: mean distance between student and teacher codes (僅監控)
         - vq_loss: commitment loss (僅監控)
         - token_acc: token match rate
     """
-    student_features = output['student_features']
-    teacher_features = output['teacher_features']
+    # 使用 VQ前 特徵進行 Feature Loss 計算（關鍵修改！）
+    student_encoder_out = output['student_encoder_out']  # VQ前
+    teacher_encoder_out = output['teacher_encoder_out']  # VQ前
     student_codes = output['student_codes']
     teacher_codes = output['teacher_codes']
     vq_loss = output['vq_loss']
 
-    # 1. Feature Loss (這是唯一參與訓練的 loss)
-    feature_loss = F.mse_loss(student_features, teacher_features)
+    # 1. Feature Loss (使用 VQ前 特徵！)
+    # 這樣梯度可以直接流回 Student encoder，不經過 VQ 的 straight-through estimator
+    feature_loss = F.mse_loss(student_encoder_out, teacher_encoder_out)
 
     # 2. Distance Loss (僅監控，不參與訓練)
     with torch.no_grad():

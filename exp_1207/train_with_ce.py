@@ -124,10 +124,10 @@ class TeacherStudentWithCE(nn.Module):
 
     def forward(self, noisy_audio, clean_audio):
         """
-        Forward pass - 優化版本，只調用一次 encoder
+        Forward pass - 分離 encoder 和 VQ 步驟，以獲取 VQ前 特徵
 
         Returns:
-            dict with features, codes, and raw encoder outputs for CE
+            dict with features, codes, and encoder outputs (VQ前)
         """
         # 確保格式
         if noisy_audio.dim() == 1:
@@ -137,30 +137,35 @@ class TeacherStudentWithCE(nn.Module):
 
         # Teacher: clean audio (frozen, no grad)
         with torch.no_grad():
-            teacher_features, teacher_codes, _ = self.teacher.feature_extractor(
-                clean_audio, bandwidth_id=0
-            )
+            # 分步執行以獲取 VQ前 特徵
+            clean_audio_3d = clean_audio.unsqueeze(1) if clean_audio.dim() == 2 else clean_audio
+            teacher_encoder_out = self.teacher.feature_extractor.encodec.encoder(clean_audio_3d)
+            # VQ
+            quantizer = self.teacher.feature_extractor.encodec.quantizer
+            teacher_vq_result = quantizer(teacher_encoder_out, frame_rate=75, bandwidth=0.075)
+            teacher_features = teacher_vq_result.quantized  # VQ後
+            teacher_codes = teacher_vq_result.codes
 
-        # Student: 手動分步執行，避免重複計算 encoder
-        # Step 1: Encoder (只執行一次！)
+        # Student: 手動分步執行
+        # Step 1: Encoder (VQ前)
         noisy_audio_3d = noisy_audio.unsqueeze(1) if noisy_audio.dim() == 2 else noisy_audio
         student_encoder_out = self.student.feature_extractor.encodec.encoder(noisy_audio_3d)
         # shape: (B, C, T) where C=512
 
-        # Step 2: VQ (使用 encoder 輸出)
+        # Step 2: VQ
         quantizer = self.student.feature_extractor.encodec.quantizer
-        vq_result = quantizer(student_encoder_out, frame_rate=75, bandwidth=0.075)
-        # vq_result 是 QuantizedResult 物件，有 .quantized, .codes, .penalty 屬性
-        student_features = vq_result.quantized  # (B, C, T)
-        student_codes = vq_result.codes         # (K, B, T) where K=1
-        vq_loss = vq_result.penalty             # scalar
+        student_vq_result = quantizer(student_encoder_out, frame_rate=75, bandwidth=0.075)
+        student_features = student_vq_result.quantized  # VQ後
+        student_codes = student_vq_result.codes
+        vq_loss = student_vq_result.penalty
 
         return {
-            'student_features': student_features,      # VQ 後
-            'teacher_features': teacher_features,      # VQ 後
-            'student_codes': student_codes,            # token indices
-            'teacher_codes': teacher_codes,            # token indices (target for CE)
-            'student_encoder_out': student_encoder_out,  # VQ 前，用於計算 CE
+            'student_features': student_features,      # VQ後
+            'teacher_features': teacher_features,      # VQ後
+            'student_codes': student_codes,
+            'teacher_codes': teacher_codes,
+            'student_encoder_out': student_encoder_out,  # VQ前
+            'teacher_encoder_out': teacher_encoder_out,  # VQ前（新增！）
             'vq_loss': vq_loss,
         }
 
@@ -202,7 +207,7 @@ def compute_losses(model, output, distance_matrix, feature_weight, ce_weight, ce
     Returns:
         dict with:
         - total_loss: weighted sum (參與訓練)
-        - feature_loss: MSE(z_student, z_teacher)
+        - feature_loss: MSE(z_student, z_teacher) - 使用 VQ前 特徵！
         - ce_loss: CrossEntropy(logits, teacher_tokens)
         - distance_loss: 僅監控
         - vq_loss: 僅監控
@@ -213,15 +218,16 @@ def compute_losses(model, output, distance_matrix, feature_weight, ce_weight, ce
         - 較小的 temperature (如 0.1) 會使機率分布更尖銳
         - 這有助於在距離很大時仍然保持有意義的梯度
     """
-    student_features = output['student_features']
-    teacher_features = output['teacher_features']
+    # 使用 VQ前 特徵（關鍵修改！）
+    student_encoder_out = output['student_encoder_out']  # VQ前
+    teacher_encoder_out = output['teacher_encoder_out']  # VQ前
     student_codes = output['student_codes']
     teacher_codes = output['teacher_codes']
-    student_encoder_out = output['student_encoder_out']
     vq_loss = output['vq_loss']
 
-    # 1. Feature Loss
-    feature_loss = F.mse_loss(student_features, teacher_features)
+    # 1. Feature Loss (使用 VQ前 特徵！)
+    # 這樣梯度可以直接流回 Student encoder
+    feature_loss = F.mse_loss(student_encoder_out, teacher_encoder_out)
 
     # 2. Cross-Entropy Loss
     # 計算 logits
