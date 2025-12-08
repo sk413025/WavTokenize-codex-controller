@@ -4,7 +4,7 @@
 # 假設：如果 z_noisy ≈ z_clean，則 token_noisy == token_clean
 # 測試：只用 Feature MSE Loss，不用任何 Distance Loss
 # 使用 GPU 1 (RTX 2080 Ti, 11GB)
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 # 優化 CUDA 記憶體分配
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 set -e

@@ -11,7 +11,7 @@
 #   - CE Loss: 強迫特徵跨回正確的 Voronoi Cell
 #
 # 使用 GPU 2 (RTX 2080 Ti, 11GB)
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 set -e
 

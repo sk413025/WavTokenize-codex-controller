@@ -152,7 +152,7 @@ def train_epoch(model, loss_fn, train_loader, optimizer, device, epoch, args, co
 
         # Backward
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.trainable_parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(model.get_trainable_parameters(), max_norm=1.0)
 
         # 如果 loss_fn 有可訓練參數，也更新
         if hasattr(loss_fn, 'get_trainable_parameters'):
@@ -271,7 +271,7 @@ def main():
     loss_fn = create_loss_fn(args, device)
 
     # Create optimizer
-    params_to_optimize = list(model.trainable_parameters())
+    params_to_optimize = list(model.get_trainable_parameters())
     if hasattr(loss_fn, 'get_trainable_parameters'):
         params_to_optimize.extend(list(loss_fn.get_trainable_parameters()))
 

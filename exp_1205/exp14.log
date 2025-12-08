@@ -1,0 +1,23 @@
+==========================================
+Running exp_1205: exp14_margin
+Strategy: Margin-based Loss
+GPU: 1
+
+Key insight from diagnosis:
+  - MSE doesn't care about 'nearest', only 'close'
+  - Margin Loss: correct must be closer than wrong by margin
+  - margin = 0.5
+==========================================
+/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/utils/weight_norm.py:143: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+run_exp14_margin.sh: line 50: 2113679 Killed                  python train.py --exp_name ${EXP_NAME} --loss_type margin --margin 0.5 --lora_rank 128 --lora_alpha 256 --batch_size 20 --num_epochs 50 --learning_rate 5e-5 --save_interval 10 --log_interval 50
+==========================================
+Experiment exp14_margin completed!
+Results: experiments/exp14_margin/
+
+Compare with exp_1204:
+  - exp11 (MSE + CE):       Val Acc ~2%
+  - exp14 (Margin Loss):    check experiments/exp14_margin/
+
+If Val Acc improves: Margin Loss helps discriminate tokens!
+==========================================

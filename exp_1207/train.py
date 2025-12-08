@@ -23,10 +23,28 @@ import matplotlib.pyplot as plt
 import argparse
 import json
 import sys
+import random
+import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 from datetime import datetime
 from torch.cuda.amp import GradScaler, autocast
+
+
+def set_seed(seed=42):
+    """
+    固定隨機種子以確保實驗可重現性
+    
+    Args:
+        seed: 隨機種子值，預設為 42
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    print(f"Random seed set to: {seed}")
 
 # 添加路徑
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -465,7 +483,7 @@ def save_audio_samples(model, dataloader, device, exp_dir, epoch, num_samples=3,
             else:
                 raise e
 
-    print(f"  🔊 Saved {min(num_samples, len(val_loader))} audio samples to {audio_dir}")
+    print(f"  🔊 Saved {min(num_samples, len(dataloader))} {split} audio samples to {audio_dir}")
 
 
 def plot_spectrogram(waveform, sample_rate, title, ax):
@@ -601,6 +619,9 @@ def main():
     parser.add_argument('--num_workers', type=int, default=4)
 
     args = parser.parse_args()
+
+    # 固定隨機種子
+    set_seed(42)
 
     # Device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
