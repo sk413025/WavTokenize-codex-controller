@@ -213,7 +213,8 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, epoch, distance
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
-        scheduler.step()
+        if scheduler is not None:
+            scheduler.step()
 
         # 累計
         total_feature_loss += metrics['feature_loss'].item()
@@ -226,13 +227,15 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, epoch, distance
         pbar.set_postfix({
             'loss': f"{metrics['feature_loss'].item():.4f}",
             'acc': f"{metrics['token_acc']*100:.1f}%",
-            'lr': f"{scheduler.get_last_lr()[0]:.2e}"
         })
 
-    # 確保 lr 是 float 而不是 Tensor
-    lr = scheduler.get_last_lr()[0]
-    if hasattr(lr, 'item'):
-        lr = lr.item()
+    # 確保 lr 是 float
+    if scheduler is not None:
+        lr = scheduler.get_last_lr()[0]
+        if hasattr(lr, 'item'):
+            lr = lr.item()
+    else:
+        lr = optimizer.param_groups[0]['lr']
 
     return {
         'total_loss': total_feature_loss / n_batches,  # = feature_loss
@@ -624,19 +627,9 @@ def main():
         weight_decay=args.weight_decay
     )
 
-    # Scheduler (cosine with warmup)
-    total_steps = len(train_loader) * args.num_epochs
-    warmup_steps = int(total_steps * args.warmup_ratio)
-
-    def lr_lambda(step):
-        if step < warmup_steps:
-            return step / warmup_steps
-        else:
-            progress = (step - warmup_steps) / (total_steps - warmup_steps)
-            import math
-            return 0.5 * (1 + math.cos(progress * 3.14159))
-
-    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+    # Scheduler (disabled - using constant learning rate)
+    scheduler = None
+    print(f"Scheduler: DISABLED (constant lr={args.learning_rate})")
 
     # AMP (Automatic Mixed Precision) - 關鍵！節省 GPU 記憶體
     use_amp = True

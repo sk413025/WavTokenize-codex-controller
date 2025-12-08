@@ -11,7 +11,7 @@
 #   - CE Loss: 強迫特徵跨回正確的 Voronoi Cell
 #
 # 使用 GPU 2 (RTX 2080 Ti, 11GB)
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 set -e
 
@@ -43,6 +43,7 @@ python train_with_ce.py \
     --lora_alpha 128 \
     --feature_weight 1.0 \
     --ce_weight 1.0 \
+    --ce_temperature 0.1 \
     --save_interval 10 \
     --plot_interval 10 \
     --audio_interval 10
@@ -67,6 +68,7 @@ python train_with_ce.py \
     --lora_alpha 128 \
     --feature_weight 0.1 \
     --ce_weight 1.0 \
+    --ce_temperature 0.1 \
     --save_interval 10 \
     --plot_interval 10 \
     --audio_interval 10
@@ -91,6 +93,7 @@ python train_with_ce.py \
     --lora_alpha 128 \
     --feature_weight 0.0 \
     --ce_weight 1.0 \
+    --ce_temperature 0.1 \
     --save_interval 10 \
     --plot_interval 10 \
     --audio_interval 10

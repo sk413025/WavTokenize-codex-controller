@@ -104,15 +104,17 @@ class TeacherStudentWithCE(nn.Module):
 
     def _get_codebook(self):
         """從 Teacher 模型獲取 codebook"""
-        # WavTokenizer 使用的是 ResidualVectorQuantize
-        # codebook 在 quantizer.layers[0]._codebook.embed
+        # WavTokenizer 的結構：
+        # quantizer (ResidualVectorQuantizer)
+        #   └── vq (LanguageVectorQuantization)
+        #       └── layers (ModuleList)
+        #           └── [0] (VectorQuantization)
+        #               └── codebook: (4096, 512)
         try:
             quantizer = self.teacher.feature_extractor.encodec.quantizer
-            # 取第一層的 codebook (bandwidth_id=0)
-            codebook = quantizer.layers[0]._codebook.embed.detach()
-            # shape: (1, num_codes, dim) -> (num_codes, dim)
-            if codebook.dim() == 3:
-                codebook = codebook.squeeze(0)
+            # 正確路徑：quantizer.vq.layers[0].codebook
+            codebook = quantizer.vq.layers[0].codebook.detach()
+            # shape: (num_codes, dim) = (4096, 512)
             return codebook
         except Exception as e:
             print(f"Warning: Could not get codebook directly: {e}")
@@ -122,7 +124,7 @@ class TeacherStudentWithCE(nn.Module):
 
     def forward(self, noisy_audio, clean_audio):
         """
-        Forward pass
+        Forward pass - 優化版本，只調用一次 encoder
 
         Returns:
             dict with features, codes, and raw encoder outputs for CE
@@ -133,23 +135,25 @@ class TeacherStudentWithCE(nn.Module):
         if clean_audio.dim() == 1:
             clean_audio = clean_audio.unsqueeze(0)
 
-        # Teacher: clean audio
+        # Teacher: clean audio (frozen, no grad)
         with torch.no_grad():
             teacher_features, teacher_codes, _ = self.teacher.feature_extractor(
                 clean_audio, bandwidth_id=0
             )
 
-        # Student: noisy audio
-        student_features, student_codes, vq_loss = self.student.feature_extractor(
-            noisy_audio, bandwidth_id=0
-        )
+        # Student: 手動分步執行，避免重複計算 encoder
+        # Step 1: Encoder (只執行一次！)
+        noisy_audio_3d = noisy_audio.unsqueeze(1) if noisy_audio.dim() == 2 else noisy_audio
+        student_encoder_out = self.student.feature_extractor.encodec.encoder(noisy_audio_3d)
+        # shape: (B, C, T) where C=512
 
-        # 獲取 Student 的原始 encoder 輸出 (VQ 之前)
-        # 這需要直接調用 encoder
-        with torch.no_grad():
-            # Student encoder output (這是 VQ 輸入)
-            student_encoder_out = self.student.feature_extractor.encodec.encoder(noisy_audio)
-            # shape: (B, C, T) where C=512
+        # Step 2: VQ (使用 encoder 輸出)
+        quantizer = self.student.feature_extractor.encodec.quantizer
+        vq_result = quantizer(student_encoder_out, frame_rate=75, bandwidth=0.075)
+        # vq_result 是 QuantizedResult 物件，有 .quantized, .codes, .penalty 屬性
+        student_features = vq_result.quantized  # (B, C, T)
+        student_codes = vq_result.codes         # (K, B, T) where K=1
+        vq_loss = vq_result.penalty             # scalar
 
         return {
             'student_features': student_features,      # VQ 後
@@ -191,7 +195,7 @@ class TeacherStudentWithCE(nn.Module):
         return logits  # (B, T, num_codes)
 
 
-def compute_losses(model, output, distance_matrix, feature_weight, ce_weight):
+def compute_losses(model, output, distance_matrix, feature_weight, ce_weight, ce_temperature=0.1):
     """
     計算所有 losses
 
@@ -203,6 +207,11 @@ def compute_losses(model, output, distance_matrix, feature_weight, ce_weight):
         - distance_loss: 僅監控
         - vq_loss: 僅監控
         - token_acc: 僅監控
+
+    Note:
+        ce_temperature: 用於縮放 logits，避免 softmax 飽和
+        - 較小的 temperature (如 0.1) 會使機率分布更尖銳
+        - 這有助於在距離很大時仍然保持有意義的梯度
     """
     student_features = output['student_features']
     teacher_features = output['teacher_features']
@@ -224,9 +233,13 @@ def compute_losses(model, output, distance_matrix, feature_weight, ce_weight):
     else:
         t_codes = teacher_codes.squeeze(1)
 
-    # CE Loss
+    # CE Loss with temperature scaling
+    # Temperature scaling 可以避免 softmax 飽和
+    # 當距離很大時，logits 差異會很大，導致 softmax 趨近於 one-hot
+    # 除以 temperature 可以緩解這個問題
     B, T, num_codes = logits.shape
-    logits_flat = logits.reshape(B * T, num_codes)  # (B*T, num_codes)
+    logits_scaled = logits / ce_temperature  # Temperature scaling
+    logits_flat = logits_scaled.reshape(B * T, num_codes)  # (B*T, num_codes)
     targets_flat = t_codes.reshape(B * T).long()    # (B*T,)
     ce_loss = F.cross_entropy(logits_flat, targets_flat)
 
@@ -260,7 +273,8 @@ def compute_losses(model, output, distance_matrix, feature_weight, ce_weight):
 
 
 def train_epoch(model, dataloader, optimizer, scheduler, device, epoch,
-                distance_matrix, feature_weight, ce_weight, scaler=None, use_amp=True):
+                distance_matrix, feature_weight, ce_weight, ce_temperature=0.1,
+                scaler=None, use_amp=True):
     """訓練一個 epoch"""
     model.train()
 
@@ -281,7 +295,7 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, epoch,
         # Forward with AMP
         with autocast(enabled=use_amp):
             output = model(noisy_audio, clean_audio)
-            losses = compute_losses(model, output, distance_matrix, feature_weight, ce_weight)
+            losses = compute_losses(model, output, distance_matrix, feature_weight, ce_weight, ce_temperature)
             loss = losses['total_loss']
 
         # Backward with AMP
@@ -296,7 +310,8 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, epoch,
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
-        scheduler.step()
+        if scheduler is not None:
+            scheduler.step()
 
         # 累計
         total_loss += losses['total_loss'].item()
@@ -316,9 +331,13 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, epoch,
         })
 
     # 確保 lr 是 float
-    lr = scheduler.get_last_lr()[0]
-    if hasattr(lr, 'item'):
-        lr = lr.item()
+    if scheduler is not None:
+        lr = scheduler.get_last_lr()[0]
+        if hasattr(lr, 'item'):
+            lr = lr.item()
+    else:
+        # 從 optimizer 取得固定學習率
+        lr = optimizer.param_groups[0]['lr']
 
     return {
         'total_loss': total_loss / n_batches,
@@ -332,7 +351,8 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, epoch,
 
 
 @torch.no_grad()
-def validate(model, dataloader, device, distance_matrix, feature_weight, ce_weight, use_amp=True):
+def validate(model, dataloader, device, distance_matrix, feature_weight, ce_weight,
+             ce_temperature=0.1, use_amp=True):
     """驗證"""
     model.eval()
 
@@ -350,7 +370,7 @@ def validate(model, dataloader, device, distance_matrix, feature_weight, ce_weig
 
         with autocast(enabled=use_amp):
             output = model(noisy_audio, clean_audio)
-            losses = compute_losses(model, output, distance_matrix, feature_weight, ce_weight)
+            losses = compute_losses(model, output, distance_matrix, feature_weight, ce_weight, ce_temperature)
 
         total_loss += losses['total_loss'].item()
         total_feature_loss += losses['feature_loss'].item()
@@ -478,20 +498,31 @@ def plot_training_curves(history, exp_dir, epoch):
 
 
 @torch.no_grad()
-def save_audio_samples(model, val_loader, device, exp_dir, epoch, num_samples=3):
-    """保存音檔樣本"""
+def save_audio_samples(model, dataloader, device, exp_dir, epoch, num_samples=3, split='val'):
+    """
+    保存音檔樣本
+    
+    Args:
+        model: 模型
+        dataloader: 資料載入器
+        device: 裝置
+        exp_dir: 實驗目錄
+        epoch: 當前 epoch
+        num_samples: 樣本數量
+        split: 'train' 或 'val'，用於分開儲存
+    """
     model.eval()
-    audio_dir = exp_dir / 'audio_samples' / f'epoch_{epoch:03d}'
+    audio_dir = exp_dir / 'audio_samples' / split / f'epoch_{epoch:03d}'
     audio_dir.mkdir(parents=True, exist_ok=True)
 
     sample_rate = 24000
-    val_iter = iter(val_loader)
+    data_iter = iter(dataloader)
 
     torch.cuda.empty_cache()
 
-    for i in range(min(num_samples, len(val_loader))):
+    for i in range(min(num_samples, len(dataloader))):
         try:
-            batch = next(val_iter)
+            batch = next(data_iter)
         except StopIteration:
             break
 
@@ -539,7 +570,7 @@ def save_audio_samples(model, val_loader, device, exp_dir, epoch, num_samples=3)
             else:
                 raise e
 
-    print(f"  🔊 Saved {min(num_samples, len(val_loader))} audio samples to {audio_dir}")
+    print(f"  🔊 Saved {min(num_samples, len(dataloader))} {split} audio samples to {audio_dir}")
 
 
 def plot_spectrogram(waveform, sample_rate, title, ax):
@@ -643,6 +674,8 @@ def main():
                        help='Weight for Feature MSE Loss')
     parser.add_argument('--ce_weight', type=float, default=1.0,
                        help='Weight for Cross-Entropy Loss')
+    parser.add_argument('--ce_temperature', type=float, default=0.1,
+                       help='Temperature for CE logits scaling (smaller = sharper distribution)')
 
     # LoRA
     parser.add_argument('--lora_rank', type=int, default=64)
@@ -711,18 +744,10 @@ def main():
         weight_decay=args.weight_decay
     )
 
-    # Scheduler (cosine with warmup)
-    total_steps = len(train_loader) * args.num_epochs
-    warmup_steps = int(total_steps * args.warmup_ratio)
-
-    def lr_lambda(step):
-        if step < warmup_steps:
-            return step / warmup_steps
-        else:
-            progress = (step - warmup_steps) / (total_steps - warmup_steps)
-            return 0.5 * (1 + math.cos(progress * 3.14159))
-
-    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+    # Scheduler (disabled - using constant learning rate)
+    # 設為 None 表示不使用 scheduler，保持固定學習率
+    scheduler = None
+    print(f"Scheduler: DISABLED (constant lr={args.learning_rate})")
 
     # AMP
     use_amp = True
@@ -753,6 +778,7 @@ def main():
     print(f"Loss configuration:")
     print(f"  - Feature Loss weight: {args.feature_weight}")
     print(f"  - CE Loss weight: {args.ce_weight}")
+    print(f"  - CE Temperature: {args.ce_temperature}")
     print(f"  - Total = {args.feature_weight}*Feature + {args.ce_weight}*CE")
     print("="*60 + "\n")
 
@@ -762,12 +788,14 @@ def main():
         # Train
         train_results = train_epoch(
             model, train_loader, optimizer, scheduler, device, epoch, distance_matrix,
-            args.feature_weight, args.ce_weight, scaler=scaler, use_amp=use_amp
+            args.feature_weight, args.ce_weight, args.ce_temperature,
+            scaler=scaler, use_amp=use_amp
         )
 
         # Validate
         val_results = validate(model, val_loader, device, distance_matrix,
-                              args.feature_weight, args.ce_weight, use_amp=use_amp)
+                              args.feature_weight, args.ce_weight, args.ce_temperature,
+                              use_amp=use_amp)
 
         # Record history
         history['train_total_loss'].append(train_results['total_loss'])
@@ -819,9 +847,13 @@ def main():
         if epoch % args.plot_interval == 0 or epoch == args.num_epochs:
             plot_training_curves(history, exp_dir, epoch)
 
-        # Save audio samples and spectrograms
+        # Save audio samples and spectrograms (分別儲存 train 和 val)
         if epoch % args.audio_interval == 0 or epoch == args.num_epochs:
-            save_audio_samples(model, val_loader, device, exp_dir, epoch, args.num_audio_samples)
+            # Train samples
+            save_audio_samples(model, train_loader, device, exp_dir, epoch, args.num_audio_samples, split='train')
+            # Val samples
+            save_audio_samples(model, val_loader, device, exp_dir, epoch, args.num_audio_samples, split='val')
+            # Spectrograms (使用 val)
             save_spectrogram_comparison(model, val_loader, device, exp_dir, epoch, args.num_audio_samples)
 
         # Save history
