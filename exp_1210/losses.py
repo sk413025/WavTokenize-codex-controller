@@ -484,3 +484,141 @@ def compute_token_accuracy(student_codes: torch.Tensor, teacher_codes: torch.Ten
         teacher_codes = teacher_codes[0]
 
     return (student_codes == teacher_codes).float().mean().item()
+
+
+class CombinedLossV2(nn.Module):
+    """
+    組合多個損失函數 V2 版本
+
+    支援:
+    - Feature MSE Loss
+    - Triplet Loss
+    - DW (Distance-Weighted) Loss: 使用 codebook 距離作為軟目標
+    - Soft CE Loss: 使用 teacher 分布作為軟目標
+
+    Total Loss = λ₁ * Feature + λ₂ * Triplet + λ₃ * DW + λ₄ * Soft_CE
+    """
+
+    def __init__(
+        self,
+        feature_weight: float = 1.0,
+        triplet_weight: float = 0.5,
+        triplet_margin: float = 0.2,
+        dw_weight: float = 0.0,
+        dw_temperature: float = 1.0,
+        soft_ce_weight: float = 0.0,
+        soft_ce_temperature: float = 2.0,
+    ):
+        super().__init__()
+        self.feature_weight = feature_weight
+        self.triplet_weight = triplet_weight
+        self.dw_weight = dw_weight
+        self.dw_temperature = dw_temperature
+        self.soft_ce_weight = soft_ce_weight
+        self.soft_ce_temperature = soft_ce_temperature
+
+        self.triplet_loss = TripletLoss(margin=triplet_margin)
+
+    def forward(
+        self,
+        student_out: torch.Tensor,
+        teacher_out: torch.Tensor,
+        codebook: torch.Tensor,
+        teacher_codes: torch.Tensor,
+        distance_matrix: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, dict]:
+        """
+        計算組合損失
+
+        Args:
+            student_out: (B, C, T)
+            teacher_out: (B, C, T)
+            codebook: (num_codes, C)
+            teacher_codes: 正確的 token
+            distance_matrix: (num_codes, num_codes), 用於 DW loss
+
+        Returns:
+            total_loss, info
+        """
+        losses = {}
+        info = {}
+        B, C, T = student_out.shape
+
+        # 1. Feature MSE Loss
+        if self.feature_weight > 0:
+            feature_loss = F.mse_loss(student_out, teacher_out)
+            losses['feature'] = self.feature_weight * feature_loss
+            info['feature_loss'] = feature_loss.item()
+
+        # 2. Triplet Loss
+        if self.triplet_weight > 0:
+            triplet_loss, triplet_info = self.triplet_loss(
+                student_out, teacher_out, codebook, teacher_codes
+            )
+            losses['triplet'] = self.triplet_weight * triplet_loss
+            info['triplet_loss'] = triplet_loss.item()
+            info.update({f'triplet_{k}': v for k, v in triplet_info.items()})
+
+        # 3. DW (Distance-Weighted) Loss
+        if self.dw_weight > 0:
+            # 計算 student 到所有 codebook 的 logits
+            z = student_out.permute(0, 2, 1).reshape(-1, C)  # (B*T, C)
+
+            # 負 L2 距離作為 logits
+            # logits[i,j] = -||z_i - c_j||^2
+            z_sq = (z ** 2).sum(dim=1, keepdim=True)  # (B*T, 1)
+            c_sq = (codebook ** 2).sum(dim=1, keepdim=True).t()  # (1, num_codes)
+            logits = 2 * torch.matmul(z, codebook.t()) - z_sq - c_sq  # (B*T, num_codes)
+            logits = logits / self.dw_temperature
+
+            # 處理 teacher_codes
+            if teacher_codes.dim() == 3:
+                tc = teacher_codes[0]
+            else:
+                tc = teacher_codes
+            targets = tc.reshape(-1).long()  # (B*T,)
+
+            # 使用 cross entropy
+            dw_loss = F.cross_entropy(logits, targets)
+            losses['dw'] = self.dw_weight * dw_loss
+            info['dw_loss'] = dw_loss.item()
+
+        # 4. Soft CE Loss (知識蒸餾風格)
+        if self.soft_ce_weight > 0:
+            z = student_out.permute(0, 2, 1).reshape(-1, C)  # (B*T, C)
+
+            # Student logits
+            z_sq = (z ** 2).sum(dim=1, keepdim=True)
+            c_sq = (codebook ** 2).sum(dim=1, keepdim=True).t()
+            student_logits = 2 * torch.matmul(z, codebook.t()) - z_sq - c_sq
+            student_logits = student_logits / self.soft_ce_temperature
+
+            # Teacher logits (使用 teacher encoder output)
+            t = teacher_out.permute(0, 2, 1).reshape(-1, C)  # (B*T, C)
+            t_sq = (t ** 2).sum(dim=1, keepdim=True)
+            teacher_logits = 2 * torch.matmul(t, codebook.t()) - t_sq - c_sq
+            teacher_logits = teacher_logits / self.soft_ce_temperature
+
+            # KL divergence
+            student_log_prob = F.log_softmax(student_logits, dim=-1)
+            teacher_prob = F.softmax(teacher_logits, dim=-1)
+            soft_ce_loss = F.kl_div(student_log_prob, teacher_prob, reduction='batchmean')
+
+            losses['soft_ce'] = self.soft_ce_weight * soft_ce_loss
+            info['soft_ce_loss'] = soft_ce_loss.item()
+
+        # 設定預設值
+        if 'feature_loss' not in info:
+            info['feature_loss'] = 0.0
+        if 'triplet_loss' not in info:
+            info['triplet_loss'] = 0.0
+        if 'dw_loss' not in info:
+            info['dw_loss'] = 0.0
+        if 'soft_ce_loss' not in info:
+            info['soft_ce_loss'] = 0.0
+
+        # 總損失
+        total_loss = sum(losses.values())
+        info['total_loss'] = total_loss.item()
+
+        return total_loss, info

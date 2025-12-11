@@ -15,7 +15,7 @@
 # - Exp27 已修復，結果更可靠
 # ============================================================
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=2
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 set -e
 
@@ -35,7 +35,7 @@ python train_lora_v3.py \
     --dw_weight 0.0 \
     --soft_ce_weight 0.0 \
     --lr 2e-5 \
-    --batch_size 8 \
+    --batch_size 16 \
     --num_epochs 50 \
     --num_workers 4 \
     --seed 42 \

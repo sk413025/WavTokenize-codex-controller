@@ -50,7 +50,7 @@ python train_lora_v3.py \
     --soft_ce_temperature 2.0 \
     --dw_weight 0.0 \
     --lr 2e-5 \
-    --batch_size 16 \
+    --batch_size 14 \
     --num_epochs 50 \
     --num_workers 4 \
     --seed 42 \

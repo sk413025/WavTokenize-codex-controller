@@ -1,4 +1,4 @@
-#!/bin/bash
+i3/bin/bash
 # ============================================================
 # Exp26: Feature Only (修復版基線)
 # ============================================================
@@ -20,7 +20,7 @@
 # - 這是驗證修復成功的關鍵實驗
 # ============================================================
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 set -e
 
@@ -45,7 +45,7 @@ python train_lora_v3.py \
     --dw_weight 0.0 \
     --soft_ce_weight 0.0 \
     --lr 2e-5 \
-    --batch_size 8 \
+    --batch_size 16 \
     --num_epochs 50 \
     --num_workers 4 \
     --seed 42 \

@@ -13,6 +13,7 @@ exp_1210: 修復版訓練腳本
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchaudio
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -246,6 +247,192 @@ def validate(
     return metrics
 
 
+@torch.no_grad()
+def save_audio_samples(model, dataloader, device, exp_dir, epoch, num_samples=3, split='val'):
+    """
+    保存音檔樣本
+
+    Args:
+        model: 模型
+        dataloader: 資料載入器
+        device: 裝置
+        exp_dir: 實驗目錄
+        epoch: 當前 epoch
+        num_samples: 樣本數量
+        split: 'train' 或 'val'，用於分開儲存
+
+    每個樣本包含：
+    - noisy: 原始噪音音頻
+    - clean: 目標乾淨音頻
+    - student_recon: Student encoder → Teacher decoder
+    - teacher_recon: Teacher encoder → Teacher decoder
+    """
+    model.eval()
+    audio_dir = exp_dir / 'audio_samples' / split / f'epoch_{epoch:03d}'
+    audio_dir.mkdir(parents=True, exist_ok=True)
+
+    sample_rate = 24000
+    data_iter = iter(dataloader)
+
+    torch.cuda.empty_cache()
+
+    for i in range(min(num_samples, len(dataloader))):
+        try:
+            batch = next(data_iter)
+        except StopIteration:
+            break
+
+        noisy_audio = batch['noisy_audio'][:1].to(device)
+        clean_audio = batch['clean_audio'][:1].to(device)
+
+        # 確保格式
+        if noisy_audio.dim() == 1:
+            noisy_audio = noisy_audio.unsqueeze(0)
+        if clean_audio.dim() == 1:
+            clean_audio = clean_audio.unsqueeze(0)
+
+        # 1. 保存 noisy
+        noisy_path = audio_dir / f'sample_{i+1}_noisy.wav'
+        torchaudio.save(str(noisy_path), noisy_audio.cpu(), sample_rate)
+
+        # 2. 保存 clean
+        clean_path = audio_dir / f'sample_{i+1}_clean.wav'
+        torchaudio.save(str(clean_path), clean_audio.cpu(), sample_rate)
+
+        try:
+            # 3. Student reconstruction: noisy → student encoder → teacher decoder
+            student_features, _, _ = model.student.feature_extractor(noisy_audio, bandwidth_id=0)
+            student_recon = model.teacher.decode(student_features, bandwidth_id=torch.tensor([0]).to(device))
+            if student_recon.dim() == 3:
+                student_recon = student_recon.squeeze(1)
+            student_path = audio_dir / f'sample_{i+1}_student_recon.wav'
+            torchaudio.save(str(student_path), student_recon.cpu(), sample_rate)
+            del student_features, student_recon
+            torch.cuda.empty_cache()
+
+            # 4. Teacher reconstruction: clean → teacher encoder → teacher decoder
+            teacher_features, _, _ = model.teacher.feature_extractor(clean_audio, bandwidth_id=0)
+            teacher_recon = model.teacher.decode(teacher_features, bandwidth_id=torch.tensor([0]).to(device))
+            if teacher_recon.dim() == 3:
+                teacher_recon = teacher_recon.squeeze(1)
+            teacher_path = audio_dir / f'sample_{i+1}_teacher_recon.wav'
+            torchaudio.save(str(teacher_path), teacher_recon.cpu(), sample_rate)
+            del teacher_features, teacher_recon
+            torch.cuda.empty_cache()
+
+        except RuntimeError as e:
+            if "out of memory" in str(e):
+                print(f"  OOM when saving audio sample {i+1}, skipping reconstruction")
+                torch.cuda.empty_cache()
+            else:
+                raise e
+
+    print(f"  Saved {min(num_samples, len(dataloader))} {split} audio samples to {audio_dir}")
+
+
+def plot_spectrogram(waveform, sample_rate, title, ax):
+    """繪製單個頻譜圖"""
+    import numpy as np
+
+    # 確保是 numpy array
+    if torch.is_tensor(waveform):
+        waveform = waveform.cpu().numpy()
+
+    # 確保是 1D
+    if waveform.ndim > 1:
+        waveform = waveform.squeeze()
+
+    # 計算 spectrogram
+    n_fft = 1024
+    hop_length = 256
+
+    ax.specgram(waveform, NFFT=n_fft, Fs=sample_rate, noverlap=n_fft-hop_length,
+                cmap='viridis', scale='dB')
+    ax.set_title(title)
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Frequency (Hz)')
+
+
+@torch.no_grad()
+def save_spectrogram_comparison(model, val_loader, device, exp_dir, epoch, num_samples=3):
+    """
+    保存頻譜圖比較
+
+    每個樣本生成一張圖，包含 4 個子圖：
+    - noisy: 原始噪音音頻
+    - clean: 目標乾淨音頻
+    - student_recon: Student encoder → Teacher decoder
+    - teacher_recon: Teacher encoder → Teacher decoder
+    """
+    model.eval()
+    spec_dir = exp_dir / 'spectrograms' / f'epoch_{epoch:03d}'
+    spec_dir.mkdir(parents=True, exist_ok=True)
+
+    sample_rate = 24000
+    val_iter = iter(val_loader)
+
+    torch.cuda.empty_cache()
+
+    for i in range(min(num_samples, len(val_loader))):
+        try:
+            batch = next(val_iter)
+        except StopIteration:
+            break
+
+        noisy_audio = batch['noisy_audio'][:1].to(device)
+        clean_audio = batch['clean_audio'][:1].to(device)
+
+        if noisy_audio.dim() == 1:
+            noisy_audio = noisy_audio.unsqueeze(0)
+        if clean_audio.dim() == 1:
+            clean_audio = clean_audio.unsqueeze(0)
+
+        # 創建 2x2 子圖
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+        fig.suptitle(f'Spectrogram Comparison - Sample {i+1} (Epoch {epoch})', fontsize=14)
+
+        # 1. Noisy
+        plot_spectrogram(noisy_audio[0], sample_rate, 'Noisy Input', axes[0, 0])
+
+        # 2. Clean
+        plot_spectrogram(clean_audio[0], sample_rate, 'Clean Target', axes[0, 1])
+
+        try:
+            # 3. Student reconstruction
+            student_features, _, _ = model.student.feature_extractor(noisy_audio, bandwidth_id=0)
+            student_recon = model.teacher.decode(student_features, bandwidth_id=torch.tensor([0]).to(device))
+            if student_recon.dim() == 3:
+                student_recon = student_recon.squeeze(1)
+            plot_spectrogram(student_recon[0], sample_rate, 'Student Recon (noisy→student→decoder)', axes[1, 0])
+            del student_features, student_recon
+            torch.cuda.empty_cache()
+
+            # 4. Teacher reconstruction
+            teacher_features, _, _ = model.teacher.feature_extractor(clean_audio, bandwidth_id=0)
+            teacher_recon = model.teacher.decode(teacher_features, bandwidth_id=torch.tensor([0]).to(device))
+            if teacher_recon.dim() == 3:
+                teacher_recon = teacher_recon.squeeze(1)
+            plot_spectrogram(teacher_recon[0], sample_rate, 'Teacher Recon (clean→teacher→decoder)', axes[1, 1])
+            del teacher_features, teacher_recon
+            torch.cuda.empty_cache()
+
+        except RuntimeError as e:
+            if "out of memory" in str(e):
+                print(f"  OOM when generating spectrogram {i+1}")
+                axes[1, 0].text(0.5, 0.5, 'OOM', ha='center', va='center', transform=axes[1, 0].transAxes)
+                axes[1, 1].text(0.5, 0.5, 'OOM', ha='center', va='center', transform=axes[1, 1].transAxes)
+                torch.cuda.empty_cache()
+            else:
+                raise e
+
+        plt.tight_layout()
+        spec_path = spec_dir / f'sample_{i+1}_spectrogram.png'
+        plt.savefig(spec_path, dpi=150, bbox_inches='tight')
+        plt.close()
+
+    print(f"  Saved {min(num_samples, len(val_loader))} spectrograms to {spec_dir}")
+
+
 def save_plots(history: dict, exp_dir: Path):
     """保存訓練曲線"""
     fig, axes = plt.subplots(2, 3, figsize=(15, 10))
@@ -464,6 +651,13 @@ def main():
 
         # 保存圖表
         save_plots(history, exp_dir)
+
+        # 每 5 個 epoch 保存音檔和頻譜圖
+        if epoch % 5 == 0 or epoch == 1:
+            print(f"\n[Epoch {epoch}] 保存音檔和頻譜圖...")
+            save_audio_samples(model, train_loader, device, exp_dir, epoch, num_samples=2, split='train')
+            save_audio_samples(model, val_loader, device, exp_dir, epoch, num_samples=2, split='val')
+            save_spectrogram_comparison(model, val_loader, device, exp_dir, epoch, num_samples=2)
 
     # 完成
     print(f"\n{'='*60}")
