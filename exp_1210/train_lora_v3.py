@@ -494,6 +494,8 @@ def main():
     parser.add_argument('--exp_name', type=str, required=True, help='實驗名稱')
     parser.add_argument('--lora_rank', type=int, default=128, help='LoRA rank')
     parser.add_argument('--lora_alpha', type=int, default=256, help='LoRA alpha')
+    parser.add_argument('--lora_dropout', type=float, default=0.1, help='LoRA dropout rate')
+    parser.add_argument('--weight_decay', type=float, default=0.01, help='Weight decay for AdamW')
     parser.add_argument('--feature_weight', type=float, default=1.0, help='Feature Loss 權重')
     parser.add_argument('--triplet_weight', type=float, default=0.5, help='Triplet Loss 權重')
     parser.add_argument('--triplet_margin', type=float, default=0.2, help='Triplet margin')
@@ -529,9 +531,10 @@ def main():
     print(f"\n{'='*60}")
     print(f"Exp1210 (Fixed): {args.exp_name}")
     print(f"{'='*60}")
-    print(f"LoRA: rank={args.lora_rank}, alpha={args.lora_alpha}, 18 layers")
+    print(f"LoRA: rank={args.lora_rank}, alpha={args.lora_alpha}, dropout={args.lora_dropout}, 18 layers")
     print(f"Loss weights: feature={args.feature_weight}, triplet={args.triplet_weight}")
     print(f"             dw={args.dw_weight}, soft_ce={args.soft_ce_weight}")
+    print(f"Optimizer: lr={args.lr}, weight_decay={args.weight_decay}")
     print(f"Codebook safety check interval: {args.check_interval} batches")
     print(f"{'='*60}\n")
 
@@ -545,6 +548,7 @@ def main():
         wavtok_ckpt=WAVTOK_CKPT,
         lora_rank=args.lora_rank,
         lora_alpha=args.lora_alpha,
+        lora_dropout=args.lora_dropout,
         device=device,
     )
 
@@ -568,7 +572,7 @@ def main():
     # 只優化可訓練參數 (LoRA)
     trainable_params = list(get_trainable_params(model))
     print(f"Trainable parameters: {sum(p.numel() for p in trainable_params):,}")
-    optimizer = torch.optim.AdamW(trainable_params, lr=args.lr, weight_decay=0.01)
+    optimizer = torch.optim.AdamW(trainable_params, lr=args.lr, weight_decay=args.weight_decay)
 
     # AMP scaler
     scaler = GradScaler() if args.use_amp else None

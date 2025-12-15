@@ -239,3 +239,34 @@ class TeacherStudentExpandedLoRA(nn.Module):
             'teacher_codes': teacher_codes,
             'codebook': self.codebook,
         }
+
+    def compute_ce_logits(self, encoder_out):
+        """
+        計算 Cross-Entropy logits
+
+        基於到每個 codebook entry 的負距離作為 logits。
+        logits = -||z - c||^2 = 2*z*c - c^2  (忽略 z^2，對 softmax 無影響)
+
+        Args:
+            encoder_out: (B, C, T) - Student encoder 輸出
+
+        Returns:
+            logits: (B, num_codes, T)
+        """
+        B, C, T = encoder_out.shape
+
+        # encoder_out: (B, C, T) -> (B, T, C)
+        z = encoder_out.permute(0, 2, 1)  # (B, T, C)
+
+        # codebook: (num_codes, C)
+        # 計算 2*z*c: (B, T, C) @ (C, num_codes) -> (B, T, num_codes)
+        logits = 2 * torch.matmul(z, self.codebook.t())
+
+        # 減去 c^2: (num_codes,) broadcast
+        c_sq = (self.codebook ** 2).sum(dim=1)  # (num_codes,)
+        logits = logits - c_sq.unsqueeze(0).unsqueeze(0)
+
+        # Permute to (B, num_codes, T) for MaskedCrossEntropyLoss
+        logits = logits.permute(0, 2, 1)
+
+        return logits
