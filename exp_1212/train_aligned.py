@@ -459,6 +459,12 @@ def main():
     # Encoder stride (WavTokenizer ~320)
     parser.add_argument('--encoder_stride', type=int, default=320)
 
+    # Resume training
+    parser.add_argument('--resume', type=str, default=None,
+                        help='Path to checkpoint to resume from (e.g., runs/exp37_ce_only/best_model.pt)')
+    parser.add_argument('--resume_epoch', type=int, default=None,
+                        help='Override starting epoch (default: use checkpoint epoch)')
+
     args = parser.parse_args()
 
     # 設置種子
@@ -544,6 +550,36 @@ def main():
         weight_decay=args.weight_decay,
     )
 
+    # Resume from checkpoint
+    start_epoch = 1
+    if args.resume:
+        resume_path = Path(args.resume)
+        if not resume_path.is_absolute():
+            resume_path = Path(__file__).parent / resume_path
+
+        if resume_path.exists():
+            print(f"\n載入 checkpoint: {resume_path}")
+            checkpoint = torch.load(resume_path, map_location=device)
+
+            # 載入模型權重
+            model.load_state_dict(checkpoint['model_state_dict'])
+            print(f"  模型權重已載入")
+
+            # 載入 optimizer 狀態
+            if 'optimizer_state_dict' in checkpoint:
+                optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                print(f"  Optimizer 狀態已載入")
+
+            # 設置起始 epoch
+            if args.resume_epoch is not None:
+                start_epoch = args.resume_epoch
+            elif 'epoch' in checkpoint:
+                start_epoch = checkpoint['epoch'] + 1
+
+            print(f"  從 Epoch {start_epoch} 繼續訓練")
+        else:
+            print(f"警告: checkpoint 不存在: {resume_path}")
+
     # Scheduler (Cosine with Warmup)
     scheduler = None
     if args.use_scheduler:
@@ -588,9 +624,31 @@ def main():
     best_val_acc = 0
     best_epoch = 0
 
+    # Resume: 載入之前的 history (如果存在)
+    if args.resume:
+        resume_path = Path(args.resume)
+        if not resume_path.is_absolute():
+            resume_path = Path(__file__).parent / resume_path
+
+        history_path = resume_path.parent / 'history.json'
+        if history_path.exists():
+            with open(history_path, 'r') as f:
+                old_history = json.load(f)
+            # 只保留到 resume epoch 之前的歷史
+            for key in history.keys():
+                if key in old_history:
+                    history[key] = old_history[key][:start_epoch - 1]
+            print(f"  訓練歷史已載入 ({len(history['train_loss'])} epochs)")
+
+            # 更新 best_val_acc
+            if history['val_masked_acc']:
+                best_val_acc = max(history['val_masked_acc'])
+                best_epoch = history['val_masked_acc'].index(best_val_acc) + 1
+                print(f"  之前最佳: Epoch {best_epoch}, Masked Acc: {best_val_acc*100:.2f}%")
+
     # 訓練循環
     print("\n開始訓練...")
-    for epoch in range(1, args.num_epochs + 1):
+    for epoch in range(start_epoch, args.num_epochs + 1):
         print(f"\n{'='*60}")
         print(f"Epoch {epoch}/{args.num_epochs}")
         print(f"{'='*60}")
