@@ -8,7 +8,7 @@
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate test
 
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=0
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 set -e
 

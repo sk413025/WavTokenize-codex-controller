@@ -9,7 +9,7 @@
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate test
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=2
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 set -e
 
@@ -40,7 +40,8 @@ python train.py \
     --use_amp \
     --use_scheduler \
     --warmup_epochs 5 \
-    --grad_clip 1.0
+    --grad_clip 1.0 \
+    --seed 42
 
 echo "============================================================"
 echo "Exp47 完成!"
