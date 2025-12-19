@@ -22,13 +22,15 @@ class AlignedNoisyCleanPairDataset(Dataset):
     修復:
     1. 每對 noisy/clean 截到相同長度 (min_len)
     2. 返回 length 資訊供 masked loss 使用
+    3. 過濾 Clean→Clean 樣本 (Student 應只訓練 denoising)
     """
 
-    def __init__(self, cache_path, max_samples=None):
+    def __init__(self, cache_path, max_samples=None, filter_clean_to_clean=True):
         """
         Args:
             cache_path: Path to train_cache.pt or val_cache.pt
             max_samples: 最多載入多少樣本 (用於 smoke test)
+            filter_clean_to_clean: 是否過濾掉 clean→clean 樣本 (預設 True)
         """
         self.cache_path = Path(cache_path)
         assert self.cache_path.exists(), f"Cache not found: {cache_path}"
@@ -37,12 +39,39 @@ class AlignedNoisyCleanPairDataset(Dataset):
         data = torch.load(cache_path, weights_only=False)
 
         # 假設 data 結構: list of dicts with 'noisy_audio' and 'clean_audio'
-        self.samples = data if isinstance(data, list) else [data]
+        samples = data if isinstance(data, list) else [data]
+
+        # 過濾 Clean→Clean 樣本
+        if filter_clean_to_clean:
+            original_count = len(samples)
+            samples = [
+                s for s in samples
+                if not self._is_clean_to_clean(s)
+            ]
+            filtered_count = original_count - len(samples)
+            print(f"Filtered {filtered_count} clean→clean samples ({filtered_count/original_count*100:.1f}%)")
+
+        self.samples = samples
 
         if max_samples is not None:
             self.samples = self.samples[:max_samples]
 
         print(f"Loaded {len(self.samples)} samples from {cache_path}")
+
+    def _is_clean_to_clean(self, sample):
+        """判斷是否為 clean→clean 樣本"""
+        noisy_path = sample.get('noisy_path', '')
+        clean_path = sample.get('clean_path', '')
+
+        # 方法1: 路徑相同
+        if noisy_path == clean_path:
+            return True
+
+        # 方法2: noisy_path 包含 '_clean_' (表示是 clean 音訊)
+        if '_clean_' in noisy_path:
+            return True
+
+        return False
 
     def __len__(self):
         return len(self.samples)
