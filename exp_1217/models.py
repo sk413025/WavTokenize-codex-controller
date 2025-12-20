@@ -50,6 +50,7 @@ ALL_ENCODER_CONV_MODULES = [
 ]
 
 # 關鍵 8 層 (輸入/輸出投影 + downsampling + 關鍵 residual)
+# 注意: 這個配置遺漏了 model.7 和 model.10 的語義層！
 CRITICAL_ENCODER_CONV_MODULES = [
     # 輸入投影
     "feature_extractor.encodec.encoder.model.0.conv.conv",
@@ -65,10 +66,38 @@ CRITICAL_ENCODER_CONV_MODULES = [
     "feature_extractor.encodec.encoder.model.15.conv.conv",
 ]
 
+# 關鍵 10 層 (修正版: 包含 model.7 和 model.10 語義層)
+# 設計原則:
+# - model.0: 輸入投影 (首層處理噪聲)
+# - model.7.*: 語義提取 ResBlock ★★★ (關鍵!)
+# - model.10.*: 高階抽象 ResBlock ★★★ (關鍵!)
+# - model.15: 輸出投影到 VQ 空間
+# - Downsample 層保留以維持空間一致性
+CRITICAL_10_ENCODER_CONV_MODULES = [
+    # 輸入投影
+    "feature_extractor.encodec.encoder.model.0.conv.conv",
+    # Downsample 層 (維持空間結構)
+    "feature_extractor.encodec.encoder.model.3.conv.conv",
+    "feature_extractor.encodec.encoder.model.6.conv.conv",
+    # model.7 語義提取 ResBlock (完整覆蓋) ★★★
+    "feature_extractor.encodec.encoder.model.7.block.1.conv.conv",
+    "feature_extractor.encodec.encoder.model.7.block.3.conv.conv",
+    # Downsample 3
+    "feature_extractor.encodec.encoder.model.9.conv.conv",
+    # model.10 高階抽象 ResBlock (完整覆蓋) ★★★
+    "feature_extractor.encodec.encoder.model.10.block.1.conv.conv",
+    "feature_extractor.encodec.encoder.model.10.block.3.conv.conv",
+    # Downsample 4
+    "feature_extractor.encodec.encoder.model.12.conv.conv",
+    # 輸出投影
+    "feature_extractor.encodec.encoder.model.15.conv.conv",
+]
+
 # 層配置預設
 LORA_LAYER_PRESETS = {
     'all_18': ALL_ENCODER_CONV_MODULES,
     'critical_8': CRITICAL_ENCODER_CONV_MODULES,
+    'critical_10': CRITICAL_10_ENCODER_CONV_MODULES,
 }
 
 
