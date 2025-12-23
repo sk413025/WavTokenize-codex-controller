@@ -82,6 +82,7 @@ def train_epoch(
     use_amp: bool = True,
     check_interval: int = 100,
     grad_clip: float = 1.0,
+    gradient_accumulation_steps: int = 1,
 ) -> dict:
     """訓練一個 epoch"""
     model.train()
@@ -102,7 +103,9 @@ def train_epoch(
         clean_audio = batch['clean_audio'].to(device)
         lengths = batch['lengths'].to(device)
 
-        optimizer.zero_grad()
+        # 只在累積開始時清零梯度
+        if batch_idx % gradient_accumulation_steps == 0:
+            optimizer.zero_grad()
 
         if use_amp and scaler is not None:
             with autocast(enabled=use_amp):
@@ -121,11 +124,16 @@ def train_epoch(
                     logits=logits,
                 )
 
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(get_trainable_params(model), grad_clip)
-            scaler.step(optimizer)
-            scaler.update()
+            # 縮放 loss 以匹配累積步數
+            scaled_loss = loss / gradient_accumulation_steps
+            scaler.scale(scaled_loss).backward()
+
+            # 只在累積完成時更新參數
+            if (batch_idx + 1) % gradient_accumulation_steps == 0:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(get_trainable_params(model), grad_clip)
+                scaler.step(optimizer)
+                scaler.update()
         else:
             output = model(noisy_audio, clean_audio)
 
@@ -142,9 +150,14 @@ def train_epoch(
                 logits=logits,
             )
 
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(get_trainable_params(model), grad_clip)
-            optimizer.step()
+            # 縮放 loss 以匹配累積步數
+            scaled_loss = loss / gradient_accumulation_steps
+            scaled_loss.backward()
+
+            # 只在累積完成時更新參數
+            if (batch_idx + 1) % gradient_accumulation_steps == 0:
+                torch.nn.utils.clip_grad_norm_(get_trainable_params(model), grad_clip)
+                optimizer.step()
 
         if (batch_idx + 1) % check_interval == 0:
             verify_model_state(model, f"Epoch {epoch} Batch {batch_idx + 1}")
@@ -436,7 +449,7 @@ def main():
     parser.add_argument('--lora_alpha', type=int, default=256)
     parser.add_argument('--lora_dropout', type=float, default=0.2)
     parser.add_argument('--lora_layers', type=str, default='all_18',
-                        choices=['all_18', 'critical_8'],
+                        choices=['all_18', 'critical_8', 'critical_10'],
                         help='Which encoder layers to apply LoRA')
 
     # Loss 權重
@@ -460,6 +473,10 @@ def main():
     parser.add_argument('--use_scheduler', action='store_true')
     parser.add_argument('--warmup_epochs', type=int, default=10)
     parser.add_argument('--grad_clip', type=float, default=1.0)
+
+    # Gradient Accumulation
+    parser.add_argument('--gradient_accumulation_steps', type=int, default=1,
+                        help='Number of steps to accumulate gradients before updating')
 
     # Encoder stride
     parser.add_argument('--encoder_stride', type=int, default=320)
@@ -497,6 +514,10 @@ def main():
     print(f"  Cosine: {args.cosine_weight}")  # NEW
     print(f"  Triplet: {args.triplet_weight} (margin={args.triplet_margin})")
     print(f"  CE: {args.ce_weight}")
+    print(f"Training Config:")
+    print(f"  Batch Size: {args.batch_size}")
+    print(f"  Gradient Accumulation: {args.gradient_accumulation_steps}")
+    print(f"  Effective Batch Size: {args.batch_size * args.gradient_accumulation_steps}")
     print("=" * 60)
 
     # 載入資料
@@ -649,7 +670,7 @@ def main():
         train_metrics = train_epoch(
             model, train_loader, optimizer, loss_fn, device, epoch,
             distance_matrix, args.encoder_stride, scaler, args.use_amp, args.check_interval,
-            args.grad_clip
+            args.grad_clip, args.gradient_accumulation_steps
         )
 
         current_lr = optimizer.param_groups[0]['lr']

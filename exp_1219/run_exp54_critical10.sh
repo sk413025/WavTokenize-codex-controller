@@ -27,7 +27,7 @@ conda activate test
 
 cd /home/sbplab/ruizi/WavTokenize-self-supervised
 
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 python exp_1219/train.py \
@@ -37,9 +37,9 @@ python exp_1219/train.py \
     --lora_dropout 0.2 \
     --lora_layers critical_10 \
     --feature_weight 1.0 \
-    --cosine_weight 0.1 \
+    --cosine_weight 0.0 \
     --triplet_weight 1.0 \
-    --triplet_margin 0.5 \
+    --triplet_margin 0.2 \
     --ce_weight 0.0 \
     --lr 1e-4 \
     --weight_decay 0.05 \

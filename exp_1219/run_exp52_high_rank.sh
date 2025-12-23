@@ -18,7 +18,7 @@ conda activate test
 
 cd /home/sbplab/ruizi/WavTokenize-self-supervised
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 python exp_1219/train.py \

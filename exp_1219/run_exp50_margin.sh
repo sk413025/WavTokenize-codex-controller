@@ -11,9 +11,12 @@
 # 修改:
 # - triplet_margin: 0.2 -> 0.5
 
-cd /home/sbplab/ruizi/WavTokenize-self-supervised
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate test
 
-export CUDA_VISIBLE_DEVICES=1
+cd /home/sbplab/ruizi/WavTokenize-self-supervised
+export CUDA_VISIBLE_DEVICES=2
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 python exp_1219/train.py \
     --exp_name exp50_margin \
