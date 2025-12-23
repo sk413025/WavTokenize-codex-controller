@@ -36,7 +36,7 @@ python train.py \
     --use_scheduler \
     --warmup_epochs 10 \
     --grad_clip 1.0 \
-    --batch_size 16 \
+    --batch_size 12 \
     --num_epochs 100 \
     --num_workers 4 \
     --seed 42 \
