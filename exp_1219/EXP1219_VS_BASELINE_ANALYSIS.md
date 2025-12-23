@@ -36,8 +36,8 @@
 | Exp50 | triplet_margin: 0.2→**0.5** | 100 | 0.81% | 📉 -0.07% | ✅ 完成 |
 | Exp51_v2 | margin=0.5 + cosine=**0.1** | 100 | 0.82% | 📉 -0.06% | ✅ 完成 |
 | Exp52 | rank=**256**, margin=0.5, cosine=0.1 | 78/100 | ~0.84% | 📉 -0.04% | ❌ OOM |
-| Exp53 | dropout=**0.4**, weight_decay=**0.1** | 170/200 | ~0.78% | 📉 -0.10% | 🔄 進行中 |
-| **Exp55** | rank=**256** + grad_accum=**2** | 200 | **0.91%** | 📈 **+0.03%** | ✅ 完成 |
+| Exp53 | dropout=**0.4**, weight_decay=**0.1** | 200 | 0.80% | 📉 -0.08% | ✅ 完成 |
+| **Exp55** | rank=**256** + grad_accum=**2** | 200 | **0.91%** | 📈 **+0.03%** | ✅ 完成 ⚠️ |
 
 ---
 
@@ -194,8 +194,20 @@ triplet_margin=0.2, cosine_weight=0.0
 feature_weight=1.0, triplet_weight=1.0
 ```
 
-**結果**: Val Acc ~0.78% (📉 -0.10%)  
-**結論**: 過強的正則化反而**限制了模型學習能力**。問題可能不是過擬合，而是任務本身的難度（noisy → clean 映射的上限）
+**結果**: Val Acc = **0.80%** (📉 -0.08%), Best Epoch = 151
+
+**過擬合分析**:
+| 指標 | 數值 |
+|------|------|
+| Best Val Loss Epoch | 149 |
+| Best Val Loss | 1.1077 |
+| Final Val Loss (Epoch 200) | 1.1155 |
+| 過擬合程度 | **+0.70%** |
+
+**結論**:
+1. 過強的正則化反而**限制了模型學習能力**
+2. 雖然過擬合程度最低（僅 0.70%），但代價是犧牲了絕對性能
+3. 問題可能不是過擬合，而是任務本身的難度（noisy → clean 映射的上限）
 
 ---
 
@@ -235,13 +247,28 @@ triplet_margin=0.2, cosine_weight=0.0
 feature_weight=1.0, triplet_weight=1.0
 ```
 
-**結果**: Val Acc = **0.91%** (📈 +0.03%)，Best Epoch = 173  
+**結果**: Val Acc = **0.91%** (📈 +0.03%)，Best Epoch = 173
 
-**結論**: 
+**⚠️ 過擬合分析**:
+| 指標 | 數值 |
+|------|------|
+| Best Val Loss Epoch | **56** |
+| Best Val Loss | 1.1069 |
+| Final Val Loss (Epoch 200) | 1.1565 |
+| 過擬合程度 | **+4.49%** |
+
+**關鍵發現**:
+- Val Loss 在 **Epoch 56** 就達到最低，之後持續上升
+- Val Accuracy 在 Epoch 173 達到最高 (0.91%)
+- **Val Loss 和 Val Accuracy 的最佳 epoch 差距很大**（56 vs 173）
+- 這表明 Val Loss 可能不是最好的模型選擇指標
+
+**結論**:
 1. **唯一超越 baseline 的實驗！**
 2. 高容量 LoRA (rank=256) 確實有幫助，但需要穩定梯度
 3. 回歸 baseline 的 loss 配置 (margin=0.2, cosine=0) 是正確的
 4. 證明「**容量 + 穩定梯度 + 正確 loss 配置**」三者缺一不可
+5. ⚠️ **過擬合警告**: Val Loss 上升 4.49%，建議使用 **Early Stopping** 或基於 Val Accuracy 選擇模型
 
 ---
 
@@ -277,12 +304,27 @@ feature_weight=1.0, triplet_weight=1.0
 
 ### 4. 正則化分析
 
-| 配置 | Dropout | Weight Decay | Val Acc |
-|------|---------|--------------|---------|
-| Baseline | 0.2 | 0.05 | 0.88% |
-| Exp53 | 0.4 | 0.1 | ~0.78% |
+| 配置 | Dropout | Weight Decay | Val Acc | 過擬合程度 |
+|------|---------|--------------|---------|------------|
+| Baseline | 0.2 | 0.05 | 0.88% | - |
+| Exp53 | 0.4 | 0.1 | 0.80% | **+0.70%** |
+| Exp55 | 0.2 | 0.05 | **0.91%** | **+4.49%** |
 
-**解釋**: 過強的正則化限制了模型的學習能力
+**解釋**:
+- 過強的正則化 (Exp53) 雖然減少過擬合，但限制了模型的學習能力
+- Exp55 雖然過擬合程度較高，但絕對性能最佳
+
+### 5. 過擬合分析總結
+
+| 實驗 | Best Val Loss Epoch | Best Val Acc Epoch | Loss 過擬合 |
+|------|---------------------|--------------------| ------------|
+| Exp53 | 149 | 151 | +0.70% (輕微) |
+| Exp55 | **56** | 173 | **+4.49%** (顯著) |
+
+**重要發現**: Exp55 的 Val Loss 和 Val Accuracy 最佳 epoch 差距達 117 個 epoch，說明：
+1. Val Loss 可能不是選擇模型的最佳指標
+2. 應該基於 **Val Accuracy** 而非 Val Loss 選擇 checkpoint
+3. Early Stopping 策略需要重新考慮
 
 ---
 
@@ -308,14 +350,23 @@ feature_weight=1.0, triplet_weight=1.0
 
 ### 短期（基於 Exp55 最佳配置）
 
-1. **延長 Exp55 訓練**: 當前 200 epochs，可嘗試 500 epochs
+1. ~~**延長 Exp55 訓練**: 當前 200 epochs，可嘗試 500 epochs~~ ❌ 不建議（已有明顯過擬合）
 2. **微調學習率**: 嘗試 5e-5 或 2e-4
 3. **增加 gradient accumulation**: 嘗試 steps=4（等效 batch=32）
+4. **⚠️ 使用 Early Stopping**: 基於 Val Accuracy 而非 Val Loss
+5. **保存最佳 Val Accuracy checkpoint** 而非最低 Val Loss checkpoint
 
 ### 中期
 
 1. **數據增強**: 增加訓練數據多樣性
 2. **Speaker 適應**: 針對不同 speaker 的 token distribution 進行調整
+
+### 正在進行: Audio Domain Loss (exp_1222)
+
+由於 Token Accuracy 與實際音質不完全相關（見 Exp48 音質評估），正在嘗試 Audio Domain Loss：
+- **Exp58**: 使用 STFT + Mel Loss 微調 Exp48
+- **Exp57**: STFT + Mel + Feature + Triplet (Hybrid)
+- **Exp56**: 純 Audio Loss (從頭訓練)
 
 ---
 
@@ -339,3 +390,15 @@ Exp1219 系列實驗系統性地測試了多種改進假設，最終發現：
 > **最有效的改進是 Exp55**: 使用高容量 LoRA (rank=256) 配合 gradient accumulation 維持穩定梯度，達到 **0.91% Val Accuracy**，超越 baseline 0.03%。
 
 其他嘗試的策略（增大 margin、加入 cosine loss、增強正則化）均未能提升性能，證明原始 Exp48 的 loss 配置已經是接近最優的。
+
+### ⚠️ 重要警告
+
+**Exp55 存在明顯過擬合**:
+- Val Loss 在 Epoch 56 達到最低，之後上升 4.49%
+- Val Accuracy 在 Epoch 173 才達到最高
+- 這表明 **Val Loss 和 Val Accuracy 的行為不一致**
+- 建議使用 **Val Accuracy** 作為模型選擇標準
+
+---
+
+**更新日期**: 2025-12-23 (補充 Exp53/Exp55 過擬合分析)
