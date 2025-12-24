@@ -443,6 +443,8 @@ def main():
 
     # 實驗名稱
     parser.add_argument('--exp_name', type=str, required=True)
+    parser.add_argument('--output_dir', type=str, default=None,
+                        help='自訂輸出目錄，若未指定則使用 runs/{exp_name}')
 
     # LoRA 參數
     parser.add_argument('--lora_rank', type=int, default=128)
@@ -492,7 +494,11 @@ def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"Using device: {device}")
 
-    exp_dir = Path(__file__).parent / 'runs' / args.exp_name
+    # 設定輸出目錄
+    if args.output_dir:
+        exp_dir = Path(args.output_dir)
+    else:
+        exp_dir = Path(__file__).parent / 'runs' / args.exp_name
     exp_dir.mkdir(parents=True, exist_ok=True)
 
     config = vars(args)
