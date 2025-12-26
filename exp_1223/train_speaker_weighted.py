@@ -281,13 +281,15 @@ def validate(
 
 @torch.no_grad()
 def save_audio_samples(model, dataloader, device, exp_dir, epoch, num_samples=2, split='val'):
-    """保存音檔樣本"""
+    """保存音檔樣本 (使用正確的 WavTokenizer decode 流程)"""
     model.eval()
     audio_dir = exp_dir / 'audio_samples' / split / f'epoch_{epoch:03d}'
     audio_dir.mkdir(parents=True, exist_ok=True)
 
     sample_rate = 24000
     data_iter = iter(dataloader)
+
+    torch.cuda.empty_cache()
 
     for i in range(num_samples):
         try:
@@ -297,39 +299,137 @@ def save_audio_samples(model, dataloader, device, exp_dir, epoch, num_samples=2,
 
         noisy_audio = batch['noisy_audio'][:1].to(device)
         clean_audio = batch['clean_audio'][:1].to(device)
-        length = batch['lengths'][0].item()
 
-        output = model(noisy_audio, clean_audio)
+        if noisy_audio.dim() == 1:
+            noisy_audio = noisy_audio.unsqueeze(0)
+        if clean_audio.dim() == 1:
+            clean_audio = clean_audio.unsqueeze(0)
 
-        # Get decoder from model
-        decoder = model.student.feature_extractor.encodec.decoder
-
-        # Decode student
-        student_features = output['student_encoder_out']
-        student_recon = decoder(student_features)
-        if student_recon.dim() == 3:
-            student_recon = student_recon.squeeze(0)
-        student_recon = student_recon[:, :length].cpu()
-
-        # Decode teacher
-        teacher_features = output['teacher_encoder_out']
-        teacher_recon = decoder(teacher_features)
-        if teacher_recon.dim() == 3:
-            teacher_recon = teacher_recon.squeeze(0)
-        teacher_recon = teacher_recon[:, :length].cpu()
-
-        # Original audio
-        noisy_orig = noisy_audio[0, :length].cpu()
-        clean_orig = clean_audio[0, :length].cpu()
-
-        # Save
+        # Save original audio
         import torchaudio
-        torchaudio.save(str(audio_dir / f'sample_{i+1}_noisy.wav'), noisy_orig.unsqueeze(0), sample_rate)
-        torchaudio.save(str(audio_dir / f'sample_{i+1}_clean.wav'), clean_orig.unsqueeze(0), sample_rate)
-        torchaudio.save(str(audio_dir / f'sample_{i+1}_student_recon.wav'), student_recon, sample_rate)
-        torchaudio.save(str(audio_dir / f'sample_{i+1}_teacher_recon.wav'), teacher_recon, sample_rate)
+        torchaudio.save(str(audio_dir / f'sample_{i+1}_noisy.wav'), noisy_audio.cpu(), sample_rate)
+        torchaudio.save(str(audio_dir / f'sample_{i+1}_clean.wav'), clean_audio.cpu(), sample_rate)
+
+        try:
+            # Student reconstruction: encode with student, decode with teacher
+            student_features, _, _ = model.student.feature_extractor(noisy_audio, bandwidth_id=0)
+            student_recon = model.teacher.decode(student_features, bandwidth_id=torch.tensor([0]).to(device))
+            if student_recon.dim() == 3:
+                student_recon = student_recon.squeeze(1)
+            torchaudio.save(str(audio_dir / f'sample_{i+1}_student_recon.wav'), student_recon.cpu(), sample_rate)
+            del student_features, student_recon
+            torch.cuda.empty_cache()
+
+            # Teacher reconstruction: encode and decode with teacher (for reference)
+            teacher_features, _, _ = model.teacher.feature_extractor(clean_audio, bandwidth_id=0)
+            teacher_recon = model.teacher.decode(teacher_features, bandwidth_id=torch.tensor([0]).to(device))
+            if teacher_recon.dim() == 3:
+                teacher_recon = teacher_recon.squeeze(1)
+            torchaudio.save(str(audio_dir / f'sample_{i+1}_teacher_recon.wav'), teacher_recon.cpu(), sample_rate)
+            del teacher_features, teacher_recon
+            torch.cuda.empty_cache()
+
+        except Exception as e:
+            print(f"  Warning: Failed to save audio sample {i+1}: {e}")
+            continue
 
     print(f"  Saved {num_samples} {split} audio samples to {audio_dir}")
+
+
+def plot_metrics(history, exp_dir):
+    """繪製訓練曲線 (包含 speaker weight)"""
+    fig, axes = plt.subplots(2, 4, figsize=(20, 10))
+
+    # Total Loss
+    ax = axes[0, 0]
+    ax.plot(history['train_loss'], label='Train')
+    ax.plot(history['val_loss'], label='Val')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Total Loss')
+    ax.set_title('Total Loss')
+    ax.legend()
+    ax.grid(True)
+
+    # Masked Accuracy
+    ax = axes[0, 1]
+    ax.plot([x * 100 for x in history['train_masked_acc']], label='Train Masked')
+    ax.plot([x * 100 for x in history['val_masked_acc']], label='Val Masked')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Accuracy (%)')
+    ax.set_title('Masked Token Accuracy')
+    ax.legend()
+    ax.grid(True)
+
+    # Speaker Weight
+    ax = axes[0, 2]
+    if 'train_speaker_weight' in history and history['train_speaker_weight']:
+        ax.plot(history['train_speaker_weight'], label='Train')
+        ax.plot(history['val_speaker_weight'], label='Val')
+        ax.axhline(y=0.5, color='r', linestyle='--', label='Min Weight')
+        ax.axhline(y=1.0, color='g', linestyle='--', label='Max Weight')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Speaker Weight')
+    ax.set_title('Speaker Weight (Mean)')
+    ax.legend()
+    ax.grid(True)
+
+    # Cosine Similarity (if available)
+    ax = axes[0, 3]
+    if history.get('train_cos_sim', []) and any(history['train_cos_sim']):
+        ax.plot(history['train_cos_sim'], label='Train')
+        ax.plot(history['val_cos_sim'], label='Val')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Cosine Similarity')
+    ax.set_title('Cosine Similarity')
+    ax.legend()
+    ax.grid(True)
+
+    # Feature Loss
+    ax = axes[1, 0]
+    ax.plot(history['train_feature_loss'], label='Train')
+    ax.plot(history['val_feature_loss'], label='Val')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Feature Loss')
+    ax.set_title('Feature Loss')
+    ax.legend()
+    ax.grid(True)
+
+    # Triplet Loss
+    ax = axes[1, 1]
+    ax.plot(history['train_triplet_loss'], label='Train')
+    ax.plot(history['val_triplet_loss'], label='Val')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Triplet Loss')
+    ax.set_title('Triplet Loss')
+    ax.legend()
+    ax.grid(True)
+
+    # Distance
+    ax = axes[1, 2]
+    ax.plot(history['train_dist'], label='Train')
+    ax.plot(history['val_dist'], label='Val')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Distance')
+    ax.set_title('Average Distance')
+    ax.legend()
+    ax.grid(True)
+
+    # Val Accuracy Zoomed
+    ax = axes[1, 3]
+    val_acc = [x * 100 for x in history['val_masked_acc']]
+    ax.plot(val_acc, label='Val Masked Acc', color='orange')
+    if val_acc:
+        ax.axhline(y=max(val_acc), color='g', linestyle='--', label=f'Best: {max(val_acc):.2f}%')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Accuracy (%)')
+    ax.set_title('Val Masked Accuracy (Zoomed)')
+    ax.legend()
+    ax.grid(True)
+
+    plt.tight_layout()
+    plt.savefig(exp_dir / 'training_curves.png', dpi=150)
+    plt.close()
+    print(f"Saved training curves to {exp_dir / 'training_curves.png'}")
 
 
 def main():
