@@ -301,60 +301,166 @@ def validate_epoch(model, dataloader, loss_fn, device, epoch,
     return metrics
 
 
-def save_audio_samples(model, dataloader, device, save_dir, epoch, num_samples=3):
-    """Save audio samples for qualitative evaluation"""
+def save_audio_samples(model, dataloader, device, exp_dir, epoch, num_samples=3, split='val'):
+    """保存音檔樣本 (參考 exp_1223 格式)"""
     model.eval()
-    save_dir = Path(save_dir) / f"epoch_{epoch}"
-    save_dir.mkdir(parents=True, exist_ok=True)
+    audio_dir = exp_dir / 'audio_samples' / split / f'epoch_{epoch:03d}'
+    audio_dir.mkdir(parents=True, exist_ok=True)
 
     import torchaudio
+    sample_rate = 24000
+    data_iter = iter(dataloader)
 
-    with torch.no_grad():
-        for i, batch in enumerate(dataloader):
-            if i >= num_samples:
-                break
+    torch.cuda.empty_cache()
 
-            noisy = batch['noisy_audio'][:1].to(device)
-            clean = batch['clean_audio'][:1].to(device)
+    for i in range(min(num_samples, len(dataloader))):
+        try:
+            batch = next(data_iter)
+        except StopIteration:
+            break
 
-            if noisy.dim() == 2:
-                noisy = noisy.unsqueeze(1)
-            if clean.dim() == 2:
-                clean = clean.unsqueeze(1)
+        noisy = batch['noisy_audio'][:1].to(device)
+        clean = batch['clean_audio'][:1].to(device)
 
-            # Get Post-VQ features for reconstruction
-            student_feat, student_codes, _ = model.student.feature_extractor(
-                noisy.squeeze(1), bandwidth_id=0
-            )
-            teacher_feat, teacher_codes, _ = model.teacher.feature_extractor(
-                clean.squeeze(1), bandwidth_id=0
-            )
+        if noisy.dim() == 2:
+            noisy = noisy.unsqueeze(1)
+        if clean.dim() == 2:
+            clean = clean.unsqueeze(1)
 
-            # Decode
-            student_recon = model.teacher.decode(
-                student_feat, bandwidth_id=torch.tensor([0]).to(device)
-            )
-            teacher_recon = model.teacher.decode(
-                teacher_feat, bandwidth_id=torch.tensor([0]).to(device)
-            )
+        # Save noisy input
+        torchaudio.save(
+            str(audio_dir / f"sample_{i+1}_noisy.wav"),
+            noisy.squeeze(1).cpu(), sample_rate
+        )
 
-            # Save
-            torchaudio.save(
-                save_dir / f"sample_{i+1}_noisy.wav",
-                noisy.squeeze(1).cpu(), 24000
-            )
-            torchaudio.save(
-                save_dir / f"sample_{i+1}_clean.wav",
-                clean.squeeze(1).cpu(), 24000
-            )
-            torchaudio.save(
-                save_dir / f"sample_{i+1}_student_recon.wav",
-                student_recon.cpu(), 24000
-            )
-            torchaudio.save(
-                save_dir / f"sample_{i+1}_teacher_recon.wav",
-                teacher_recon.cpu(), 24000
-            )
+        # Save clean target
+        torchaudio.save(
+            str(audio_dir / f"sample_{i+1}_clean.wav"),
+            clean.squeeze(1).cpu(), sample_rate
+        )
+
+        try:
+            with torch.no_grad():
+                # Get Post-VQ features for reconstruction
+                student_feat, student_codes, _ = model.student.feature_extractor(
+                    noisy.squeeze(1), bandwidth_id=0
+                )
+                teacher_feat, teacher_codes, _ = model.teacher.feature_extractor(
+                    clean.squeeze(1), bandwidth_id=0
+                )
+
+                # Decode
+                student_recon = model.teacher.decode(
+                    student_feat, bandwidth_id=torch.tensor([0]).to(device)
+                )
+                teacher_recon = model.teacher.decode(
+                    teacher_feat, bandwidth_id=torch.tensor([0]).to(device)
+                )
+
+                torchaudio.save(
+                    str(audio_dir / f"sample_{i+1}_student_recon.wav"),
+                    student_recon.cpu(), sample_rate
+                )
+                torchaudio.save(
+                    str(audio_dir / f"sample_{i+1}_teacher_recon.wav"),
+                    teacher_recon.cpu(), sample_rate
+                )
+
+                del student_feat, teacher_feat, student_recon, teacher_recon
+                torch.cuda.empty_cache()
+
+        except Exception as e:
+            print(f"  Warning: Failed to save {split} sample {i+1}: {e}")
+
+    print(f"  Saved {min(num_samples, len(dataloader))} {split} audio samples")
+
+
+def plot_metrics(history, exp_dir):
+    """即時繪製訓練曲線"""
+    if not history['train']:
+        return
+
+    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+
+    epochs = range(1, len(history['train']) + 1)
+
+    # Extract metrics
+    train_loss = [h['total_loss'] for h in history['train']]
+    val_loss = [h['total_loss'] for h in history['val']]
+    train_acc = [h['masked_acc'] * 100 for h in history['train']]
+    val_acc = [h['masked_acc'] * 100 for h in history['val']]
+    train_feature_loss = [h['feature_loss'] for h in history['train']]
+    val_feature_loss = [h['feature_loss'] for h in history['val']]
+    train_triplet_loss = [h['triplet_loss'] for h in history['train']]
+    val_triplet_loss = [h['triplet_loss'] for h in history['val']]
+    train_post_vq_cos = [h['post_vq_cos_sim'] for h in history['train']]
+    val_post_vq_cos = [h['post_vq_cos_sim'] for h in history['val']]
+    train_post_vq_feature = [h['post_vq_feature_loss'] for h in history['train']]
+    val_post_vq_feature = [h['post_vq_feature_loss'] for h in history['val']]
+
+    # Total Loss
+    ax = axes[0, 0]
+    ax.plot(epochs, train_loss, label='Train')
+    ax.plot(epochs, val_loss, label='Val')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Total Loss')
+    ax.set_title('Total Loss')
+    ax.legend()
+    ax.grid(True)
+
+    # Masked Accuracy
+    ax = axes[0, 1]
+    ax.plot(epochs, train_acc, label='Train')
+    ax.plot(epochs, val_acc, label='Val')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Accuracy (%)')
+    ax.set_title('Masked Token Accuracy')
+    ax.legend()
+    ax.grid(True)
+
+    # Feature Loss
+    ax = axes[0, 2]
+    ax.plot(epochs, train_feature_loss, label='Train')
+    ax.plot(epochs, val_feature_loss, label='Val')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Feature Loss')
+    ax.set_title('Feature Loss')
+    ax.legend()
+    ax.grid(True)
+
+    # Triplet Loss
+    ax = axes[1, 0]
+    ax.plot(epochs, train_triplet_loss, label='Train')
+    ax.plot(epochs, val_triplet_loss, label='Val')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Triplet Loss')
+    ax.set_title('Triplet Loss')
+    ax.legend()
+    ax.grid(True)
+
+    # Post-VQ Cosine Similarity
+    ax = axes[1, 1]
+    ax.plot(epochs, train_post_vq_cos, label='Train')
+    ax.plot(epochs, val_post_vq_cos, label='Val')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Cosine Similarity')
+    ax.set_title('Post-VQ Cosine Similarity')
+    ax.legend()
+    ax.grid(True)
+
+    # Post-VQ Feature Loss
+    ax = axes[1, 2]
+    ax.plot(epochs, train_post_vq_feature, label='Train')
+    ax.plot(epochs, val_post_vq_feature, label='Val')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Post-VQ Feature Loss')
+    ax.set_title('Post-VQ Feature Loss')
+    ax.legend()
+    ax.grid(True)
+
+    plt.tight_layout()
+    plt.savefig(exp_dir / 'training_curves.png', dpi=150)
+    plt.close()
 
 
 def main():
@@ -543,36 +649,58 @@ def main():
                 'val_acc': best_val_acc,
             }, exp_dir / 'best_model.pt')
             print(f"  ★ New best model saved! Val Acc: {best_val_acc*100:.2f}%")
-
-            # Save audio samples for best model
-            save_audio_samples(model, val_loader, device,
-                              exp_dir / 'audio_samples' / 'val', epoch)
         else:
             patience_counter += 1
 
         # Early stopping
         if patience_counter >= args.early_stopping_patience:
-            print(f"\nEarly stopping at epoch {epoch}")
+            print(f"\n⚠ Early stopping at epoch {epoch}")
+            # Save last epoch model before stopping
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'val_acc': val_metrics['masked_acc'],
+                'early_stopped': True,
+            }, exp_dir / 'last_model.pt')
+            print(f"  ✓ Last epoch model saved to: {exp_dir / 'last_model.pt'}")
             break
 
-        # Periodic saves
-        if epoch % 50 == 0:
+        # Periodic saves (every 50 epochs or epoch 1)
+        if epoch % 50 == 0 or epoch == 1:
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
             }, exp_dir / f'checkpoint_epoch_{epoch}.pt')
-            save_audio_samples(model, train_loader, device,
-                              exp_dir / 'audio_samples' / 'train', epoch)
+            # Save train and val audio samples
+            save_audio_samples(model, train_loader, device, exp_dir, epoch, num_samples=2, split='train')
+            save_audio_samples(model, val_loader, device, exp_dir, epoch, num_samples=2, split='val')
 
-    # Save history
-    with open(exp_dir / 'history.json', 'w') as f:
-        json.dump(history, f, indent=2)
+        # Plot metrics (即時更新)
+        plot_metrics(history, exp_dir)
+
+        # Save history (每個 epoch 保存)
+        with open(exp_dir / 'history.json', 'w') as f:
+            json.dump(history, f, indent=2)
+
+    # Save final model if training completed without early stopping
+    if patience_counter < args.early_stopping_patience:
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'val_acc': val_metrics['masked_acc'],
+            'early_stopped': False,
+        }, exp_dir / 'last_model.pt')
+        print(f"\n✓ Final model saved to: {exp_dir / 'last_model.pt'}")
 
     print("\n" + "=" * 60)
     print("訓練完成!")
+    print(f"Last Epoch: {epoch}")
     print(f"Best Epoch: {best_epoch}")
     print(f"Best Val Masked Acc: {best_val_acc*100:.2f}%")
+    print(f"Early Stopped: {patience_counter >= args.early_stopping_patience}")
     print(f"Results saved to: {exp_dir}")
     print("=" * 60)
 

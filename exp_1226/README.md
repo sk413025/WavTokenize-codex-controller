@@ -4,7 +4,7 @@
 
 基於 Exp55 (目前最佳 baseline，Val Masked Acc = 0.91%)，進行問題診斷和改進實驗。
 
-**更新日期**：2024-12-26
+**更新日期**：2024-12-28
 
 ---
 
@@ -241,16 +241,15 @@ Average Improvement:       +0.70%
 
 **驗證方式**：比較 Val Masked Acc 是否有顯著提升
 
-**實驗狀態**：🟡 運行中（Epoch 35/500）
+**實驗狀態**：✅ 完成（Epoch 182/500, Early Stopped）
 
-**目前結果**：
-| 指標 | 數值 |
-|------|------|
-| Best Val Acc | 0.71% @ Epoch 28 |
-| Train Acc | ~1.55% |
-| Feature Distance | ~3.65 |
+**最終結果**：
+| 指標 | Exp62 (rank=384) | Baseline Exp55 (rank=256) |
+|------|------------------|---------------------------|
+| Best Val Acc | 0.75% @ Epoch 83 | 0.91% |
+| Epochs | 182 (early stopped) | - |
 
-**初步結論**：❌ 增加容量未能顯著提升（0.71% < baseline 0.91%）
+**結論**：❌ 增加容量無效，比 baseline 更差。容量不是瓶頸。
 
 ---
 
@@ -269,17 +268,15 @@ Average Improvement:       +0.70%
 
 **假設**：如果問題是 VQ bottleneck，這些 loss 應該改善 decode 音質
 
-**實驗狀態**：🟡 運行中（Epoch 39/300）
+**實驗狀態**：✅ 完成（Epoch 300/300）
 
-**目前結果**：
+**最終結果**：
 | 指標 | 數值 |
 |------|------|
-| Best Val Acc | **0.82%** @ Epoch 32 |
-| Train Acc | ~2.0% |
-| VQ Commit Loss | ~0.27 |
-| VQ Distort Loss | ~0.064 |
+| Best Val Acc | **0.95%** @ Epoch 206 |
+| Epochs | 300 |
 
-**初步結論**：📈 有改善（0.82% vs 0.71% of Exp62），但仍低於 baseline
+**結論**：📈 輕微改善 (+0.04%)，VQ-Aware 方向值得繼續探索
 
 ---
 
@@ -294,7 +291,15 @@ Average Improvement:       +0.70%
 
 **假設**：先學會簡單的 denoising 可能幫助泛化
 
-**實驗狀態**：⚪ 待執行
+**實驗狀態**：✅ 完成（Epoch 300/300）
+
+**最終結果**：
+| 指標 | 數值 |
+|------|------|
+| Best Val Acc | **1.06%** @ Epoch 149 |
+| Epochs | 300 |
+
+**結論**：✅ **最佳結果** (+0.15%)，Curriculum Learning 有效改善泛化能力
 
 ---
 
@@ -345,7 +350,15 @@ Average Improvement:       +0.70%
 3. 觀察 Token Accuracy 是否提升
 4. 觀察 `offset_zero_ratio` 了解偏移分布
 
-**實驗狀態**：⚪ 待執行
+**實驗狀態**：✅ 完成（Epoch 300/300）
+
+**最終結果**：
+| 指標 | 數值 |
+|------|------|
+| Best Val Acc | 0.69% @ Epoch 144 |
+| Epochs | 300 |
+
+**結論**：❌ 更差 (正則化太強)，需降低 weight → Exp69
 
 ---
 
@@ -389,6 +402,77 @@ Average Improvement:       +0.70%
 2. 聽 validation 音檔品質是否改善
 3. 比較 Token Accuracy 變化
 
+**實驗狀態**：✅ 完成（**崩潰**）
+
+**結果**：
+| 指標 | 數值 |
+|------|------|
+| Best Val Acc | 0.61% @ Epoch 17 |
+| Final Val Acc | 0.45% |
+| 崩潰指標 | Post-VQ Cos Sim 從 0.68 降到 -0.06 |
+| 最終 Loss | 70+ (爆炸) |
+
+**崩潰原因分析**：
+- Post-VQ loss weight 太大 (0.5)
+- Straight-Through Estimator 梯度不穩定
+- Epoch 20 後 Post-VQ Cos Sim 變成負數，表示 student 和 teacher 特徵方向相反
+
+**修復方案** → Exp68：降低 post_vq_weight 到 0.05
+
+---
+
+### Exp67: Curriculum + VQ-Aware 組合 (新增)
+
+**目的**：結合 Exp64 (最佳) 和 Exp63 (有改善) 的優點
+
+**配置**：
+- Curriculum Learning: 從簡單樣本 (高 SNR) 開始
+- VQ-Aware Loss: VQ Commitment + Distortion (λ=0.1)
+- 基於 Exp64 最佳配置
+
+**實作檔案**：
+- `train_exp67_curriculum_vq.py`
+- `run_exp67_curriculum_vq.sh`
+
+**實驗狀態**：🔄 進行中 (GPU 1)
+
+**說明**：
+- Curriculum Learning 初始使用 30% 資料，每 30 epochs 增加 10%
+- 因此初期 batch 數量較少 (389 vs 1296)
+
+---
+
+### Exp68: Post-VQ Loss 修復版 (新增)
+
+**目的**：修復 Exp66 的崩潰問題
+
+**修改**：
+- post_vq_feature_weight: 0.5 → 0.05
+- post_vq_cosine_weight: 0.5 → 0.05
+- 保持基礎 Feature + Triplet Loss 為主
+
+**實作檔案**：
+- 使用 `train_exp66_post_vq.py`（修改參數）
+- `run_exp68_post_vq_fixed.sh`
+
+**實驗狀態**：🔄 進行中 (GPU 2)
+
+---
+
+### Exp69: Anti-Collapse 輕量版 (新增)
+
+**目的**：修復 Exp65 正則化過強問題
+
+**修改**：
+- entropy_weight: 0.1 → 0.01
+- diversity_weight: 0.1 → 0.01
+- contrastive_weight: 0.1 → 0.01
+- 保持 Frame-Tolerant 功能
+
+**實作檔案**：
+- 使用 `train_exp65_anti_collapse.py`（修改參數）
+- `run_exp69_anti_collapse_light.sh`
+
 **實驗狀態**：⚪ 待執行
 
 ---
@@ -421,34 +505,146 @@ Average Improvement:       +0.70%
 ## 執行方式
 
 ```bash
-# Exp62: Capacity Expansion
+# === 已完成實驗 ===
+# Exp62: Capacity Expansion (完成, 0.75%)
 bash exp_1226/run_exp62_capacity.sh
 
-# Exp63: VQ-Aware Loss
+# Exp63: VQ-Aware Loss (完成, 0.95%)
 bash exp_1226/run_exp63_vq_aware.sh
 
-# Exp64: Curriculum Learning
+# Exp64: Curriculum Learning (完成, 1.06% - BEST)
 bash exp_1226/run_exp64_curriculum.sh
 
-# Exp65: Anti-Collapse
+# Exp65: Anti-Collapse (完成, 0.69% - 正則化太強)
 bash exp_1226/run_exp65_anti_collapse.sh
 
-# Exp66: Post-VQ Feature Loss (推薦)
+# Exp66: Post-VQ Feature Loss (完成, 崩潰)
 bash exp_1226/run_exp66_post_vq.sh
+
+# === 進行中實驗 ===
+# Exp67: Curriculum + VQ-Aware 組合 (進行中, GPU 1)
+bash exp_1226/run_exp67_curriculum_vq.sh
+
+# Exp68: Post-VQ Loss 修復版 (進行中, GPU 2)
+bash exp_1226/run_exp68_post_vq_fixed.sh
+
+# === 待執行實驗 ===
+# Exp69: Anti-Collapse 輕量版 (weight 降到 0.01)
+bash exp_1226/run_exp69_anti_collapse_light.sh
 ```
 
 ---
 
 ## 實驗結果總結
 
-| 實驗 | 方法 | Best Val Acc | 狀態 | 結論 |
-|------|------|-------------|------|------|
-| Baseline (Exp55) | Feature + Triplet | **0.91%** | ✅ 完成 | 最佳 baseline |
-| Exp62 | Capacity (rank=384) | 0.71% | 🟡 運行中 | ❌ 無改善 |
-| Exp63 | VQ-Aware Loss | 0.82% | 🟡 運行中 | 📈 有改善但不足 |
-| Exp64 | Curriculum Learning | - | ⚪ 待執行 | - |
-| Exp65 | Anti-Collapse | - | ⚪ 待執行 | - |
-| Exp66 | Post-VQ Loss | - | ⚪ 待執行 | - |
+| 實驗 | 方法 | Best Val Acc | Best Epoch | 狀態 | 結論 |
+|------|------|-------------|------------|------|------|
+| Baseline (Exp55) | Feature + Triplet | **0.91%** | - | ✅ 完成 | 最佳 baseline |
+| Exp62 | Capacity (rank=384) | 0.75% | 83 | ✅ 完成 | ❌ 無改善 |
+| Exp63 | VQ-Aware Loss | 0.95% | 206 | ✅ 完成 | 📈 輕微改善 (+0.04%) |
+| Exp64 | Curriculum Learning | **1.06%** | 149 | ✅ 完成 | ✅ **最佳結果** (+0.15%) |
+| Exp65 | Anti-Collapse | 0.69% | 144 | ✅ 完成 | ❌ 更差 (正則化太強) |
+| Exp66 | Post-VQ Loss | 0.61% | 17 | ✅ 完成 | ❌ **崩潰** (weight 太大) |
+| Exp67 | Curriculum + VQ-Aware | - | - | 🔄 進行中 | 結合 Exp64 + Exp63 |
+| Exp68 | Post-VQ Fixed | - | - | 🔄 進行中 | 修復 Exp66 (weight=0.05) |
+| Exp69 | Anti-Collapse Light | - | - | ⚪ 待執行 | 修復 Exp65 (weight=0.01) |
+
+---
+
+## Exp62-66 完整實驗分析 (2024-12-28)
+
+### 實驗結果對比
+
+| 實驗 | 方法 | Best Val Acc | Best Epoch | Final Val Acc | 結論 |
+|------|------|-------------|------------|---------------|------|
+| Baseline (Exp55) | Feature + Triplet | 0.91% | - | - | Baseline |
+| Exp62 | Capacity (rank=384) | 0.75% | 83 | 0.54% | ❌ 增加容量無效 |
+| Exp63 | VQ-Aware Loss | **0.95%** | 206 | 0.66% | 📈 輕微改善 |
+| **Exp64** | **Curriculum Learning** | **1.06%** | **149** | 0.86% | ✅ **最佳結果** |
+| Exp65 | Anti-Collapse | 0.69% | 144 | 0.51% | ❌ 正則化太強 |
+| Exp66 | Post-VQ Loss | 0.61% | 17 | 0.45% | ❌ 訓練崩潰 |
+
+### Exp62: Capacity Expansion 分析
+
+**結果**：Best Val Acc = 0.75% @ Epoch 83
+
+**發現**：
+- 增加 LoRA rank (256 → 384) 沒有帶來改善
+- 訓練到 500 epochs 但過擬合嚴重
+- 結論：**容量不是瓶頸**
+
+### Exp63: VQ-Aware Loss 分析
+
+**結果**：Best Val Acc = 0.95% @ Epoch 206
+
+**發現**：
+- VQ Commitment + Distortion Loss 有輕微改善 (+0.04%)
+- 需要更長的訓練時間達到最佳 (206 epochs)
+- VQ-Aware 方向值得繼續探索
+
+### Exp64: Curriculum Learning 分析 (最佳)
+
+**結果**：Best Val Acc = **1.06%** @ Epoch 149
+
+**配置**：
+- 初始使用 30% 最簡單樣本 (高 SNR)
+- 每 30 epochs 增加 10%
+- Epoch 149 時 curriculum_phase = 0.7
+
+**發現**：
+- **最佳實驗**，超過 baseline (+0.15%)
+- Curriculum Learning 有效改善泛化能力
+- 建議結合其他方法 (→ Exp67)
+
+### Exp65: Anti-Collapse 分析
+
+**結果**：Best Val Acc = 0.69% @ Epoch 144
+
+**問題**：
+- 正則化權重太強 (entropy=0.1, diversity=0.1, contrastive=0.1)
+- 抑制了模型正常學習能力
+- 比 baseline 還差
+
+**修復方案** → Exp69：降低權重到 0.01
+
+### Exp66: Post-VQ Loss 分析 (崩潰)
+
+**結果**：Best Val Acc = 0.61% @ Epoch 17，之後崩潰
+
+**崩潰時間線**：
+```
+Epoch 1-17:  正常訓練，Post-VQ Cos Sim = 0.68
+Epoch 18-30: 開始不穩定，Cos Sim 下降
+Epoch 30+:   完全崩潰，Cos Sim = -0.06 (負數！)
+             Loss 從 ~3 爆炸到 70+
+```
+
+**崩潰原因**：
+1. Post-VQ loss weight 太大 (0.5)
+2. Straight-Through Estimator 梯度累積不穩定
+3. Post-VQ Cos Sim 變負數 = student/teacher 特徵方向相反
+
+**修復方案** → Exp68：降低 weight 到 0.05
+
+### 關鍵發現總結
+
+1. **Curriculum Learning 最有效**：從簡單樣本開始訓練確實有助於泛化
+2. **VQ-Aware 有潛力**：輕微改善，值得與 Curriculum 結合
+3. **正則化需謹慎**：太強的 Anti-Collapse 反而抑制學習
+4. **Post-VQ Loss 需降權**：Straight-Through Estimator 梯度不穩定
+5. **容量非瓶頸**：增加 LoRA rank 無效
+
+### 下一步實驗 (Exp67-69)
+
+基於分析結果，設計三個新實驗：
+
+| 實驗 | 策略 | 說明 |
+|------|------|------|
+| **Exp67** | Curriculum + VQ-Aware | 結合兩個有效方法 |
+| **Exp68** | Post-VQ Fixed | 修復崩潰 (weight 0.5→0.05) |
+| **Exp69** | Anti-Collapse Light | 減少正則化 (0.1→0.01) |
+
+**優先順序**：Exp67 > Exp68 > Exp69
 
 ---
 

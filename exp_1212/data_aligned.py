@@ -132,20 +132,42 @@ class AlignedNoisyCleanPairDataset(Dataset):
         else:
             # 從檔名推斷目錄
             filename = audio_path.name
-            base_dir = Path("/home/sbplab/ruizi/c_code/data")
 
-            # 根據檔名特徵判斷目錄
-            if "_clean_" in filename:
-                # clean 音頻在 clean/box2/
-                audio_path = base_dir / "clean" / "box2" / filename
-            elif "_box_" in filename:
-                audio_path = base_dir / "raw" / "box" / filename
-            elif "_papercup_" in filename:
-                audio_path = base_dir / "raw" / "papercup" / filename
-            elif "_plastic_" in filename:
-                audio_path = base_dir / "raw" / "plastic" / filename
-            else:
-                # Fallback: 嘗試從 cache 目錄解析
+            # 嘗試多個可能的 base_dir
+            possible_base_dirs = [
+                Path("/home/sbplab/ruizi/WavTokenize/data"),  # 主要資料位置
+                Path("/home/sbplab/ruizi/c_code/data"),       # 備用位置
+            ]
+
+            audio_path = None
+            for base_dir in possible_base_dirs:
+                # 根據檔名特徵判斷目錄
+                if "_clean_" in filename:
+                    # clean 音頻在 clean/box2/ 或 clean/
+                    candidate_paths = [
+                        base_dir / "clean" / "box2" / filename,
+                        base_dir / "clean" / filename,
+                    ]
+                elif "_box_" in filename:
+                    candidate_paths = [base_dir / "raw" / "box" / filename]
+                elif "_papercup_" in filename:
+                    candidate_paths = [base_dir / "raw" / "papercup" / filename]
+                elif "_plastic_" in filename:
+                    candidate_paths = [base_dir / "raw" / "plastic" / filename]
+                else:
+                    # Fallback
+                    candidate_paths = [base_dir / filename]
+
+                for path in candidate_paths:
+                    if path.exists():
+                        audio_path = path
+                        break
+
+                if audio_path is not None:
+                    break
+
+            if audio_path is None:
+                # 最後 fallback: 嘗試從 cache 目錄解析
                 audio_path = self.cache_path.parent.parent / filename
 
         if not audio_path.exists():

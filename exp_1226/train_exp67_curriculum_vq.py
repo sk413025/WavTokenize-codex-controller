@@ -1,22 +1,14 @@
 """
-Exp65: Anti-Collapse 實驗
+Exp67: Curriculum Learning + VQ-Aware Loss 組合
 
-問題診斷：
-- Student encoder 發生 mode collapse
-- 不論輸入什麼 noisy audio，都輸出相似的 features
-- VQ 量化後集中在少數 codes (1760, 1834, 1623...)
-- Token accuracy 只有 ~0.9%
+結合兩個有效策略：
+1. Exp64 Curriculum Learning (Best Val Acc: 1.06%) - 從簡單到困難
+2. Exp63 VQ-Aware Loss (Best Val Acc: 0.95%) - 改善 VQ 量化品質
 
-解決方案：
-- Code Entropy Loss: 鼓勵 code distribution 更均勻
-- Feature Diversity Loss: 懲罰 batch 內 features 太相似
-- Batch Contrastive Loss: 確保不同輸入產生不同輸出
-
-配置 (基於 Exp55):
-- Feature + Triplet Loss (基礎)
-- 新增: Code Entropy Loss (λ=0.1)
-- 新增: Feature Diversity Loss (λ=0.1)
-- 新增: Batch Contrastive Loss (λ=0.1)
+假設：
+- Curriculum 讓模型先學會簡單的 denoising
+- VQ-Aware Loss 確保 features 更接近正確的 codebook
+- 兩者結合可能達到更好效果
 """
 
 import torch
@@ -38,10 +30,15 @@ from torch.cuda.amp import autocast, GradScaler
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, '/home/sbplab/ruizi/WavTokenizer-main')
 
-from exp_1212.data_aligned import create_aligned_dataloaders
-from exp_1201.config import WAVTOK_CONFIG, WAVTOK_CKPT, DISTANCE_MATRIX
+from exp_1201.config import WAVTOK_CONFIG, WAVTOK_CKPT, DISTANCE_MATRIX, TRAIN_CACHE, VAL_CACHE
 from exp_1217.models import TeacherStudentConfigurableLoRA
-from exp_1226.losses_diversity import MaskedCombinedLossV4, compute_masked_accuracy
+from exp_1219.losses import compute_masked_accuracy
+from exp_1226.losses import MaskedCombinedLossV3  # V3 支援 VQ-Aware Loss
+from exp_1226.data_curriculum import (
+    create_curriculum_dataloaders,
+    CurriculumDataset,
+    collate_fn_curriculum
+)
 
 
 def set_seed(seed: int = 42):
@@ -76,9 +73,10 @@ def train_epoch(model, dataloader, optimizer, loss_fn, device, epoch,
 
     metrics = {
         'total_loss': 0, 'feature_loss': 0, 'triplet_loss': 0,
-        'entropy_loss': 0, 'diversity_loss': 0, 'contrastive_loss': 0,
+        'vq_commitment_loss': 0, 'vq_distortion_loss': 0,  # VQ-Aware metrics
         'masked_acc': 0, 'distance_loss': 0,
         'valid_frames': 0, 'total_frames': 0,
+        'avg_snr': 0,
     }
     n_batches = 0
 
@@ -134,9 +132,12 @@ def train_epoch(model, dataloader, optimizer, loss_fn, device, epoch,
         metrics['total_loss'] += loss_info.get('total_loss', loss.item())
         metrics['feature_loss'] += loss_info.get('feature_loss', 0)
         metrics['triplet_loss'] += loss_info.get('triplet_loss', 0)
-        metrics['entropy_loss'] += loss_info.get('entropy_loss', 0)
-        metrics['diversity_loss'] += loss_info.get('diversity_loss', 0)
-        metrics['contrastive_loss'] += loss_info.get('contrastive_loss', 0)
+        metrics['vq_commitment_loss'] += loss_info.get('vq_commitment_loss', 0)
+        metrics['vq_distortion_loss'] += loss_info.get('vq_distortion_loss', 0)
+
+        # 追蹤 SNR
+        if 'snr' in batch:
+            metrics['avg_snr'] += batch['snr'].mean().item()
 
         s_codes = output['student_codes'][0] if output['student_codes'].dim() == 3 else output['student_codes']
         t_codes = output['teacher_codes'][0] if output['teacher_codes'].dim() == 3 else output['teacher_codes']
@@ -153,14 +154,10 @@ def train_epoch(model, dataloader, optimizer, loss_fn, device, epoch,
             metrics['distance_loss'] += dist
 
         n_batches += 1
-
-        ent = loss_info.get('entropy_loss', 0)
-        div = loss_info.get('diversity_loss', 0)
         pbar.set_postfix({
             'loss': f"{loss.item():.4f}",
             'm_acc': f"{masked_acc*100:.2f}%",
-            'ent': f"{ent:.3f}",
-            'div': f"{div:.3f}"
+            'vq_c': f"{loss_info.get('vq_commitment_loss', 0):.3f}"
         })
 
     for key in metrics:
@@ -178,7 +175,7 @@ def validate(model, dataloader, loss_fn, device, distance_matrix,
 
     metrics = {
         'total_loss': 0, 'feature_loss': 0, 'triplet_loss': 0,
-        'entropy_loss': 0, 'diversity_loss': 0, 'contrastive_loss': 0,
+        'vq_commitment_loss': 0, 'vq_distortion_loss': 0,
         'masked_acc': 0, 'distance_loss': 0,
         'valid_frames': 0, 'total_frames': 0,
     }
@@ -202,9 +199,8 @@ def validate(model, dataloader, loss_fn, device, distance_matrix,
         metrics['total_loss'] += loss_info.get('total_loss', loss.item())
         metrics['feature_loss'] += loss_info.get('feature_loss', 0)
         metrics['triplet_loss'] += loss_info.get('triplet_loss', 0)
-        metrics['entropy_loss'] += loss_info.get('entropy_loss', 0)
-        metrics['diversity_loss'] += loss_info.get('diversity_loss', 0)
-        metrics['contrastive_loss'] += loss_info.get('contrastive_loss', 0)
+        metrics['vq_commitment_loss'] += loss_info.get('vq_commitment_loss', 0)
+        metrics['vq_distortion_loss'] += loss_info.get('vq_distortion_loss', 0)
 
         s_codes = output['student_codes'][0] if output['student_codes'].dim() == 3 else output['student_codes']
         t_codes = output['teacher_codes'][0] if output['teacher_codes'].dim() == 3 else output['teacher_codes']
@@ -283,7 +279,7 @@ def save_audio_samples(model, dataloader, device, exp_dir, epoch, num_samples=2,
 
 
 def plot_metrics(history, exp_dir):
-    fig, axes = plt.subplots(2, 4, figsize=(20, 10))
+    fig, axes = plt.subplots(3, 3, figsize=(15, 12))
 
     # Total Loss
     ax = axes[0, 0]
@@ -316,7 +312,7 @@ def plot_metrics(history, exp_dir):
     ax.grid(True)
 
     # Triplet Loss
-    ax = axes[0, 3]
+    ax = axes[1, 0]
     ax.plot(history['train_triplet_loss'], label='Train')
     ax.plot(history['val_triplet_loss'], label='Val')
     ax.set_xlabel('Epoch')
@@ -325,28 +321,46 @@ def plot_metrics(history, exp_dir):
     ax.legend()
     ax.grid(True)
 
-    # Entropy Loss (Anti-Collapse)
-    ax = axes[1, 0]
-    ax.plot(history['train_entropy_loss'], label='Train')
-    ax.plot(history['val_entropy_loss'], label='Val')
+    # VQ Commitment Loss (NEW)
+    ax = axes[1, 1]
+    ax.plot(history['train_vq_commitment_loss'], label='Train')
+    ax.plot(history['val_vq_commitment_loss'], label='Val')
     ax.set_xlabel('Epoch')
-    ax.set_ylabel('Entropy Loss')
-    ax.set_title('Code Entropy Loss (↓ = more diverse)')
+    ax.set_ylabel('VQ Commitment Loss')
+    ax.set_title('VQ Commitment Loss')
     ax.legend()
     ax.grid(True)
 
-    # Contrastive Loss (Anti-Collapse)
-    ax = axes[1, 1]
-    ax.plot(history['train_contrastive_loss'], label='Train')
-    ax.plot(history['val_contrastive_loss'], label='Val')
+    # VQ Distortion Loss (NEW)
+    ax = axes[1, 2]
+    ax.plot(history['train_vq_distortion_loss'], label='Train')
+    ax.plot(history['val_vq_distortion_loss'], label='Val')
     ax.set_xlabel('Epoch')
-    ax.set_ylabel('Contrastive Loss')
-    ax.set_title('Batch Contrastive Loss')
+    ax.set_ylabel('VQ Distortion Loss')
+    ax.set_title('VQ Distortion Loss')
+    ax.legend()
+    ax.grid(True)
+
+    # Curriculum Phase
+    ax = axes[2, 0]
+    ax.plot(history['curriculum_phase'], color='purple')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Data Ratio')
+    ax.set_title('Curriculum Phase (Data %)')
+    ax.set_ylim(0, 1.1)
+    ax.grid(True)
+
+    # Average SNR
+    ax = axes[2, 1]
+    ax.plot(history['train_avg_snr'], label='Train Avg SNR')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('SNR (dB)')
+    ax.set_title('Training Data Average SNR')
     ax.legend()
     ax.grid(True)
 
     # Distance
-    ax = axes[1, 2]
+    ax = axes[2, 2]
     ax.plot(history['train_dist'], label='Train')
     ax.plot(history['val_dist'], label='Val')
     ax.set_xlabel('Epoch')
@@ -355,27 +369,19 @@ def plot_metrics(history, exp_dir):
     ax.legend()
     ax.grid(True)
 
-    # Learning Rate
-    ax = axes[1, 3]
-    ax.plot(history['lr'])
-    ax.set_xlabel('Epoch')
-    ax.set_ylabel('Learning Rate')
-    ax.set_title('Learning Rate Schedule')
-    ax.grid(True)
-
     plt.tight_layout()
     plt.savefig(exp_dir / 'training_curves.png', dpi=150)
     plt.close()
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Exp65: Anti-Collapse')
+    parser = argparse.ArgumentParser(description='Exp67: Curriculum + VQ-Aware')
 
     # Experiment
-    parser.add_argument('--exp_name', type=str, default='exp65_anti_collapse')
+    parser.add_argument('--exp_name', type=str, default='exp67_curriculum_vq')
     parser.add_argument('--output_dir', type=str, default=None)
 
-    # LoRA (與 Exp55 相同)
+    # LoRA
     parser.add_argument('--lora_rank', type=int, default=256)
     parser.add_argument('--lora_alpha', type=int, default=512)
     parser.add_argument('--lora_dropout', type=float, default=0.2)
@@ -388,22 +394,19 @@ def main():
     parser.add_argument('--triplet_margin', type=float, default=0.2)
     parser.add_argument('--ce_weight', type=float, default=0.0)
 
-    # Anti-Collapse Loss weights (NEW)
-    parser.add_argument('--entropy_weight', type=float, default=0.1)
-    parser.add_argument('--diversity_weight', type=float, default=0.1)
-    parser.add_argument('--contrastive_weight', type=float, default=0.1)
-    parser.add_argument('--diversity_margin', type=float, default=0.5)
-    parser.add_argument('--contrastive_temperature', type=float, default=0.1)
+    # VQ-Aware Loss (from Exp63)
+    parser.add_argument('--vq_commitment_weight', type=float, default=0.1)
+    parser.add_argument('--vq_distortion_weight', type=float, default=0.1)
+    parser.add_argument('--vq_temperature', type=float, default=1.0)
 
-    # Frame-Tolerant Loss (解決時間偏移問題)
-    parser.add_argument('--use_frame_tolerant', action='store_true', default=True,
-                        help='使用 Frame-Tolerant Loss 處理 noisy-clean 時間偏移')
-    parser.add_argument('--no_frame_tolerant', action='store_false', dest='use_frame_tolerant',
-                        help='禁用 Frame-Tolerant Loss')
-    parser.add_argument('--frame_tolerance', type=int, default=1,
-                        help='允許的 frame 偏移容忍度 (預設 ±1 frame)')
+    # Curriculum Learning (from Exp64)
+    parser.add_argument('--curriculum_mode', type=str, default='curriculum',
+                        choices=['curriculum', 'anti_curriculum'])
+    parser.add_argument('--initial_phase', type=float, default=0.3)
+    parser.add_argument('--phase_increment', type=float, default=0.1)
+    parser.add_argument('--phase_advance_epochs', type=int, default=30)
 
-    # Training (與 Exp55 相同)
+    # Training
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--weight_decay', type=float, default=0.05)
     parser.add_argument('--batch_size', type=int, default=8)
@@ -418,7 +421,7 @@ def main():
     parser.add_argument('--warmup_epochs', type=int, default=10)
     parser.add_argument('--grad_clip', type=float, default=1.0)
 
-    # Gradient Accumulation (與 Exp55 相同)
+    # Gradient Accumulation
     parser.add_argument('--gradient_accumulation_steps', type=int, default=2)
 
     # Early stopping
@@ -444,30 +447,33 @@ def main():
         json.dump(config, f, indent=2)
 
     print("=" * 60)
-    print(f"Exp65: Anti-Collapse + Frame-Tolerant")
+    print(f"Exp67: Curriculum Learning + VQ-Aware Loss")
     print(f"Experiment: {args.exp_name}")
     print("=" * 60)
-    print(f"Loss Config:")
-    print(f"  Feature: {args.feature_weight}")
-    print(f"  Triplet: {args.triplet_weight} (margin={args.triplet_margin})")
-    print(f"  Entropy: {args.entropy_weight} (Anti-Collapse)")
-    print(f"  Diversity: {args.diversity_weight} (margin={args.diversity_margin})")
-    print(f"  Contrastive: {args.contrastive_weight} (temp={args.contrastive_temperature})")
-    print(f"Frame-Tolerant Config:")
-    print(f"  Enabled: {args.use_frame_tolerant}")
-    print(f"  Tolerance: ±{args.frame_tolerance} frames")
+    print(f"Curriculum Config:")
+    print(f"  Mode: {args.curriculum_mode}")
+    print(f"  Initial Phase: {args.initial_phase:.0%}")
+    print(f"  Phase Increment: {args.phase_increment:.0%}")
+    print(f"  Advance Every: {args.phase_advance_epochs} epochs")
+    print(f"VQ-Aware Config:")
+    print(f"  VQ Commitment Weight: {args.vq_commitment_weight}")
+    print(f"  VQ Distortion Weight: {args.vq_distortion_weight}")
+    print(f"  VQ Temperature: {args.vq_temperature}")
     print("=" * 60)
 
-    # Load data
-    print("\n載入資料...")
+    # Load data with curriculum
+    print("\n載入資料 (with curriculum)...")
 
-    class DataConfig:
-        batch_size = args.batch_size
-        num_workers = args.num_workers
-        pin_memory = True
-
-    train_loader, val_loader = create_aligned_dataloaders(DataConfig())
-    print(f"  Train batches: {len(train_loader)}")
+    train_loader, val_loader, curriculum_sampler = create_curriculum_dataloaders(
+        TRAIN_CACHE, VAL_CACHE,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        curriculum_mode=args.curriculum_mode,
+        initial_phase=args.initial_phase,
+        phase_increment=args.phase_increment,
+        compute_snr=True,
+    )
+    print(f"  Initial curriculum: {len(curriculum_sampler)} samples ({args.initial_phase:.0%})")
     print(f"  Val batches: {len(val_loader)}")
 
     # Load distance matrix
@@ -491,21 +497,17 @@ def main():
     print(f"  Total params: {total_params:,}")
     print(f"  Trainable params: {trainable_params:,} ({trainable_params/total_params*100:.2f}%)")
 
-    # Loss Function - 使用 V4 版本支援 Anti-Collapse + Frame-Tolerant Loss
-    loss_fn = MaskedCombinedLossV4(
+    # Loss Function - V3 支援 VQ-Aware
+    loss_fn = MaskedCombinedLossV3(
         feature_weight=args.feature_weight,
         cosine_weight=args.cosine_weight,
         triplet_weight=args.triplet_weight,
         triplet_margin=args.triplet_margin,
         ce_weight=args.ce_weight,
-        entropy_weight=args.entropy_weight,
-        diversity_weight=args.diversity_weight,
-        contrastive_weight=args.contrastive_weight,
-        diversity_margin=args.diversity_margin,
-        contrastive_temperature=args.contrastive_temperature,
+        vq_commitment_weight=args.vq_commitment_weight,
+        vq_distortion_weight=args.vq_distortion_weight,
+        vq_temperature=args.vq_temperature,
         encoder_stride=args.encoder_stride,
-        use_frame_tolerant=args.use_frame_tolerant,
-        frame_tolerance=args.frame_tolerance,
     )
 
     # Optimizer
@@ -539,9 +541,11 @@ def main():
         'train_masked_acc': [], 'val_masked_acc': [],
         'train_feature_loss': [], 'val_feature_loss': [],
         'train_triplet_loss': [], 'val_triplet_loss': [],
-        'train_entropy_loss': [], 'val_entropy_loss': [],
-        'train_contrastive_loss': [], 'val_contrastive_loss': [],
+        'train_vq_commitment_loss': [], 'val_vq_commitment_loss': [],
+        'train_vq_distortion_loss': [], 'val_vq_distortion_loss': [],
         'train_dist': [], 'val_dist': [],
+        'train_avg_snr': [],
+        'curriculum_phase': [],
         'lr': [],
     }
 
@@ -554,8 +558,12 @@ def main():
     print("\n開始訓練...")
     for epoch in range(1, args.num_epochs + 1):
         print(f"\n{'='*60}")
-        print(f"Epoch {epoch}/{args.num_epochs}")
+        print(f"Epoch {epoch}/{args.num_epochs} (Curriculum: {curriculum_sampler.current_phase:.0%})")
         print(f"{'='*60}")
+
+        # Advance curriculum phase
+        if epoch > 1 and (epoch - 1) % args.phase_advance_epochs == 0:
+            curriculum_sampler.advance_phase()
 
         train_metrics = train_epoch(
             model, train_loader, optimizer, loss_fn, device, epoch,
@@ -582,17 +590,20 @@ def main():
         history['val_feature_loss'].append(val_metrics['feature_loss'])
         history['train_triplet_loss'].append(train_metrics['triplet_loss'])
         history['val_triplet_loss'].append(val_metrics['triplet_loss'])
-        history['train_entropy_loss'].append(train_metrics['entropy_loss'])
-        history['val_entropy_loss'].append(val_metrics['entropy_loss'])
-        history['train_contrastive_loss'].append(train_metrics['contrastive_loss'])
-        history['val_contrastive_loss'].append(val_metrics['contrastive_loss'])
+        history['train_vq_commitment_loss'].append(train_metrics['vq_commitment_loss'])
+        history['val_vq_commitment_loss'].append(val_metrics['vq_commitment_loss'])
+        history['train_vq_distortion_loss'].append(train_metrics['vq_distortion_loss'])
+        history['val_vq_distortion_loss'].append(val_metrics['vq_distortion_loss'])
         history['train_dist'].append(train_metrics['distance_loss'])
         history['val_dist'].append(val_metrics['distance_loss'])
+        history['train_avg_snr'].append(train_metrics['avg_snr'])
+        history['curriculum_phase'].append(curriculum_sampler.current_phase)
 
         print(f"\nTrain: Loss={train_metrics['total_loss']:.4f}, "
-              f"Masked Acc={train_metrics['masked_acc']*100:.2f}%")
-        print(f"       Entropy={train_metrics['entropy_loss']:.4f}, "
-              f"Contrastive={train_metrics['contrastive_loss']:.4f}")
+              f"Masked Acc={train_metrics['masked_acc']*100:.2f}%, "
+              f"Avg SNR={train_metrics['avg_snr']:.1f} dB")
+        print(f"       VQ Commit={train_metrics['vq_commitment_loss']:.4f}, "
+              f"VQ Distort={train_metrics['vq_distortion_loss']:.4f}")
         print(f"Val:   Loss={val_metrics['total_loss']:.4f}, "
               f"Masked Acc={val_metrics['masked_acc']*100:.2f}%")
         print(f"       Distance={val_metrics['distance_loss']:.4f}")
@@ -608,6 +619,7 @@ def main():
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'val_masked_acc': val_metrics['masked_acc'],
+                'curriculum_phase': curriculum_sampler.current_phase,
                 'config': config,
             }, exp_dir / 'best_model.pt')
             print(f"  ★ New best model saved! Masked Acc: {best_val_acc*100:.2f}%")
@@ -624,6 +636,7 @@ def main():
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'val_masked_acc': val_metrics['masked_acc'],
+                'curriculum_phase': curriculum_sampler.current_phase,
                 'config': config,
                 'early_stopped': True,
             }, exp_dir / 'last_model.pt')
@@ -646,6 +659,7 @@ def main():
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'val_masked_acc': val_metrics['masked_acc'],
+            'curriculum_phase': curriculum_sampler.current_phase,
             'config': config,
             'early_stopped': False,
         }, exp_dir / 'last_model.pt')
