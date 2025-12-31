@@ -1,0 +1,694 @@
+{
+  "results": [
+    {
+      "sample_name": "nor_girl9_clean_100_synthetic_noise",
+      "layer_similarities": [
+        {
+          "cosine_similarity": 0.822174608707428,
+          "correlation": 0.8221710324287415,
+          "l2_distance_normalized": 0.6948216557502747,
+          "layer_idx": 0,
+          "layer_name": "model.0.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.6000206470489502,
+          "correlation": 0.5999290943145752,
+          "l2_distance_normalized": 1.3266063928604126,
+          "layer_idx": 1,
+          "layer_name": "model.1.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.2680671513080597,
+          "correlation": 0.2653660774230957,
+          "l2_distance_normalized": 3.3693675994873047,
+          "layer_idx": 2,
+          "layer_name": "model.1.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.8589110374450684,
+          "correlation": 0.8588953614234924,
+          "l2_distance_normalized": 0.5991235375404358,
+          "layer_idx": 3,
+          "layer_name": "model.1.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.30655360221862793,
+          "correlation": 0.29541507363319397,
+          "l2_distance_normalized": 2.9633889198303223,
+          "layer_idx": 4,
+          "layer_name": "model.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.25110167264938354,
+          "correlation": 0.24231235682964325,
+          "l2_distance_normalized": 3.727466583251953,
+          "layer_idx": 5,
+          "layer_name": "model.4.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.17979542911052704,
+          "correlation": 0.18320034444332123,
+          "l2_distance_normalized": 5.066561222076416,
+          "layer_idx": 6,
+          "layer_name": "model.4.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.26607081294059753,
+          "correlation": 0.2625572681427002,
+          "l2_distance_normalized": 3.1978652477264404,
+          "layer_idx": 7,
+          "layer_name": "model.4.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.2977660298347473,
+          "correlation": 0.29766470193862915,
+          "l2_distance_normalized": 2.982142686843872,
+          "layer_idx": 8,
+          "layer_name": "model.6.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.3598686158657074,
+          "correlation": 0.36195653676986694,
+          "l2_distance_normalized": 2.775669813156128,
+          "layer_idx": 9,
+          "layer_name": "model.7.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.504069447517395,
+          "correlation": 0.49000638723373413,
+          "l2_distance_normalized": 2.0696334838867188,
+          "layer_idx": 10,
+          "layer_name": "model.7.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.3066292405128479,
+          "correlation": 0.3058093786239624,
+          "l2_distance_normalized": 2.9588370323181152,
+          "layer_idx": 11,
+          "layer_name": "model.7.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.5490694642066956,
+          "correlation": 0.5165878534317017,
+          "l2_distance_normalized": 2.2250843048095703,
+          "layer_idx": 12,
+          "layer_name": "model.9.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.7853946089744568,
+          "correlation": 0.7692740559577942,
+          "l2_distance_normalized": 1.2598040103912354,
+          "layer_idx": 13,
+          "layer_name": "model.10.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.7451611757278442,
+          "correlation": 0.7279667258262634,
+          "l2_distance_normalized": 0.951848030090332,
+          "layer_idx": 14,
+          "layer_name": "model.10.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.7044858932495117,
+          "correlation": 0.6952430605888367,
+          "l2_distance_normalized": 2.4846978187561035,
+          "layer_idx": 15,
+          "layer_name": "model.10.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.45879489183425903,
+          "correlation": 0.45254218578338623,
+          "l2_distance_normalized": 1.5335068702697754,
+          "layer_idx": 16,
+          "layer_name": "model.12.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.1909240335226059,
+          "correlation": 0.19126950204372406,
+          "l2_distance_normalized": 1.7868216037750244,
+          "layer_idx": 17,
+          "layer_name": "model.15.conv.conv"
+        }
+      ]
+    },
+    {
+      "sample_name": "nor_girl9_clean_099_synthetic_noise",
+      "layer_similarities": [
+        {
+          "cosine_similarity": 0.8810912370681763,
+          "correlation": 0.8810865879058838,
+          "l2_distance_normalized": 0.5382099747657776,
+          "layer_idx": 0,
+          "layer_name": "model.0.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.6924651265144348,
+          "correlation": 0.6923746466636658,
+          "l2_distance_normalized": 1.0356764793395996,
+          "layer_idx": 1,
+          "layer_name": "model.1.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.3172719478607178,
+          "correlation": 0.3126450777053833,
+          "l2_distance_normalized": 2.843836784362793,
+          "layer_idx": 2,
+          "layer_name": "model.1.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.9079660177230835,
+          "correlation": 0.9079574346542358,
+          "l2_distance_normalized": 0.46308696269989014,
+          "layer_idx": 3,
+          "layer_name": "model.1.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.36545848846435547,
+          "correlation": 0.34937164187431335,
+          "l2_distance_normalized": 2.4705350399017334,
+          "layer_idx": 4,
+          "layer_name": "model.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.30089905858039856,
+          "correlation": 0.2883246839046478,
+          "l2_distance_normalized": 3.1528491973876953,
+          "layer_idx": 5,
+          "layer_name": "model.4.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.21419426798820496,
+          "correlation": 0.21903924643993378,
+          "l2_distance_normalized": 4.356359958648682,
+          "layer_idx": 6,
+          "layer_name": "model.4.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.32055655121803284,
+          "correlation": 0.31523290276527405,
+          "l2_distance_normalized": 2.654968500137329,
+          "layer_idx": 7,
+          "layer_name": "model.4.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.40317651629447937,
+          "correlation": 0.4031611382961273,
+          "l2_distance_normalized": 2.232318878173828,
+          "layer_idx": 8,
+          "layer_name": "model.6.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.48913663625717163,
+          "correlation": 0.4930860698223114,
+          "l2_distance_normalized": 1.9915426969528198,
+          "layer_idx": 9,
+          "layer_name": "model.7.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.6548408269882202,
+          "correlation": 0.6429941058158875,
+          "l2_distance_normalized": 1.418728232383728,
+          "layer_idx": 10,
+          "layer_name": "model.7.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.4072532057762146,
+          "correlation": 0.40669775009155273,
+          "l2_distance_normalized": 2.2252938747406006,
+          "layer_idx": 11,
+          "layer_name": "model.7.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.6560208797454834,
+          "correlation": 0.6319161057472229,
+          "l2_distance_normalized": 1.5440789461135864,
+          "layer_idx": 12,
+          "layer_name": "model.9.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.8477665185928345,
+          "correlation": 0.8316801190376282,
+          "l2_distance_normalized": 0.8866334557533264,
+          "layer_idx": 13,
+          "layer_name": "model.10.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.7905329465866089,
+          "correlation": 0.7782416939735413,
+          "l2_distance_normalized": 0.755295991897583,
+          "layer_idx": 14,
+          "layer_name": "model.10.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.8173376321792603,
+          "correlation": 0.8101016879081726,
+          "l2_distance_normalized": 1.8007479906082153,
+          "layer_idx": 15,
+          "layer_name": "model.10.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.5549798011779785,
+          "correlation": 0.5512841939926147,
+          "l2_distance_normalized": 1.1596012115478516,
+          "layer_idx": 16,
+          "layer_name": "model.12.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.37832242250442505,
+          "correlation": 0.3783063292503357,
+          "l2_distance_normalized": 1.457371711730957,
+          "layer_idx": 17,
+          "layer_name": "model.15.conv.conv"
+        }
+      ]
+    },
+    {
+      "sample_name": "nor_girl9_clean_098_synthetic_noise",
+      "layer_similarities": [
+        {
+          "cosine_similarity": 0.7911546230316162,
+          "correlation": 0.7911538481712341,
+          "l2_distance_normalized": 0.77159583568573,
+          "layer_idx": 0,
+          "layer_name": "model.0.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.5730541944503784,
+          "correlation": 0.5729693174362183,
+          "l2_distance_normalized": 1.4128985404968262,
+          "layer_idx": 1,
+          "layer_name": "model.1.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.26671501994132996,
+          "correlation": 0.26396840810775757,
+          "l2_distance_normalized": 3.2931787967681885,
+          "layer_idx": 2,
+          "layer_name": "model.1.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.8316935896873474,
+          "correlation": 0.8316710591316223,
+          "l2_distance_normalized": 0.6667380928993225,
+          "layer_idx": 3,
+          "layer_name": "model.1.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.29481133818626404,
+          "correlation": 0.2824823558330536,
+          "l2_distance_normalized": 2.997504234313965,
+          "layer_idx": 4,
+          "layer_name": "model.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.24902580678462982,
+          "correlation": 0.239558145403862,
+          "l2_distance_normalized": 3.697211742401123,
+          "layer_idx": 5,
+          "layer_name": "model.4.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.19552721083164215,
+          "correlation": 0.19913339614868164,
+          "l2_distance_normalized": 4.791060447692871,
+          "layer_idx": 6,
+          "layer_name": "model.4.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.27682119607925415,
+          "correlation": 0.27333977818489075,
+          "l2_distance_normalized": 2.8788726329803467,
+          "layer_idx": 7,
+          "layer_name": "model.4.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.3319912850856781,
+          "correlation": 0.331850528717041,
+          "l2_distance_normalized": 2.6472017765045166,
+          "layer_idx": 8,
+          "layer_name": "model.6.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.3995301425457001,
+          "correlation": 0.40100574493408203,
+          "l2_distance_normalized": 2.4484784603118896,
+          "layer_idx": 9,
+          "layer_name": "model.7.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.5460640788078308,
+          "correlation": 0.5306244492530823,
+          "l2_distance_normalized": 1.8233332633972168,
+          "layer_idx": 10,
+          "layer_name": "model.7.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.33388081192970276,
+          "correlation": 0.33292490243911743,
+          "l2_distance_normalized": 2.6632533073425293,
+          "layer_idx": 11,
+          "layer_name": "model.7.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.5968134999275208,
+          "correlation": 0.5624041557312012,
+          "l2_distance_normalized": 1.8908005952835083,
+          "layer_idx": 12,
+          "layer_name": "model.9.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.8192433714866638,
+          "correlation": 0.8015277981758118,
+          "l2_distance_normalized": 1.0859954357147217,
+          "layer_idx": 13,
+          "layer_name": "model.10.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.7596854567527771,
+          "correlation": 0.7452007532119751,
+          "l2_distance_normalized": 0.9026756882667542,
+          "layer_idx": 14,
+          "layer_name": "model.10.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.7804485559463501,
+          "correlation": 0.7712658643722534,
+          "l2_distance_normalized": 2.1618313789367676,
+          "layer_idx": 15,
+          "layer_name": "model.10.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.5177270174026489,
+          "correlation": 0.5124971866607666,
+          "l2_distance_normalized": 1.3100357055664062,
+          "layer_idx": 16,
+          "layer_name": "model.12.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.287072092294693,
+          "correlation": 0.2871699333190918,
+          "l2_distance_normalized": 1.6161742210388184,
+          "layer_idx": 17,
+          "layer_name": "model.15.conv.conv"
+        }
+      ]
+    },
+    {
+      "sample_name": "nor_girl9_clean_097_synthetic_noise",
+      "layer_similarities": [
+        {
+          "cosine_similarity": 0.8386624455451965,
+          "correlation": 0.8386588096618652,
+          "l2_distance_normalized": 0.6505991816520691,
+          "layer_idx": 0,
+          "layer_name": "model.0.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.6221274733543396,
+          "correlation": 0.6220429539680481,
+          "l2_distance_normalized": 1.2479671239852905,
+          "layer_idx": 1,
+          "layer_name": "model.1.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.29378774762153625,
+          "correlation": 0.2909557819366455,
+          "l2_distance_normalized": 2.9681901931762695,
+          "layer_idx": 2,
+          "layer_name": "model.1.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.8722843527793884,
+          "correlation": 0.8722689151763916,
+          "l2_distance_normalized": 0.5619696974754333,
+          "layer_idx": 3,
+          "layer_name": "model.1.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.32854458689689636,
+          "correlation": 0.316790908575058,
+          "l2_distance_normalized": 2.6658878326416016,
+          "layer_idx": 4,
+          "layer_name": "model.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.28175029158592224,
+          "correlation": 0.2728056311607361,
+          "l2_distance_normalized": 3.2294139862060547,
+          "layer_idx": 5,
+          "layer_name": "model.4.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.23031267523765564,
+          "correlation": 0.23348137736320496,
+          "l2_distance_normalized": 4.12851619720459,
+          "layer_idx": 6,
+          "layer_name": "model.4.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.321077823638916,
+          "correlation": 0.3180024027824402,
+          "l2_distance_normalized": 2.4895079135894775,
+          "layer_idx": 7,
+          "layer_name": "model.4.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.3927353322505951,
+          "correlation": 0.39264175295829773,
+          "l2_distance_normalized": 2.2231850624084473,
+          "layer_idx": 8,
+          "layer_name": "model.6.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.4630378782749176,
+          "correlation": 0.464732825756073,
+          "l2_distance_normalized": 2.0249016284942627,
+          "layer_idx": 9,
+          "layer_name": "model.7.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.6074395179748535,
+          "correlation": 0.5953814387321472,
+          "l2_distance_normalized": 1.520328164100647,
+          "layer_idx": 10,
+          "layer_name": "model.7.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.3880031704902649,
+          "correlation": 0.387257844209671,
+          "l2_distance_normalized": 2.266538619995117,
+          "layer_idx": 11,
+          "layer_name": "model.7.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.6370687484741211,
+          "correlation": 0.6102691888809204,
+          "l2_distance_normalized": 1.6095404624938965,
+          "layer_idx": 12,
+          "layer_name": "model.9.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.8184494972229004,
+          "correlation": 0.8007538914680481,
+          "l2_distance_normalized": 1.0247957706451416,
+          "layer_idx": 13,
+          "layer_name": "model.10.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.7335560917854309,
+          "correlation": 0.7153122425079346,
+          "l2_distance_normalized": 0.9212450385093689,
+          "layer_idx": 14,
+          "layer_name": "model.10.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.791557788848877,
+          "correlation": 0.7840997576713562,
+          "l2_distance_normalized": 1.783793568611145,
+          "layer_idx": 15,
+          "layer_name": "model.10.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.5456485748291016,
+          "correlation": 0.5410811305046082,
+          "l2_distance_normalized": 1.2817494869232178,
+          "layer_idx": 16,
+          "layer_name": "model.12.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.35420581698417664,
+          "correlation": 0.35424646735191345,
+          "l2_distance_normalized": 1.5031380653381348,
+          "layer_idx": 17,
+          "layer_name": "model.15.conv.conv"
+        }
+      ]
+    },
+    {
+      "sample_name": "nor_girl9_clean_096_synthetic_noise",
+      "layer_similarities": [
+        {
+          "cosine_similarity": 0.8695472478866577,
+          "correlation": 0.8695473670959473,
+          "l2_distance_normalized": 0.5666000843048096,
+          "layer_idx": 0,
+          "layer_name": "model.0.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.6708965301513672,
+          "correlation": 0.6707998514175415,
+          "l2_distance_normalized": 1.0924278497695923,
+          "layer_idx": 1,
+          "layer_name": "model.1.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.3128049969673157,
+          "correlation": 0.30895617604255676,
+          "l2_distance_normalized": 2.830080986022949,
+          "layer_idx": 2,
+          "layer_name": "model.1.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.8978192210197449,
+          "correlation": 0.8978102207183838,
+          "l2_distance_normalized": 0.48966288566589355,
+          "layer_idx": 3,
+          "layer_name": "model.1.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.3562941551208496,
+          "correlation": 0.34209659695625305,
+          "l2_distance_normalized": 2.4845643043518066,
+          "layer_idx": 4,
+          "layer_name": "model.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.3000849485397339,
+          "correlation": 0.2890130281448364,
+          "l2_distance_normalized": 3.0734808444976807,
+          "layer_idx": 5,
+          "layer_name": "model.4.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.2285679578781128,
+          "correlation": 0.23242339491844177,
+          "l2_distance_normalized": 4.052083969116211,
+          "layer_idx": 6,
+          "layer_name": "model.4.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.3249918222427368,
+          "correlation": 0.3206624984741211,
+          "l2_distance_normalized": 2.5521774291992188,
+          "layer_idx": 7,
+          "layer_name": "model.4.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.4047183692455292,
+          "correlation": 0.4046849012374878,
+          "l2_distance_normalized": 2.1808419227600098,
+          "layer_idx": 8,
+          "layer_name": "model.6.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.48031824827194214,
+          "correlation": 0.4832123816013336,
+          "l2_distance_normalized": 1.9723182916641235,
+          "layer_idx": 9,
+          "layer_name": "model.7.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.6318209767341614,
+          "correlation": 0.620215892791748,
+          "l2_distance_normalized": 1.4680640697479248,
+          "layer_idx": 10,
+          "layer_name": "model.7.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.40626415610313416,
+          "correlation": 0.40566855669021606,
+          "l2_distance_normalized": 2.196749687194824,
+          "layer_idx": 11,
+          "layer_name": "model.7.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.6508710384368896,
+          "correlation": 0.6286348700523376,
+          "l2_distance_normalized": 1.5704551935195923,
+          "layer_idx": 12,
+          "layer_name": "model.9.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.8486559391021729,
+          "correlation": 0.834966242313385,
+          "l2_distance_normalized": 0.967413067817688,
+          "layer_idx": 13,
+          "layer_name": "model.10.block.1.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.7898573875427246,
+          "correlation": 0.7765617370605469,
+          "l2_distance_normalized": 0.8304779529571533,
+          "layer_idx": 14,
+          "layer_name": "model.10.block.3.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.7941322326660156,
+          "correlation": 0.7867488861083984,
+          "l2_distance_normalized": 1.8333820104599,
+          "layer_idx": 15,
+          "layer_name": "model.10.shortcut.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.5509695410728455,
+          "correlation": 0.5456039905548096,
+          "l2_distance_normalized": 1.2437773942947388,
+          "layer_idx": 16,
+          "layer_name": "model.12.conv.conv"
+        },
+        {
+          "cosine_similarity": 0.3417836129665375,
+          "correlation": 0.34181126952171326,
+          "l2_distance_normalized": 1.5040727853775024,
+          "layer_idx": 17,
+          "layer_name": "model.15.conv.conv"
+        }
+      ]
+    }
+  ],
+  "health_report": {
+    "avg_layer_similarities": [
+      0.840526032447815,
+      0.631712794303894,
+      0.2917293727397919,
+      0.8737348437309265,
+      0.33033243417739866,
+      0.27657235562801363,
+      0.2096795082092285,
+      0.30190364122390745,
+      0.36607750654220583,
+      0.43837830424308777,
+      0.5888469696044922,
+      0.36840611696243286,
+      0.6179687261581421,
+      0.8239019870758056,
+      0.7637586116790771,
+      0.7775924205780029,
+      0.5256239652633667,
+      0.3104615956544876
+    ],
+    "group_stats": {
+      "input": 0.840526032447815,
+      "low_level": 0.5318773612380028,
+      "mid_level": 0.28855825290083886,
+      "semantic": 0.5034000292420387,
+      "abstract": 0.722719246149063,
+      "output": 0.3104615956544876
+    },
+    "health_metrics": {
+      "\u6dfa\u5c64\u566a\u97f3\u654f\u611f\u5ea6\n(\u671f\u671b: \u4f4e)": 0.4681226387619972,
+      "\u6df1\u5c64\u9b6f\u68d2\u6027\n(\u671f\u671b: \u9ad8)": 0.722719246149063,
+      "\u6df1\u6dfa\u5dee\u7570\n(\u671f\u671b: \u6b63)": 0.19084188491106024
+    }
+  }
+}
