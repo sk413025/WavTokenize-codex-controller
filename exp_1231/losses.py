@@ -37,8 +37,8 @@ class SoftTokenLoss(nn.Module):
     ) -> Tuple[torch.Tensor, Dict]:
         """
         Args:
-            student_features: (B, T, D) - Student encoder output
-            teacher_features: (B, T, D) - Teacher encoder output
+            student_features: (B, D, T) or (B, T, D) - Student encoder output
+            teacher_features: (B, D, T) or (B, T, D) - Teacher encoder output
             codebook: (K, D) - VQ codebook, K=4096
             lengths: (B,) - Original audio lengths
             encoder_stride: Encoder stride for calculating valid frames
@@ -47,6 +47,16 @@ class SoftTokenLoss(nn.Module):
             loss: KL Divergence loss
             info: Dict with metrics
         """
+        # 處理維度：encoder output 可能是 (B, D, T) 或 (B, T, D)
+        # codebook 的 D=512，所以我們用它來判斷
+        D_codebook = codebook.shape[1]  # 512
+
+        # 如果 student_features 的最後一維不是 D，需要 transpose
+        if student_features.shape[-1] != D_codebook:
+            student_features = student_features.transpose(1, 2)  # (B, D, T) -> (B, T, D)
+        if teacher_features.shape[-1] != D_codebook:
+            teacher_features = teacher_features.transpose(1, 2)
+
         B, T, D = student_features.shape
         K = codebook.shape[0]
 
@@ -133,7 +143,7 @@ class ContrastiveTokenLoss(nn.Module):
     ) -> Tuple[torch.Tensor, Dict]:
         """
         Args:
-            student_features: (B, T, D)
+            student_features: (B, D, T) or (B, T, D)
             teacher_codes: (B, T) - Teacher 選擇的 VQ codes
             codebook: (K, D)
             lengths: (B,)
@@ -142,6 +152,11 @@ class ContrastiveTokenLoss(nn.Module):
             loss: InfoNCE loss
             info: Dict with metrics
         """
+        # 處理維度
+        D_codebook = codebook.shape[1]
+        if student_features.shape[-1] != D_codebook:
+            student_features = student_features.transpose(1, 2)
+
         B, T, D = student_features.shape
         K = codebook.shape[0]
         device = student_features.device
@@ -390,6 +405,13 @@ class CombinedLossExp71(nn.Module):
         """
         計算組合 loss
         """
+        # 處理維度：encoder output 可能是 (B, D, T) 或 (B, T, D)
+        D_codebook = codebook.shape[1]
+        if student_features.shape[-1] != D_codebook:
+            student_features = student_features.transpose(1, 2)
+        if teacher_features.shape[-1] != D_codebook:
+            teacher_features = teacher_features.transpose(1, 2)
+
         B, T, D = student_features.shape
         device = student_features.device
 
@@ -498,6 +520,13 @@ class CombinedLossExp72(nn.Module):
         lengths: Optional[torch.Tensor] = None,
         encoder_stride: int = 320,
     ) -> Tuple[torch.Tensor, Dict]:
+        # 處理維度：encoder output 可能是 (B, D, T) 或 (B, T, D)
+        D_codebook = codebook.shape[1]
+        if student_features.shape[-1] != D_codebook:
+            student_features = student_features.transpose(1, 2)
+        if teacher_features.shape[-1] != D_codebook:
+            teacher_features = teacher_features.transpose(1, 2)
+
         B, T, D = student_features.shape
         device = student_features.device
 

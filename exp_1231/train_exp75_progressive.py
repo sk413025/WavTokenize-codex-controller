@@ -72,6 +72,13 @@ class ProgressiveLoss(nn.Module):
         """
         weights: dict with 'feature_weight', 'triplet_weight', 'soft_token_weight'
         """
+        # 處理維度：encoder output 可能是 (B, D, T) 或 (B, T, D)
+        D_codebook = codebook.shape[1]
+        if student_features.shape[-1] != D_codebook:
+            student_features = student_features.transpose(1, 2)
+        if teacher_features.shape[-1] != D_codebook:
+            teacher_features = teacher_features.transpose(1, 2)
+
         B, T, D = student_features.shape
         device = student_features.device
 
