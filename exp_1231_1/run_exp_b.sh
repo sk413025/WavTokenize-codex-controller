@@ -17,10 +17,14 @@
 # - 如果 Val acc 下降 → 需要 Exp A (深層低 rank)
 # =============================================================
 
-cd /home/sbplab/ruizi/WavTokenize-feature-analysis/exp_1231_1
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate test
+
+cd /home/sbplab/ruizi/WavTokenize-feature-analysis
 
 # 設定 GPU
 export CUDA_VISIBLE_DEVICES=0
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 echo "============================================================"
 echo "Exp 1231_1: 凍結深層實驗 (Exp B)"
@@ -32,8 +36,9 @@ echo "  - L0-L8 (shallow_mid): LoRA rank=256"
 echo "  - L9-L17 (deep): FROZEN"
 echo "============================================================"
 
-python train_shallow_lora.py \
+python -u exp_1231_1/train_shallow_lora.py \
     --exp_name exp_b_freeze_deep \
+    --output_dir /home/sbplab/ruizi/WavTokenize-feature-analysis/exp_1231_1/runs/exp_b_freeze_deep \
     --lora_layers shallow_mid \
     --lora_rank 256 \
     --lora_alpha 512 \
@@ -54,7 +59,9 @@ python train_shallow_lora.py \
     --use_amp \
     --use_scheduler \
     --seed 42 \
-    2>&1 | tee runs/exp_b_freeze_deep/train.log
+    --num_workers 4 \
+    --grad_clip 1.0 \
+    2>&1 | tee exp_1231_1/runs/exp_b_freeze_deep/train.log
 
 echo ""
 echo "============================================================"

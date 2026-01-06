@@ -36,6 +36,7 @@ from peft import LoraConfig, get_peft_model
 # 添加路徑
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, '/home/sbplab/ruizi/WavTokenizer-main')
+sys.path.insert(0, '/home/sbplab/ruizi/WavTokenize-self-supervised')
 
 from exp_1201.config import WAVTOK_CONFIG, WAVTOK_CKPT, DISTANCE_MATRIX, TRAIN_CACHE, VAL_CACHE
 from exp_1219.losses import MaskedCombinedLossV2, compute_masked_accuracy
@@ -523,6 +524,7 @@ def main():
 
     # Experiment
     parser.add_argument('--exp_name', type=str, default='exp_e_progressive')
+    parser.add_argument('--output_dir', type=str, default=None)
 
     # LoRA
     parser.add_argument('--lora_rank', type=int, default=256)
@@ -560,7 +562,10 @@ def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"Using device: {device}")
 
-    exp_dir = Path(__file__).parent / 'runs' / args.exp_name
+    if args.output_dir:
+        exp_dir = Path(args.output_dir)
+    else:
+        exp_dir = Path(__file__).parent / 'runs' / args.exp_name
     exp_dir.mkdir(parents=True, exist_ok=True)
 
     total_epochs = args.phase1_epochs + args.phase2_epochs + args.phase3_epochs
@@ -591,7 +596,7 @@ def main():
         num_workers=args.num_workers,
         curriculum_mode='curriculum',
         initial_phase=1.0,  # 使用全部資料
-        compute_snr=True,
+        compute_snr=False,  # Progressive training 不需要 SNR 分類
     )
 
     # Load distance matrix

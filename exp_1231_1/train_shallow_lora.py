@@ -36,6 +36,7 @@ from torch.cuda.amp import autocast, GradScaler
 # 添加路徑
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, '/home/sbplab/ruizi/WavTokenizer-main')
+sys.path.insert(0, '/home/sbplab/ruizi/WavTokenize-self-supervised')
 
 from exp_1201.config import WAVTOK_CONFIG, WAVTOK_CKPT, DISTANCE_MATRIX, TRAIN_CACHE, VAL_CACHE
 from exp_1231_1.models import TeacherStudentShallowLoRA, LORA_LAYER_PRESETS

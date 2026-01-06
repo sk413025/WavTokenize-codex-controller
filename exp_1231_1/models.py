@@ -21,6 +21,7 @@ from typing import List, Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, '/home/sbplab/ruizi/WavTokenizer-main')
+sys.path.insert(0, '/home/sbplab/ruizi/WavTokenize-self-supervised')
 
 from peft import LoraConfig, get_peft_model
 from decoder.pretrained import WavTokenizer

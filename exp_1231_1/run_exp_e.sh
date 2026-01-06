@@ -13,10 +13,14 @@
 # 2. 深層只需要「適應」而非「學習去噪」
 # =============================================================
 
-cd /home/sbplab/ruizi/WavTokenize-feature-analysis/exp_1231_1
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate test
+
+cd /home/sbplab/ruizi/WavTokenize-feature-analysis
 
 # 設定 GPU
 export CUDA_VISIBLE_DEVICES=1
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 echo "============================================================"
 echo "Exp E: 分階段訓練 (Progressive Training)"
@@ -31,10 +35,11 @@ echo "  Total:             300 epochs"
 echo "============================================================"
 
 # 創建輸出目錄
-mkdir -p runs/exp_e_progressive
+mkdir -p exp_1231_1/runs/exp_e_progressive
 
-python train_progressive.py \
+python -u exp_1231_1/train_progressive.py \
     --exp_name exp_e_progressive \
+    --output_dir /home/sbplab/ruizi/WavTokenize-feature-analysis/exp_1231_1/runs/exp_e_progressive \
     --lora_rank 256 \
     --lora_alpha 512 \
     --lora_dropout 0.2 \
@@ -51,7 +56,9 @@ python train_progressive.py \
     --gradient_accumulation_steps 2 \
     --use_amp \
     --seed 42 \
-    2>&1 | tee runs/exp_e_progressive/train.log
+    --num_workers 4 \
+    --grad_clip 1.0 \
+    2>&1 | tee exp_1231_1/runs/exp_e_progressive/train.log
 
 echo ""
 echo "============================================================"
