@@ -38,6 +38,16 @@ WAVTOK_CKPT = "/home/sbplab/ruizi/c_code/models/wavtokenizer_large_speech_320_24
 
 # 測試音檔
 AUDIO_DIR = Path("/home/sbplab/ruizi/WavTokenize/data/clean/box2")
+
+# 所有說話者
+SPEAKERS_BOY = ['boy1', 'boy3', 'boy4', 'boy5', 'boy6', 'boy7', 'boy8', 'boy9', 'boy10']
+SPEAKERS_GIRL = ['girl2', 'girl3', 'girl4', 'girl6', 'girl7', 'girl8', 'girl9', 'girl10', 'girl11']
+ALL_SPEAKERS = SPEAKERS_BOY + SPEAKERS_GIRL
+
+# 測試句子 (使用多個句子增加信心度)
+TEST_SENTENCES = ['001', '002', '003', '010', '020', '030']
+
+# 舊的設定 (保留兼容)
 TEST_AUDIO_PAIRS = [
     ("nor_boy1_clean_001.wav", "nor_girl2_clean_001.wav"),
     ("nor_boy1_clean_010.wav", "nor_girl2_clean_010.wav"),
@@ -408,6 +418,333 @@ def analyze_speaker_invariance(
     return results
 
 
+def analyze_speaker_invariance_multi(
+    extractor: FeatureMapExtractor,
+    output_dir: Path,
+    n_speakers: int = 6,
+    n_sentences: int = 5,
+):
+    """
+    擴展分析: 多位說話者比較，增加統計信心度
+
+    比較策略:
+    1. 跨性別比較 (boy vs girl)
+    2. 同性別比較 (boy vs boy, girl vs girl)
+    3. 統計 mean ± std
+
+    Args:
+        n_speakers: 每個性別使用的說話者數量
+        n_sentences: 使用的句子數量
+    """
+    print("\n" + "="*60)
+    print("分析 1b: Multi-Speaker Invariance Analysis")
+    print(f"  使用說話者: {n_speakers} boys + {n_speakers} girls")
+    print(f"  使用句子數: {n_sentences}")
+    print("="*60)
+
+    # 選擇說話者
+    selected_boys = SPEAKERS_BOY[:n_speakers]
+    selected_girls = SPEAKERS_GIRL[:n_speakers]
+    sentences = TEST_SENTENCES[:n_sentences]
+
+    print(f"\n選擇的說話者:")
+    print(f"  Boys: {selected_boys}")
+    print(f"  Girls: {selected_girls}")
+    print(f"  Sentences: {sentences}")
+
+    # 儲存所有比較結果
+    cross_gender_results = []  # boy vs girl
+    same_gender_boy_results = []  # boy vs boy
+    same_gender_girl_results = []  # girl vs girl
+
+    n_layers = len(ENCODER_CONV_LAYERS)
+
+    # 1. 跨性別比較
+    print("\n--- 跨性別比較 (Boy vs Girl) ---")
+    for sentence in sentences:
+        for boy in selected_boys:
+            for girl in selected_girls:
+                boy_file = f"nor_{boy}_clean_{sentence}.wav"
+                girl_file = f"nor_{girl}_clean_{sentence}.wav"
+                boy_path = AUDIO_DIR / boy_file
+                girl_path = AUDIO_DIR / girl_file
+
+                if not boy_path.exists() or not girl_path.exists():
+                    continue
+
+                boy_audio = load_audio(boy_path)
+                girl_audio = load_audio(girl_path)
+                boy_fm = extractor.extract(boy_audio)
+                girl_fm = extractor.extract(girl_audio)
+
+                sims = []
+                for layer_name in ENCODER_CONV_LAYERS:
+                    if layer_name in boy_fm and layer_name in girl_fm:
+                        sim = compute_feature_similarity(boy_fm[layer_name], girl_fm[layer_name])
+                        sims.append(sim['cosine_similarity'])
+
+                if len(sims) == n_layers:
+                    cross_gender_results.append(sims)
+
+    print(f"  完成 {len(cross_gender_results)} 組比較")
+
+    # 2. 同性別比較 - Boys
+    print("\n--- 同性別比較 (Boy vs Boy) ---")
+    for sentence in sentences:
+        for i, boy1 in enumerate(selected_boys):
+            for boy2 in selected_boys[i+1:]:
+                boy1_file = f"nor_{boy1}_clean_{sentence}.wav"
+                boy2_file = f"nor_{boy2}_clean_{sentence}.wav"
+                boy1_path = AUDIO_DIR / boy1_file
+                boy2_path = AUDIO_DIR / boy2_file
+
+                if not boy1_path.exists() or not boy2_path.exists():
+                    continue
+
+                boy1_audio = load_audio(boy1_path)
+                boy2_audio = load_audio(boy2_path)
+                boy1_fm = extractor.extract(boy1_audio)
+                boy2_fm = extractor.extract(boy2_audio)
+
+                sims = []
+                for layer_name in ENCODER_CONV_LAYERS:
+                    if layer_name in boy1_fm and layer_name in boy2_fm:
+                        sim = compute_feature_similarity(boy1_fm[layer_name], boy2_fm[layer_name])
+                        sims.append(sim['cosine_similarity'])
+
+                if len(sims) == n_layers:
+                    same_gender_boy_results.append(sims)
+
+    print(f"  完成 {len(same_gender_boy_results)} 組比較")
+
+    # 3. 同性別比較 - Girls
+    print("\n--- 同性別比較 (Girl vs Girl) ---")
+    for sentence in sentences:
+        for i, girl1 in enumerate(selected_girls):
+            for girl2 in selected_girls[i+1:]:
+                girl1_file = f"nor_{girl1}_clean_{sentence}.wav"
+                girl2_file = f"nor_{girl2}_clean_{sentence}.wav"
+                girl1_path = AUDIO_DIR / girl1_file
+                girl2_path = AUDIO_DIR / girl2_file
+
+                if not girl1_path.exists() or not girl2_path.exists():
+                    continue
+
+                girl1_audio = load_audio(girl1_path)
+                girl2_audio = load_audio(girl2_path)
+                girl1_fm = extractor.extract(girl1_audio)
+                girl2_fm = extractor.extract(girl2_audio)
+
+                sims = []
+                for layer_name in ENCODER_CONV_LAYERS:
+                    if layer_name in girl1_fm and layer_name in girl2_fm:
+                        sim = compute_feature_similarity(girl1_fm[layer_name], girl2_fm[layer_name])
+                        sims.append(sim['cosine_similarity'])
+
+                if len(sims) == n_layers:
+                    same_gender_girl_results.append(sims)
+
+    print(f"  完成 {len(same_gender_girl_results)} 組比較")
+
+    # 統計分析
+    cross_gender = np.array(cross_gender_results)
+    same_boy = np.array(same_gender_boy_results)
+    same_girl = np.array(same_gender_girl_results)
+
+    # 繪製結果
+    visualize_multi_speaker_results(
+        cross_gender, same_boy, same_girl,
+        output_dir / 'multi_speaker_analysis.png'
+    )
+
+    # 儲存詳細結果
+    results = {
+        'n_speakers_per_gender': n_speakers,
+        'n_sentences': n_sentences,
+        'n_cross_gender_comparisons': len(cross_gender_results),
+        'n_same_boy_comparisons': len(same_gender_boy_results),
+        'n_same_girl_comparisons': len(same_gender_girl_results),
+        'cross_gender_mean': cross_gender.mean(axis=0).tolist() if len(cross_gender) > 0 else [],
+        'cross_gender_std': cross_gender.std(axis=0).tolist() if len(cross_gender) > 0 else [],
+        'same_boy_mean': same_boy.mean(axis=0).tolist() if len(same_boy) > 0 else [],
+        'same_boy_std': same_boy.std(axis=0).tolist() if len(same_boy) > 0 else [],
+        'same_girl_mean': same_girl.mean(axis=0).tolist() if len(same_girl) > 0 else [],
+        'same_girl_std': same_girl.std(axis=0).tolist() if len(same_girl) > 0 else [],
+    }
+
+    # 分組統計
+    print("\n" + "="*60)
+    print("Multi-Speaker Analysis Summary")
+    print("="*60)
+
+    print(f"\n比較組數:")
+    print(f"  跨性別 (Boy vs Girl): {len(cross_gender_results)}")
+    print(f"  同性別 (Boy vs Boy):  {len(same_gender_boy_results)}")
+    print(f"  同性別 (Girl vs Girl): {len(same_gender_girl_results)}")
+
+    if len(cross_gender) > 0:
+        print("\n各層組平均相似度 ± 標準差:")
+        for group_name, layer_indices in LAYER_GROUPS.items():
+            indices = [i for i in layer_indices if i < n_layers]
+            cross_mean = cross_gender[:, indices].mean()
+            cross_std = cross_gender[:, indices].std()
+            same_mean = np.concatenate([same_boy[:, indices], same_girl[:, indices]]).mean() if len(same_boy) > 0 and len(same_girl) > 0 else 0
+            same_std = np.concatenate([same_boy[:, indices], same_girl[:, indices]]).std() if len(same_boy) > 0 and len(same_girl) > 0 else 0
+
+            print(f"  {group_name:12s}: Cross={cross_mean:.4f}±{cross_std:.4f}, Same={same_mean:.4f}±{same_std:.4f}")
+
+    return results
+
+
+def visualize_multi_speaker_results(
+    cross_gender: np.ndarray,
+    same_boy: np.ndarray,
+    same_girl: np.ndarray,
+    output_path: Path,
+):
+    """視覺化多說話者分析結果"""
+    n_layers = cross_gender.shape[1] if len(cross_gender) > 0 else 18
+
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+
+    x = np.arange(n_layers)
+    layer_labels = [f"L{i}" for i in range(n_layers)]
+
+    # 1. 各層相似度 (mean ± std)
+    ax = axes[0, 0]
+    if len(cross_gender) > 0:
+        cross_mean = cross_gender.mean(axis=0)
+        cross_std = cross_gender.std(axis=0)
+        ax.fill_between(x, cross_mean - cross_std, cross_mean + cross_std, alpha=0.3, color='red')
+        ax.plot(x, cross_mean, 'r-o', label=f'Cross-Gender (n={len(cross_gender)})', markersize=4)
+
+    if len(same_boy) > 0:
+        same_boy_mean = same_boy.mean(axis=0)
+        same_boy_std = same_boy.std(axis=0)
+        ax.fill_between(x, same_boy_mean - same_boy_std, same_boy_mean + same_boy_std, alpha=0.2, color='blue')
+        ax.plot(x, same_boy_mean, 'b-s', label=f'Boy vs Boy (n={len(same_boy)})', markersize=4)
+
+    if len(same_girl) > 0:
+        same_girl_mean = same_girl.mean(axis=0)
+        same_girl_std = same_girl.std(axis=0)
+        ax.fill_between(x, same_girl_mean - same_girl_std, same_girl_mean + same_girl_std, alpha=0.2, color='green')
+        ax.plot(x, same_girl_mean, 'g-^', label=f'Girl vs Girl (n={len(same_girl)})', markersize=4)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(layer_labels, rotation=45, fontsize=8)
+    ax.set_xlabel('Layer')
+    ax.set_ylabel('Cosine Similarity')
+    ax.set_title('Speaker Similarity by Layer (mean ± std)')
+    ax.legend()
+    ax.set_ylim(0, 1)
+    ax.grid(True, alpha=0.3)
+
+    # 2. 分組統計 (bar chart)
+    ax = axes[0, 1]
+    group_names = list(LAYER_GROUPS.keys())
+    bar_width = 0.25
+    x_groups = np.arange(len(group_names))
+
+    for i, (data, label, color) in enumerate([
+        (cross_gender, 'Cross-Gender', 'red'),
+        (same_boy, 'Boy vs Boy', 'blue'),
+        (same_girl, 'Girl vs Girl', 'green'),
+    ]):
+        if len(data) > 0:
+            group_means = []
+            group_stds = []
+            for group_name, indices in LAYER_GROUPS.items():
+                valid_indices = [idx for idx in indices if idx < n_layers]
+                group_means.append(data[:, valid_indices].mean())
+                group_stds.append(data[:, valid_indices].std())
+
+            ax.bar(x_groups + i * bar_width, group_means, bar_width,
+                   yerr=group_stds, capsize=3, label=label, color=color, alpha=0.7)
+
+    ax.set_xticks(x_groups + bar_width)
+    ax.set_xticklabels(group_names, rotation=45, fontsize=9)
+    ax.set_ylabel('Cosine Similarity')
+    ax.set_title('Layer Group Statistics')
+    ax.legend()
+    ax.set_ylim(0, 1)
+
+    # 3. 信心區間 (boxplot for cross-gender)
+    ax = axes[1, 0]
+    if len(cross_gender) > 0:
+        bp = ax.boxplot([cross_gender[:, i] for i in range(n_layers)],
+                        labels=layer_labels, patch_artist=True)
+        colors = []
+        for i in range(n_layers):
+            for group_name, indices in LAYER_GROUPS.items():
+                if i in indices:
+                    if group_name == 'input':
+                        colors.append('lightgray')
+                    elif group_name == 'low_level':
+                        colors.append('lightblue')
+                    elif group_name == 'mid_level':
+                        colors.append('skyblue')
+                    elif group_name == 'semantic':
+                        colors.append('steelblue')
+                    elif group_name == 'abstract':
+                        colors.append('navy')
+                    else:
+                        colors.append('darkblue')
+                    break
+        for patch, color in zip(bp['boxes'], colors):
+            patch.set_facecolor(color)
+
+        ax.set_xlabel('Layer')
+        ax.set_ylabel('Cosine Similarity')
+        ax.set_title('Cross-Gender Similarity Distribution')
+        ax.tick_params(axis='x', rotation=45)
+
+    # 4. 統計摘要
+    ax = axes[1, 1]
+    ax.axis('off')
+    summary_text = "Statistical Summary\n" + "="*40 + "\n\n"
+
+    if len(cross_gender) > 0:
+        summary_text += f"Cross-Gender Comparisons: {len(cross_gender)}\n"
+        summary_text += f"Same-Gender Boy: {len(same_boy)}\n"
+        summary_text += f"Same-Gender Girl: {len(same_girl)}\n\n"
+
+        summary_text += "Layer Group Analysis:\n"
+        summary_text += "-"*40 + "\n"
+
+        for group_name, indices in LAYER_GROUPS.items():
+            valid_indices = [i for i in indices if i < n_layers]
+            cross_val = cross_gender[:, valid_indices].mean()
+            same_val = np.concatenate([same_boy[:, valid_indices], same_girl[:, valid_indices]]).mean() if len(same_boy) > 0 and len(same_girl) > 0 else 0
+
+            summary_text += f"{group_name:12s}: Cross={cross_val:.3f}, Same={same_val:.3f}\n"
+
+        # 結論
+        summary_text += "\n" + "="*40 + "\n"
+        summary_text += "Interpretation:\n"
+
+        # 比較 semantic 和 low_level
+        semantic_idx = [i for i in LAYER_GROUPS['semantic'] if i < n_layers]
+        low_level_idx = [i for i in LAYER_GROUPS['low_level'] if i < n_layers]
+
+        semantic_sim = cross_gender[:, semantic_idx].mean()
+        low_level_sim = cross_gender[:, low_level_idx].mean()
+
+        if semantic_sim > low_level_sim:
+            summary_text += "✓ Deep layers show HIGHER speaker invariance\n"
+            summary_text += "  → Confirms semantic/content extraction\n"
+        else:
+            summary_text += "✗ Deep layers show LOWER speaker invariance\n"
+            summary_text += "  → Unexpected pattern\n"
+
+    ax.text(0.05, 0.95, summary_text, transform=ax.transAxes,
+            fontsize=10, verticalalignment='top', fontfamily='monospace')
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150)
+    plt.close()
+    print(f"\nSaved: {output_path}")
+
+
 def summarize_speaker_invariance(results: List[Dict], output_dir: Path):
     """總結說話者不變性分析結果"""
 
@@ -507,10 +844,23 @@ def main():
     # 創建 extractor
     extractor = FeatureMapExtractor(wavtok, device)
 
-    # 分析 1: 說話者不變性
+    # 分析 1a: 說話者不變性 (原始 2 對)
     results = analyze_speaker_invariance(extractor, OUTPUT_DIR)
 
+    # 分析 1b: 多說話者分析 (增加統計信心度)
+    # 使用 6 位說話者 x 5 句話 = 更多比較組合
+    multi_results = analyze_speaker_invariance_multi(
+        extractor, OUTPUT_DIR,
+        n_speakers=6,  # 每個性別 6 位
+        n_sentences=5,  # 5 句話
+    )
+
     # 保存結果
+    all_results = {
+        'original_analysis': results,
+        'multi_speaker_analysis': multi_results,
+    }
+
     with open(OUTPUT_DIR / 'analysis_results.json', 'w') as f:
         # Convert numpy to list for JSON serialization
         def convert(obj):
@@ -520,7 +870,7 @@ def main():
                 return float(obj)
             return obj
 
-        json.dump(results, f, indent=2, default=convert)
+        json.dump(all_results, f, indent=2, default=convert)
 
     print("\n" + "="*60)
     print("Analysis complete!")

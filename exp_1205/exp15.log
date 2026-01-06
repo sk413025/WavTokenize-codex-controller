@@ -1,114 +1,0 @@
-==========================================
-Running exp_1205: exp15_hard_neg
-Strategy: Hard Negative Mining + CE
-GPU: 2
-
-Key insight from diagnosis:
-  - Student is close to SOME tokens, just not the CORRECT one
-  - Hard Negative Mining: focus on distinguishing nearby tokens
-  - K = 100 nearest tokens
-==========================================
-/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/utils/weight_norm.py:143: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
-  WeightNorm.apply(module, name, dim)
-✓ Applied WavTokenizer-LoRA compatibility patch
-Using device: cuda
-============================================================
-exp_1205: exp15_hard_neg
-Loss type: hard_neg
-============================================================
-
-Loading model...
-Loading Teacher model (frozen)...
-✓ Teacher loaded and frozen
-Loading Student model (with LoRA)...
-trainable params: 308,096 || all params: 80,860,516 || trainable%: 0.3810
-✓ Student loaded with LoRA
-Computing codebook distance matrix...
-✓ Distance matrix shape: torch.Size([4096, 4096])
-Codebook shape: torch.Size([4096, 512])
-
-Creating hard_neg loss...
-Total trainable parameters: 308096
-
-Loading data...
-Loaded 7776 samples from /home/sbplab/ruizi/WavTokenize-self-supervised/done/exp/data_with_distances/train_cache_with_distances.pt
-Loaded 1440 samples from /home/sbplab/ruizi/WavTokenize-self-supervised/done/exp/data_with_distances/val_cache_with_distances.pt
-Train samples: 7776
-Val samples: 1440
-
-============================================================
-Starting training...
-============================================================
-Epoch 1:   0%|          | 0/389 [00:00<?, ?it/s]Epoch 1:   0%|          | 0/389 [00:06<?, ?it/s, loss=6.2110, acc=28.13%]Epoch 1:   0%|          | 1/389 [00:06<43:40,  6.75s/it, loss=6.2110, acc=28.13%]Epoch 1:   1%|          | 2/389 [00:07<19:43,  3.06s/it, loss=6.2110, acc=28.13%]Epoch 1:   1%|          | 3/389 [00:07<12:29,  1.94s/it, loss=6.2110, acc=28.13%]Epoch 1:   1%|          | 4/389 [00:08<09:04,  1.41s/it, loss=6.2110, acc=28.13%]Epoch 1:   1%|▏         | 5/389 [00:09<07:10,  1.12s/it, loss=6.2110, acc=28.13%]Epoch 1:   2%|▏         | 6/389 [00:09<05:47,  1.10it/s, loss=6.2110, acc=28.13%]Epoch 1:   2%|▏         | 7/389 [00:09<04:49,  1.32it/s, loss=6.2110, acc=28.13%]Epoch 1:   2%|▏         | 8/389 [00:10<04:13,  1.51it/s, loss=6.2110, acc=28.13%]Epoch 1:   2%|▏         | 9/389 [00:11<04:23,  1.44it/s, loss=6.2110, acc=28.13%]Epoch 1:   2%|▏         | 9/389 [00:12<09:02,  1.43s/it, loss=6.2110, acc=28.13%]
-Traceback (most recent call last):
-  File "/home/sbplab/ruizi/WavTokenize-self-supervised/exp_1205/train.py", line 397, in <module>
-    main()
-    ~~~~^^
-  File "/home/sbplab/ruizi/WavTokenize-self-supervised/exp_1205/train.py", line 330, in main
-    train_results = train_epoch(
-        model, loss_fn, train_loader, optimizer, device, epoch, args, codebook
-    )
-  File "/home/sbplab/ruizi/WavTokenize-self-supervised/exp_1205/train.py", line 145, in train_epoch
-    output = model.forward_with_emb(noisy_audio, clean_audio, compute_vq_features=False)
-  File "/home/sbplab/ruizi/WavTokenize-self-supervised/exp_1205/model.py", line 246, in forward_with_emb
-    student_emb = self.student.feature_extractor.encodec.encoder(student_audio)  # (B, C, T_frame)
-  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/home/sbplab/ruizi/WavTokenizer-main/encoder/modules/seanet.py", line 144, in forward
-    return self.model(x)
-           ~~~~~~~~~~^^^
-  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/container.py", line 250, in forward
-    input = module(input)
-  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/home/sbplab/ruizi/WavTokenize-self-supervised/exp_1205/wavtok_lora_patch.py", line 93, in patched_sconv1d_forward
-    return self.conv(x)
-           ~~~~~~~~~^^^
-  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/home/sbplab/ruizi/WavTokenizer-main/encoder/modules/conv.py", line 120, in forward
-    x = self.conv(x)
-  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/peft/tuners/lora/layer.py", line 1428, in forward
-    result = result + lora_B(lora_A(dropout(x))) * scaling
-                                    ~~~~~~~^^^
-  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/modules/dropout.py", line 70, in forward
-    return F.dropout(input, self.p, self.training, self.inplace)
-           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/sbplab/miniconda3/lib/python3.13/site-packages/torch/nn/functional.py", line 1425, in dropout
-    _VF.dropout_(input, p, training) if inplace else _VF.dropout(input, p, training)
-                                                     ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
-torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 154.00 MiB. GPU 0 has a total capacity of 10.90 GiB of which 137.19 MiB is free. Including non-PyTorch memory, this process has 10.73 GiB memory in use. Of the allocated memory 9.97 GiB is allocated by PyTorch, and 603.68 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
-==========================================
-Experiment exp15_hard_neg completed!
-Results: experiments/exp15_hard_neg/
-
-Compare with exp_1204:
-  - exp11 (MSE + CE, all 4096 tokens): Val Acc ~2%
-  - exp15 (Hard Neg CE, top 100):      check experiments/exp15_hard_neg/
-
-If Val Acc improves: Hard negative mining is effective!
-==========================================

@@ -1,8 +1,0 @@
-{
-  "accuracy": 0.03999999910593033,
-  "dist_to_teacher_mean": 5.316041946411133,
-  "dist_to_student_mean": 0.49652090668678284,
-  "rank_mean": 2020.7750244140625,
-  "margin_mean": 0.29260918498039246,
-  "codebook_dist_mean": 6.091797351837158
-}
