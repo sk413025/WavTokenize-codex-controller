@@ -1,192 +1,321 @@
-[
-  {
-    "sentence_id": "001",
-    "similarities": [
-      {
-        "cosine_similarity": -0.006495282985270023,
-        "correlation": -0.006498501170426607,
-        "l2_distance_normalized": 1.5600029230117798
-      },
-      {
-        "cosine_similarity": -0.005798638798296452,
-        "correlation": -0.0064970264211297035,
-        "l2_distance_normalized": 1.552782654762268
-      },
-      {
-        "cosine_similarity": 0.023702358826994896,
-        "correlation": -0.0009635428432375193,
-        "l2_distance_normalized": 1.582605242729187
-      },
-      {
-        "cosine_similarity": -0.006355223711580038,
-        "correlation": -0.006376037839800119,
-        "l2_distance_normalized": 1.5576655864715576
-      },
-      {
-        "cosine_similarity": 0.06518000364303589,
-        "correlation": 0.011422528885304928,
-        "l2_distance_normalized": 1.5308974981307983
-      },
-      {
-        "cosine_similarity": 0.14504241943359375,
-        "correlation": 0.0668669193983078,
-        "l2_distance_normalized": 1.5022473335266113
-      },
-      {
-        "cosine_similarity": 0.05910466983914375,
-        "correlation": 0.055253732949495316,
-        "l2_distance_normalized": 1.6494234800338745
-      },
-      {
-        "cosine_similarity": 0.040626611560583115,
-        "correlation": 0.025502650067210197,
-        "l2_distance_normalized": 1.6677987575531006
-      },
-      {
-        "cosine_similarity": 0.029787639155983925,
-        "correlation": 0.029651910066604614,
-        "l2_distance_normalized": 1.764878511428833
-      },
-      {
-        "cosine_similarity": 0.06203414127230644,
-        "correlation": 0.06193332001566887,
-        "l2_distance_normalized": 1.7819931507110596
-      },
-      {
-        "cosine_similarity": 0.15395958721637726,
-        "correlation": 0.1214631125330925,
-        "l2_distance_normalized": 1.6553654670715332
-      },
-      {
-        "cosine_similarity": 0.0074289762414991856,
-        "correlation": 0.006229931954294443,
-        "l2_distance_normalized": 1.7041547298431396
-      },
-      {
-        "cosine_similarity": 0.31636324524879456,
-        "correlation": 0.24873663485050201,
-        "l2_distance_normalized": 1.4408138990402222
-      },
-      {
-        "cosine_similarity": 0.5215350985527039,
-        "correlation": 0.4759279489517212,
-        "l2_distance_normalized": 1.085176944732666
-      },
-      {
-        "cosine_similarity": 0.3449040949344635,
-        "correlation": 0.2836388349533081,
-        "l2_distance_normalized": 1.0797322988510132
-      },
-      {
-        "cosine_similarity": 0.7413278222084045,
-        "correlation": 0.7271156907081604,
-        "l2_distance_normalized": 0.9911758303642273
-      },
-      {
-        "cosine_similarity": 0.16826231777668,
-        "correlation": 0.15786534547805786,
-        "l2_distance_normalized": 1.4654486179351807
-      },
-      {
-        "cosine_similarity": 0.20781508088111877,
-        "correlation": 0.207661435008049,
-        "l2_distance_normalized": 1.2614259719848633
-      }
-    ]
-  },
-  {
-    "sentence_id": "010",
-    "similarities": [
-      {
-        "cosine_similarity": -0.015771621838212013,
-        "correlation": -0.015775198116898537,
-        "l2_distance_normalized": 1.511862874031067
-      },
-      {
-        "cosine_similarity": -0.016060305759310722,
-        "correlation": -0.01674663834273815,
-        "l2_distance_normalized": 1.5173641443252563
-      },
-      {
-        "cosine_similarity": 0.021633196622133255,
-        "correlation": -0.0076719168573617935,
-        "l2_distance_normalized": 1.4586079120635986
-      },
-      {
-        "cosine_similarity": -0.015671661123633385,
-        "correlation": -0.015693912282586098,
-        "l2_distance_normalized": 1.511864185333252
-      },
-      {
-        "cosine_similarity": 0.07068032026290894,
-        "correlation": 0.007195130921900272,
-        "l2_distance_normalized": 1.4412682056427002
-      },
-      {
-        "cosine_similarity": 0.16669151186943054,
-        "correlation": 0.07147493213415146,
-        "l2_distance_normalized": 1.3728561401367188
-      },
-      {
-        "cosine_similarity": 0.06358496099710464,
-        "correlation": 0.05742437392473221,
-        "l2_distance_normalized": 1.4536898136138916
-      },
-      {
-        "cosine_similarity": 0.05019230395555496,
-        "correlation": 0.031242772936820984,
-        "l2_distance_normalized": 1.4456452131271362
-      },
-      {
-        "cosine_similarity": 0.025144170969724655,
-        "correlation": 0.02507525123655796,
-        "l2_distance_normalized": 1.5068645477294922
-      },
-      {
-        "cosine_similarity": 0.0384618379175663,
-        "correlation": 0.03842277452349663,
-        "l2_distance_normalized": 1.511501431465149
-      },
-      {
-        "cosine_similarity": 0.1318168342113495,
-        "correlation": 0.10008512437343597,
-        "l2_distance_normalized": 1.4460008144378662
-      },
-      {
-        "cosine_similarity": 0.0018269717693328857,
-        "correlation": 0.0008720132173039019,
-        "l2_distance_normalized": 1.5145434141159058
-      },
-      {
-        "cosine_similarity": 0.2313234955072403,
-        "correlation": 0.16412045061588287,
-        "l2_distance_normalized": 1.3567098379135132
-      },
-      {
-        "cosine_similarity": 0.5231231451034546,
-        "correlation": 0.4770922362804413,
-        "l2_distance_normalized": 1.0943846702575684
-      },
-      {
-        "cosine_similarity": 0.35253360867500305,
-        "correlation": 0.2940628230571747,
-        "l2_distance_normalized": 1.2035309076309204
-      },
-      {
-        "cosine_similarity": 0.6037702560424805,
-        "correlation": 0.5845516324043274,
-        "l2_distance_normalized": 0.9695603847503662
-      },
-      {
-        "cosine_similarity": 0.15863633155822754,
-        "correlation": 0.1477884203195572,
-        "l2_distance_normalized": 1.4267200231552124
-      },
-      {
-        "cosine_similarity": 0.16549348831176758,
-        "correlation": 0.1653180718421936,
-        "l2_distance_normalized": 1.3290786743164062
-      }
+{
+  "original_analysis": [
+    {
+      "sentence_id": "001",
+      "similarities": [
+        {
+          "cosine_similarity": -0.006495282985270023,
+          "correlation": -0.00649850070476532,
+          "l2_distance_normalized": 1.5600029230117798
+        },
+        {
+          "cosine_similarity": -0.005798638798296452,
+          "correlation": -0.0064970264211297035,
+          "l2_distance_normalized": 1.5527825355529785
+        },
+        {
+          "cosine_similarity": 0.023702358826994896,
+          "correlation": -0.0009635428432375193,
+          "l2_distance_normalized": 1.5826053619384766
+        },
+        {
+          "cosine_similarity": -0.006355223245918751,
+          "correlation": -0.006376037374138832,
+          "l2_distance_normalized": 1.557665467262268
+        },
+        {
+          "cosine_similarity": 0.06518000364303589,
+          "correlation": 0.011422528885304928,
+          "l2_distance_normalized": 1.530897617340088
+        },
+        {
+          "cosine_similarity": 0.14504241943359375,
+          "correlation": 0.0668669193983078,
+          "l2_distance_normalized": 1.5022473335266113
+        },
+        {
+          "cosine_similarity": 0.05910466983914375,
+          "correlation": 0.055253732949495316,
+          "l2_distance_normalized": 1.6494234800338745
+        },
+        {
+          "cosine_similarity": 0.040626611560583115,
+          "correlation": 0.025502650067210197,
+          "l2_distance_normalized": 1.6677987575531006
+        },
+        {
+          "cosine_similarity": 0.029787639155983925,
+          "correlation": 0.029651908203959465,
+          "l2_distance_normalized": 1.764878511428833
+        },
+        {
+          "cosine_similarity": 0.06203414127230644,
+          "correlation": 0.06193332001566887,
+          "l2_distance_normalized": 1.7819931507110596
+        },
+        {
+          "cosine_similarity": 0.15395955741405487,
+          "correlation": 0.1214631125330925,
+          "l2_distance_normalized": 1.6553653478622437
+        },
+        {
+          "cosine_similarity": 0.0074289762414991856,
+          "correlation": 0.0062299324199557304,
+          "l2_distance_normalized": 1.7041547298431396
+        },
+        {
+          "cosine_similarity": 0.31636324524879456,
+          "correlation": 0.2487366497516632,
+          "l2_distance_normalized": 1.4408138990402222
+        },
+        {
+          "cosine_similarity": 0.5215351581573486,
+          "correlation": 0.4759279489517212,
+          "l2_distance_normalized": 1.0851770639419556
+        },
+        {
+          "cosine_similarity": 0.3449040949344635,
+          "correlation": 0.2836388647556305,
+          "l2_distance_normalized": 1.0797322988510132
+        },
+        {
+          "cosine_similarity": 0.7413278222084045,
+          "correlation": 0.7271156907081604,
+          "l2_distance_normalized": 0.9911757707595825
+        },
+        {
+          "cosine_similarity": 0.1682623028755188,
+          "correlation": 0.15786534547805786,
+          "l2_distance_normalized": 1.4654486179351807
+        },
+        {
+          "cosine_similarity": 0.20781511068344116,
+          "correlation": 0.207661435008049,
+          "l2_distance_normalized": 1.2614259719848633
+        }
+      ]
+    },
+    {
+      "sentence_id": "010",
+      "similarities": [
+        {
+          "cosine_similarity": -0.015771621838212013,
+          "correlation": -0.015775198116898537,
+          "l2_distance_normalized": 1.511862874031067
+        },
+        {
+          "cosine_similarity": -0.016060305759310722,
+          "correlation": -0.016746636480093002,
+          "l2_distance_normalized": 1.5173641443252563
+        },
+        {
+          "cosine_similarity": 0.021633196622133255,
+          "correlation": -0.007671917323023081,
+          "l2_distance_normalized": 1.4586079120635986
+        },
+        {
+          "cosine_similarity": -0.015671661123633385,
+          "correlation": -0.015693912282586098,
+          "l2_distance_normalized": 1.511864185333252
+        },
+        {
+          "cosine_similarity": 0.07068031281232834,
+          "correlation": 0.007195130921900272,
+          "l2_distance_normalized": 1.4412682056427002
+        },
+        {
+          "cosine_similarity": 0.16669151186943054,
+          "correlation": 0.07147493213415146,
+          "l2_distance_normalized": 1.3728561401367188
+        },
+        {
+          "cosine_similarity": 0.06358496099710464,
+          "correlation": 0.05742437392473221,
+          "l2_distance_normalized": 1.4536899328231812
+        },
+        {
+          "cosine_similarity": 0.05019230395555496,
+          "correlation": 0.031242772936820984,
+          "l2_distance_normalized": 1.4456452131271362
+        },
+        {
+          "cosine_similarity": 0.025144170969724655,
+          "correlation": 0.02507525123655796,
+          "l2_distance_normalized": 1.5068644285202026
+        },
+        {
+          "cosine_similarity": 0.0384618379175663,
+          "correlation": 0.03842277452349663,
+          "l2_distance_normalized": 1.511501431465149
+        },
+        {
+          "cosine_similarity": 0.1318168193101883,
+          "correlation": 0.10008512437343597,
+          "l2_distance_normalized": 1.4460008144378662
+        },
+        {
+          "cosine_similarity": 0.0018269717693328857,
+          "correlation": 0.0008720132173039019,
+          "l2_distance_normalized": 1.5145434141159058
+        },
+        {
+          "cosine_similarity": 0.2313234657049179,
+          "correlation": 0.16412045061588287,
+          "l2_distance_normalized": 1.3567098379135132
+        },
+        {
+          "cosine_similarity": 0.5231231451034546,
+          "correlation": 0.4770922362804413,
+          "l2_distance_normalized": 1.0943846702575684
+        },
+        {
+          "cosine_similarity": 0.35253360867500305,
+          "correlation": 0.2940628230571747,
+          "l2_distance_normalized": 1.2035309076309204
+        },
+        {
+          "cosine_similarity": 0.6037701964378357,
+          "correlation": 0.5845516324043274,
+          "l2_distance_normalized": 0.9695603847503662
+        },
+        {
+          "cosine_similarity": 0.15863633155822754,
+          "correlation": 0.1477884203195572,
+          "l2_distance_normalized": 1.4267200231552124
+        },
+        {
+          "cosine_similarity": 0.16549348831176758,
+          "correlation": 0.1653180718421936,
+          "l2_distance_normalized": 1.3290789127349854
+        }
+      ]
+    }
+  ],
+  "multi_speaker_analysis": {
+    "n_speakers_per_gender": 6,
+    "n_sentences": 5,
+    "n_cross_gender_comparisons": 180,
+    "n_same_boy_comparisons": 75,
+    "n_same_girl_comparisons": 75,
+    "cross_gender_mean": [
+      -0.0013052482363289325,
+      0.00042425467844522144,
+      0.03502064419574001,
+      -0.0011229972765755116,
+      0.08353199168211883,
+      0.1750626251929336,
+      0.07728167039652666,
+      0.06434164931997657,
+      0.03472590697411862,
+      0.05783696203596062,
+      0.150089641701844,
+      0.011504250896137415,
+      0.2604635670781136,
+      0.4883127962549528,
+      0.3207563347286648,
+      0.6418752460016145,
+      0.18531836022933323,
+      0.18610804710640674
+    ],
+    "cross_gender_std": [
+      0.016363507198599494,
+      0.01680341495241696,
+      0.016960966953756536,
+      0.01642247050073458,
+      0.021156430673654605,
+      0.03327908159256899,
+      0.02063881412348858,
+      0.021877258522292147,
+      0.010114072394341015,
+      0.017366411543881903,
+      0.023786439322768235,
+      0.010351959927149022,
+      0.05162882536725689,
+      0.047771191242975554,
+      0.04428946735735952,
+      0.07628537679966066,
+      0.04665663137613782,
+      0.06473793101276931
+    ],
+    "same_boy_mean": [
+      0.002178090112283826,
+      0.0041245653387159105,
+      0.039685620597253245,
+      0.0023766203752408426,
+      0.08537115752696992,
+      0.17907222151756286,
+      0.0833842999736468,
+      0.06965051720539729,
+      0.036449430013696354,
+      0.056715301324923834,
+      0.1447546953956286,
+      0.014233754978825649,
+      0.24632132907708487,
+      0.45001436670621237,
+      0.3872281793753306,
+      0.6288569629192352,
+      0.23280650675296782,
+      0.18067330819244187
+    ],
+    "same_boy_std": [
+      0.017370705957776067,
+      0.016974940968732744,
+      0.016307705128185194,
+      0.0174110562448049,
+      0.020659107921511356,
+      0.032991613856627425,
+      0.021566307586813875,
+      0.021420799855587293,
+      0.01077257110057449,
+      0.016252272493268768,
+      0.028667031146348165,
+      0.0096915749056628,
+      0.04502507728172234,
+      0.04879296376562746,
+      0.05093343508192281,
+      0.0857697404865934,
+      0.0409321083500867,
+      0.06084618749163937
+    ],
+    "same_girl_mean": [
+      0.0009126635089827081,
+      0.003104391428447949,
+      0.0392853461081783,
+      0.001091873315939059,
+      0.09387631729245186,
+      0.18566889743010204,
+      0.07846641470988591,
+      0.06783003528912862,
+      0.03752151802182198,
+      0.06592116038004557,
+      0.16784301201502483,
+      0.014306168556213378,
+      0.3076985385020574,
+      0.5675590018431346,
+      0.3518157370885213,
+      0.7037569053967794,
+      0.2900261954466502,
+      0.2500769594311714
+    ],
+    "same_girl_std": [
+      0.017441177963564827,
+      0.017346920814568234,
+      0.01772510140686407,
+      0.017523364637950928,
+      0.02265781432776061,
+      0.03842762941208999,
+      0.02185531665929988,
+      0.025153763506347057,
+      0.010398807012478398,
+      0.017508889684980218,
+      0.02675115507343211,
+      0.010595995022833727,
+      0.05647024763954507,
+      0.04708816227730832,
+      0.05213776117610085,
+      0.07265453088924786,
+      0.08426585849765585,
+      0.07905461304396044
     ]
   }
-]
+}
