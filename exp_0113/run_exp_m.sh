@@ -27,7 +27,7 @@
 set -e  # 遇到錯誤就停止
 
 # 設定環境
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 export PYTHONPATH="/home/sbplab/ruizi/WavTokenize-feature-analysis:$PYTHONPATH"
 
 # 啟動 conda 環境

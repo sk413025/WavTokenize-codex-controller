@@ -6,7 +6,7 @@ source ~/miniconda3/etc/profile.d/conda.sh
 conda activate test
 
 # 指定 GPU
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 
 echo "=========================================="
 echo "Exp J: Mid-Layer Adapter Denoising"
