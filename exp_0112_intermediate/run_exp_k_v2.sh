@@ -58,7 +58,7 @@ python exp_0112_intermediate/train_v2.py \
     --curriculum_mode curriculum \
     --initial_phase 0.3 \
     --phase_advance_epochs 30 \
-    --num_epochs 150 \
+    --num_epochs 300 \
     --batch_size 8 \
     --seed 42 \
     --use_amp \
