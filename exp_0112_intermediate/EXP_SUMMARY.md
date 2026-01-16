@@ -314,21 +314,24 @@ WavTokenizer 的噪音處理流程:
 intermediate_indices = [3, 6]
 intermediate_weights = {3: 0.5, 6: 0.5}
 
-# 優化配置 - 強調噪音處理層
-intermediate_indices = [3, 5, 6]  # 加入 L5 與 L6 協同
+# ★ Exp K v3 推薦配置 - 完整版
+intermediate_indices = [3, 5, 6, 10]
 intermediate_weights = {
     3: 0.5,    # low_level 代表
-    5: 0.8,    # mid_level (噪音處理)
-    6: 1.0,    # ★ 最關鍵！噪音處理核心
+    5: 0.8,    # mid_level (與 L6 協同處理噪音)
+    6: 1.0,    # ★ 噪音處理核心 (最高權重)
+    10: 0.3,   # 語義錨點 (用 MSE，確保不偏離)
 }
+# L10 使用 MSE Loss (因為本來就穩定，cos_sim=0.946)
+# 其他層使用 Cosine Loss
+```
 
-# 或加入錨點
-intermediate_indices = [3, 6, 10]
-intermediate_weights = {
-    3: 0.5,    # low_level
-    6: 1.0,    # ★ 噪音處理核心
-    10: 0.3,   # 語義錨點 (用 MSE，因為本來就穩定)
-}
+**配置說明**:
+```
+L3 (0.5):  捕捉早期噪音 → Cosine Loss
+L5 (0.8):  噪音處理協同 → Cosine Loss
+L6 (1.0):  ★ 核心層     → Cosine Loss (最高權重)
+L10 (0.3): 語義錨點     → MSE Loss (精確匹配)
 ```
 
 ### 6.4 為何監督 L6 而非 L0/L1？
@@ -357,11 +360,16 @@ intermediate_weights = {
 
 ### 6.6 下一步實驗建議
 
-| 優先級 | 實驗 | 目標 | 理由 |
+| 優先級 | 實驗 | 目標 | 配置 |
 |--------|------|------|------|
-| 高 | Exp K v3 | 加入 L5，強化 L6 權重 | L5-L6 協同處理噪音 |
-| 中 | Exp L | 利用 L10 作為錨點 | 確保語義不偏離 |
-| 低 | Exp M | 調整 L6 權重 > 1.0 | 測試更強監督效果 |
+| **高** | **Exp K v3** | 完整中間層監督 | L3(0.5) + L5(0.8) + L6(1.0) + L10(0.3) |
+| 中 | Exp K v3-lite | 簡化版測試 | L3(0.5) + L6(1.0) + L10(0.3) |
+| 低 | Exp M | 強化 L6 權重 | L6 權重 > 1.0 測試 |
+
+**Exp K v3 預期效果**:
+1. L5-L6 協同 → 更好的噪音分離學習
+2. L10 錨點 → 確保語義特徵不偏離
+3. 整體更平衡的監督訊號
 
 ---
 
