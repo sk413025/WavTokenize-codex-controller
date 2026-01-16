@@ -67,8 +67,8 @@ WavTokenizer LoRA 訓練中觀察到的矛盾現象：
 
 ### 2.2 實驗結果
 
-| Rank | 參數量 | Best Val Loss | 改善幅度 |
-|------|--------|---------------|----------|
+|oss | 改善幅度 |
+|------|--------|---------- Rank | 參數量 | Best Val L-----|----------|
 | 256 | 116K | 51.79 | baseline |
 | 512 | 233K | 51.66 | -0.25% |
 | 1024 | 466K | 51.76 | -0.06% |
@@ -88,7 +88,34 @@ WavTokenizer LoRA 訓練中觀察到的矛盾現象：
 
 ## 三、噪音敏感度分析
 
-### 3.1 測量方法
+### 3.1 歷史數據整合
+
+本分析整合兩個實驗的結果：
+
+| 實驗 | 測量對象 | 層數 | 方法 |
+|------|----------|------|------|
+| **exp_1231_feature** | WavTokenizer 完整模型 | 18 層 (L0-L17) | 合成噪音測試 |
+| **本次分析** | encoder.model | 16 層 (0-15) | 實際 noisy/clean 對 |
+
+### 3.2 exp_1231_feature 關鍵發現
+
+**層組平均噪音敏感度**:
+
+| 層組 | 層範圍 | 平均敏感度 | 解讀 |
+|------|--------|------------|------|
+| input | L0 | 0.16 | 意外地對噪音不敏感 |
+| low_level | L1-L4 | 0.47 | 中等敏感 |
+| **mid_level** | **L5-L8** | **0.71** | **★ 最敏感！噪音處理層** |
+| semantic | L9-L12 | 0.50 | 中等 |
+| abstract | L13-L16 | 0.28 | 對噪音魯棒 |
+| output | L17 | 0.69 | 敏感（噪音傳播到 codebook） |
+
+**最敏感的層**: L6 (0.79), L5 (0.72), L2 (0.71)
+
+> **關鍵洞察**: Mid-level (L5-L6) 是 WavTokenizer **「直覺處理噪音」** 的位置，
+> 這是噪音特徵與語音特徵開始分離的地方。
+
+### 3.3 測量方法
 
 測量**原始模型（無 LoRA）**對噪音的敏感度：
 
@@ -244,33 +271,83 @@ WavTokenizer LoRA 訓練中觀察到的矛盾現象：
 
 ## 六、綜合評估與建議
 
-### 6.1 當前架構評估
+### 6.1 整合 exp_1231_feature 的結論
 
-| 項目 | 當前設計 | 評估 | 建議 |
+結合歷史實驗數據，我們有更完整的理解：
+
+```
+WavTokenizer 的噪音處理流程:
+┌─────────────────────────────────────────────────────────────┐
+│ L0-L4 (low_level):  噪音進入，初步特徵提取                   │
+│                     敏感度中等 (0.47)                        │
+│                                                              │
+│ L5-L6 (mid_level):  ★ 噪音處理核心！                        │
+│                     敏感度最高 (0.71)                        │
+│                     這裡是噪音-語音分離的關鍵位置            │
+│                                                              │
+│ L9-L12 (semantic):  語義編碼                                 │
+│                     敏感度下降 (0.50)                        │
+│                                                              │
+│ L13-L15 (abstract): 高階語義，對噪音魯棒                    │
+│                     敏感度最低 (0.28)                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 6.2 當前架構評估
+
+| 項目 | 當前設計 | 評估 | 理由 |
 |------|----------|------|------|
-| 監督位置 | L3, L6 | 部分合理 | 加入 L1 |
-| Loss 類型 | Cosine | ✅ 正確 | 維持 |
-| 權重 | 各 0.5 | 可優化 | 根據敏感度調整 |
-| L10 利用 | 無 | ⚠️ 未利用 | 加入作為錨點 |
+| 監督位置 | L3, L6 | ✅ **合理** | L6 正是噪音處理核心層！ |
+| Loss 類型 | Cosine | ✅ 正確 | 尺度不變性 |
+| 權重 | 各 0.5 | 可優化 | L6 應該更高 |
+| L10 利用 | 無 | 可選 | 作為語義錨點 |
 
-### 6.2 建議的 Loss 配置
+**重要修正**: 之前建議加入 L1 監督，但根據 exp_1231_feature：
+- L5-L6 (mid_level) 是噪音處理的核心，敏感度 **0.71-0.79**
+- L1 的敏感度只有 **0.37**，遠低於 L6
+- **當前 L3, L6 的選擇是正確的**，L6 正是最關鍵的層
+
+### 6.3 建議的 Loss 配置
 
 ```python
-# 當前配置
+# 當前配置 - 基本正確
 intermediate_indices = [3, 6]
 intermediate_weights = {3: 0.5, 6: 0.5}
 
-# 建議配置
-intermediate_indices = [1, 3, 6, 10]
+# 優化配置 - 強調噪音處理層
+intermediate_indices = [3, 5, 6]  # 加入 L5 與 L6 協同
 intermediate_weights = {
-    1: 1.0,    # 最敏感，強監督 (Cosine)
-    3: 0.8,    # 敏感 (Cosine)
-    6: 0.8,    # 中層最敏感 (Cosine)
-    10: 0.3,   # 穩定錨點 (可用 MSE)
+    3: 0.5,    # low_level 代表
+    5: 0.8,    # mid_level (噪音處理)
+    6: 1.0,    # ★ 最關鍵！噪音處理核心
+}
+
+# 或加入錨點
+intermediate_indices = [3, 6, 10]
+intermediate_weights = {
+    3: 0.5,    # low_level
+    6: 1.0,    # ★ 噪音處理核心
+    10: 0.3,   # 語義錨點 (用 MSE，因為本來就穩定)
 }
 ```
 
-### 6.3 為何深層也需要訓練？
+### 6.4 為何監督 L6 而非 L0/L1？
+
+雖然本次分析顯示 L0, L1 敏感度很高，但：
+
+1. **exp_1231 顯示 mid_level 才是噪音處理核心**
+   - L5-L6 敏感度 0.71-0.79（最高）
+   - 這是噪音特徵與語音特徵開始分離的地方
+
+2. **L0/L1 敏感但非處理層**
+   - L0 是輸入投影，主要是信號轉換
+   - 監督 L0 可能干擾模型的輸入處理
+
+3. **L6 是「直覺處理」位置**
+   - WavTokenizer 設計上在 mid_level 做特徵整合
+   - 監督這裡等於指導模型「如何分離噪音」
+
+### 6.5 為何深層也需要訓練？
 
 雖然深層對噪音較穩定，但仍需參與訓練：
 
@@ -278,13 +355,13 @@ intermediate_weights = {
 2. **任務需求**: 去噪是全層協同任務，非單層可完成
 3. **深層策略**: 不需強監督，輕量 loss 確保不偏離即可
 
-### 6.4 下一步實驗建議
+### 6.6 下一步實驗建議
 
-| 優先級 | 實驗 | 目標 |
-|--------|------|------|
-| 高 | Exp K v3 | 加入 L1 監督，調整權重 |
-| 中 | Exp L | 利用 L10 作為錨點 |
-| 低 | 對比學習 | 探索更複雜的 Loss 設計 |
+| 優先級 | 實驗 | 目標 | 理由 |
+|--------|------|------|------|
+| 高 | Exp K v3 | 加入 L5，強化 L6 權重 | L5-L6 協同處理噪音 |
+| 中 | Exp L | 利用 L10 作為錨點 | 確保語義不偏離 |
+| 低 | Exp M | 調整 L6 權重 > 1.0 | 測試更強監督效果 |
 
 ---
 
@@ -294,6 +371,7 @@ intermediate_weights = {
 
 | 圖表名稱 | 路徑 | 內容說明 |
 |----------|------|----------|
+| **整合噪音分析** | [analysis/integrated_noise_analysis.png](analysis/integrated_noise_analysis.png) | ★ 整合 exp_1231 與本次分析 |
 | 噪音敏感度比較 | [analysis/noise_sensitivity_comparison.png](analysis/noise_sensitivity_comparison.png) | 原始模型各層對噪音的敏感度 |
 | 監督位置推薦 | [analysis/supervision_recommendation.png](analysis/supervision_recommendation.png) | 基於敏感度的監督位置建議 |
 | 各層距離分布 | [analysis/layer_distances.png](analysis/layer_distances.png) | 訓練後 Student-Teacher 距離 |
@@ -309,6 +387,13 @@ intermediate_weights = {
 | 噪音敏感度 | [analysis/noise_sensitivity.json](analysis/noise_sensitivity.json) | 原始模型各層敏感度數據 |
 | 層距離數據 | [analysis/layer_distances.json](analysis/layer_distances.json) | 訓練後各層距離數據 |
 | 訓練歷史 | [runs/exp_k_intermediate/history.json](runs/exp_k_intermediate/history.json) | Exp K v2 完整訓練歷史 |
+
+### 7.3 歷史實驗參考
+
+| 報告名稱 | 路徑 | 內容說明 |
+|----------|------|----------|
+| exp_1231 分析報告 | [../exp_1231_feature/ANALYSIS.md](../exp_1231_feature/ANALYSIS.md) | WavTokenizer 18 層完整分析 |
+| exp_1231 噪音數據 | [../exp_1231_feature/outputs/noise_sensitivity_results.json](../exp_1231_feature/outputs/noise_sensitivity_results.json) | 合成噪音測試數據 |
 
 ### 7.3 實驗報告
 
