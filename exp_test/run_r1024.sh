@@ -4,7 +4,7 @@
 set -e
 
 # 設定環境
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 export PYTHONPATH="/home/sbplab/ruizi/WavTokenize-feature-analysis:$PYTHONPATH"
 
 # 啟動 conda 環境
@@ -25,7 +25,8 @@ python exp_test/train.py \
     --lora_alpha 2048 \
     --lr 1e-4 \
     --num_epochs 150 \
-    --batch_size 8 \
+    --batch_size 4 \
+    --gradient_accumulation_steps 4 \
     --curriculum_mode curriculum \
     --initial_phase 0.3 \
     --phase_advance_epochs 30 \
