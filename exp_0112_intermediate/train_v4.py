@@ -2,16 +2,22 @@
 exp_0112_intermediate: Exp K v4 - 優化版中間層監督訓練
 
 改進重點:
-1. 移除 L10 監督 (效果存疑，佔比僅 0.01%)
-2. 調整權重配置: L5 提高, L6 降低
+1. 移除 L10 監督 (效果存疑)
+2. 修正監督層: model[5] 是 ELU，改為 model[4] (ResBlock2)
 3. 加強正則化: 提高 weight_decay
 4. 降低中間層總權重，避免過擬合
 
+encoder.model 結構:
+  model[3]: SConv1d (Downsample 1) - 監督目標
+  model[4]: SEANetResnetBlock (ResBlock 2) - 監督目標 (修正)
+  model[5]: ELU (激活函數，監督無效!)
+  model[6]: SConv1d (Downsample 2) - 監督目標
+
 配置:
-- L3 (0.3): low_level 輔助, Cosine Loss
-- L5 (1.0): mid_level 協同 (收斂最好), Cosine Loss
-- L6 (0.5): 噪音處理核心 (降低權重), Cosine Loss
-- intermediate_weight: 0.5 (總權重降低)
+- L3/model[3] (0.3): Downsample, Cosine Loss
+- L4/model[4] (1.0): ResBlock (修正), Cosine Loss
+- L6/model[6] (0.5): Downsample, Cosine Loss
+- intermediate_weight: 0.5
 
 執行:
     bash exp_0112_intermediate/run_exp_k_v4.sh
@@ -50,19 +56,19 @@ class IntermediateSupervisionLossV4(nn.Module):
     """
     V4: 簡化版中間層監督 Loss
     - 移除 L10 (效果存疑)
-    - 只監督 L3, L5, L6
+    - 監督 L3, L4, L6 (修正: L5 是 ELU，改為 L4 ResBlock)
     - 全部使用 Cosine Loss
     """
 
     def __init__(self, layer_weights: dict = None, target_scale: float = 1.0):
         super().__init__()
 
-        # 預設權重配置
+        # 預設權重配置 (修正: 5->4)
         if layer_weights is None:
             layer_weights = {
-                3: 0.3,   # low_level 輔助
-                5: 1.0,   # mid_level 協同 (收斂最好，提高權重)
-                6: 0.5,   # mid_level 核心 (降低權重避免過擬合)
+                3: 0.3,   # model[3]: Downsample 1
+                4: 1.0,   # model[4]: ResBlock 2 (修正，原本誤用 model[5] ELU)
+                6: 0.5,   # model[6]: Downsample 2
             }
 
         self.layer_weights = layer_weights
@@ -128,13 +134,13 @@ class IntermediateSupervisionLossV4(nn.Module):
 def get_exp_k_v4_config():
     """獲取 Exp K v4 的配置"""
     return {
-        'intermediate_indices': [3, 5, 6],
+        'intermediate_indices': [3, 4, 6],  # 修正: 5->4
         'layer_weights': {
-            3: 0.3,   # low_level
-            5: 1.0,   # mid_level (提高)
-            6: 0.5,   # mid_level (降低)
+            3: 0.3,   # model[3]: Downsample 1
+            4: 1.0,   # model[4]: ResBlock 2 (修正)
+            6: 0.5,   # model[6]: Downsample 2
         },
-        'intermediate_weight': 0.5,  # 總權重降低
+        'intermediate_weight': 0.5,
         'target_scale': 1.0,
     }
 
@@ -172,7 +178,7 @@ def train_epoch(model, dataloader, optimizer, loss_fn, intermediate_loss_fn, dev
     metrics = {
         'total_loss': 0, 'feature_loss': 0, 'triplet_loss': 0,
         'intermediate_loss': 0,
-        'intermediate_L3_loss': 0, 'intermediate_L5_loss': 0,
+        'intermediate_L3_loss': 0, 'intermediate_L4_loss': 0,
         'intermediate_L6_loss': 0,
         'masked_acc': 0, 'distance_loss': 0,
         'valid_frames': 0, 'total_frames': 0,
@@ -251,7 +257,7 @@ def train_epoch(model, dataloader, optimizer, loss_fn, intermediate_loss_fn, dev
         metrics['triplet_loss'] += final_loss_info.get('triplet_loss', 0)
         metrics['intermediate_loss'] += inter_loss.item() if isinstance(inter_loss, torch.Tensor) else inter_loss
 
-        for layer_idx in [3, 5, 6]:
+        for layer_idx in [3, 4, 6]:  # V4: 修正為 [3, 4, 6]
             key = f'intermediate_L{layer_idx}_loss'
             if key in inter_loss_info:
                 metrics[f'intermediate_L{layer_idx}_loss'] += inter_loss_info[key]
@@ -294,7 +300,7 @@ def validate_epoch(model, dataloader, loss_fn, intermediate_loss_fn, device, epo
     metrics = {
         'total_loss': 0, 'feature_loss': 0, 'triplet_loss': 0,
         'intermediate_loss': 0,
-        'intermediate_L3_loss': 0, 'intermediate_L5_loss': 0,
+        'intermediate_L3_loss': 0, 'intermediate_L4_loss': 0,
         'intermediate_L6_loss': 0,
         'masked_acc': 0, 'distance': 0,
     }
@@ -330,7 +336,7 @@ def validate_epoch(model, dataloader, loss_fn, intermediate_loss_fn, device, epo
         metrics['triplet_loss'] += final_loss_info.get('triplet_loss', 0)
         metrics['intermediate_loss'] += inter_loss.item() if isinstance(inter_loss, torch.Tensor) else inter_loss
 
-        for layer_idx in [3, 5, 6]:
+        for layer_idx in [3, 4, 6]:  # V4: 修正為 [3, 4, 6]
             key = f'intermediate_L{layer_idx}_loss'
             if key in inter_loss_info:
                 metrics[f'intermediate_L{layer_idx}_loss'] += inter_loss_info[key]
@@ -403,7 +409,7 @@ def save_audio_samples(model, dataloader, device, exp_dir, epoch, num_samples=2,
 def plot_training_curves_v4(history, save_path):
     """繪製 V4 訓練曲線"""
     fig, axes = plt.subplots(3, 3, figsize=(15, 12))
-    fig.suptitle('Exp K v4: 3-Layer Intermediate Supervision (L3+L5+L6)', fontsize=14)
+    fig.suptitle('Exp K v4: 3-Layer Intermediate Supervision (L3+L4+L6)', fontsize=14)
 
     epochs = range(1, len(history['train_loss']) + 1)
 
@@ -466,7 +472,7 @@ def plot_training_curves_v4(history, save_path):
     # Per-Layer Intermediate Loss (Train)
     ax = axes[2, 0]
     ax.plot(epochs, history['train_intermediate_L3_loss'], 'b-', label='L3 (Cosine, w=0.3)')
-    ax.plot(epochs, history['train_intermediate_L5_loss'], 'g--', label='L5 (Cosine, w=1.0)')
+    ax.plot(epochs, history['train_intermediate_L4_loss'], 'g--', label='L4 (Cosine, w=1.0)')
     ax.plot(epochs, history['train_intermediate_L6_loss'], 'r-.', label='L6 (Cosine, w=0.5)')
     ax.set_title('V4: Per-Layer Intermediate Loss (Train)')
     ax.set_xlabel('Epoch')
@@ -520,8 +526,8 @@ def main():
                         help='Total intermediate loss weight (reduced from 1.0)')
     parser.add_argument('--intermediate_L3_weight', type=float, default=0.3,
                         help='Weight for L3 (low_level)')
-    parser.add_argument('--intermediate_L5_weight', type=float, default=1.0,
-                        help='Weight for L5 (mid_level, best convergence)')
+    parser.add_argument('--intermediate_L4_weight', type=float, default=1.0,
+                        help='Weight for L4 (ResBlock2, noise sensitive)')
     parser.add_argument('--intermediate_L6_weight', type=float, default=0.5,
                         help='Weight for L6 (mid_level, reduced)')
     parser.add_argument('--target_scale', type=float, default=1.0)
@@ -577,7 +583,8 @@ def main():
         'description': 'Optimized intermediate supervision',
         'changes': [
             'Removed L10 (ineffective)',
-            'L5 weight increased to 1.0 (best convergence)',
+            'Fixed: model[5] is ELU, changed to model[4] (ResBlock2)',
+            'L4 weight = 1.0 (noise sensitive core)',
             'L6 weight reduced to 0.5 (avoid overfitting)',
             'Total intermediate_weight reduced to 0.5',
             'weight_decay increased to 0.1',
@@ -590,7 +597,7 @@ def main():
     print(f"Exp K v4: Optimized Intermediate Layer Supervision")
     print(f"{'='*60}")
     print(f"Output: {run_dir}")
-    print(f"Config: L3(w={args.intermediate_L3_weight}) + L5(w={args.intermediate_L5_weight}) + L6(w={args.intermediate_L6_weight})")
+    print(f"Config: L3(w={args.intermediate_L3_weight}) + L4(w={args.intermediate_L4_weight}) + L6(w={args.intermediate_L6_weight})")
     print(f"Total intermediate_weight: {args.intermediate_weight}")
     print(f"Weight decay: {args.weight_decay}")
     print(f"{'='*60}\n")
@@ -598,8 +605,9 @@ def main():
     # Load distance matrix
     distance_matrix = torch.load(DISTANCE_MATRIX).to(device)
 
-    # Create model (V4: only L3, L5, L6)
-    intermediate_indices = [3, 5, 6]
+    # Create model (V4: L3, L4, L6)
+    # 修正: model[5] 是 ELU，改為 model[4] (ResBlock2)
+    intermediate_indices = [3, 4, 6]
 
     model = TeacherStudentIntermediate(
         wavtok_config=WAVTOK_CONFIG,
@@ -646,10 +654,10 @@ def main():
         triplet_margin=args.triplet_margin,
     )
 
-    # V4 intermediate loss function
+    # V4 intermediate loss function (修正: 5->4)
     layer_weights = {
         3: args.intermediate_L3_weight,
-        5: args.intermediate_L5_weight,
+        4: args.intermediate_L4_weight,  # model[4] ResBlock2
         6: args.intermediate_L6_weight,
     }
     intermediate_loss_fn = IntermediateSupervisionLossV4(
@@ -668,7 +676,7 @@ def main():
         'train_triplet_loss': [], 'val_triplet_loss': [],
         'train_intermediate_loss': [], 'val_intermediate_loss': [],
         'train_intermediate_L3_loss': [], 'val_intermediate_L3_loss': [],
-        'train_intermediate_L5_loss': [], 'val_intermediate_L5_loss': [],
+        'train_intermediate_L4_loss': [], 'val_intermediate_L4_loss': [],
         'train_intermediate_L6_loss': [], 'val_intermediate_L6_loss': [],
         'train_dist': [], 'val_dist': [],
         'train_avg_snr': [],
@@ -724,7 +732,7 @@ def main():
         history['train_intermediate_loss'].append(train_metrics['intermediate_loss'])
         history['val_intermediate_loss'].append(val_metrics['intermediate_loss'])
 
-        for layer_idx in [3, 5, 6]:
+        for layer_idx in [3, 4, 6]:  # V4: 修正為 [3, 4, 6]
             key = f'intermediate_L{layer_idx}_loss'
             history[f'train_{key}'].append(train_metrics.get(key, 0))
             history[f'val_{key}'].append(val_metrics.get(key, 0))
@@ -738,7 +746,7 @@ def main():
         print(f"\nTrain: Loss={train_metrics['total_loss']:.4f}, Acc={train_metrics['masked_acc']*100:.2f}%")
         print(f"Val:   Loss={val_metrics['total_loss']:.4f}, Acc={val_metrics['masked_acc']*100:.2f}%")
         print(f"Inter: L3={val_metrics.get('intermediate_L3_loss', 0):.4f}, "
-              f"L5={val_metrics.get('intermediate_L5_loss', 0):.4f}, "
+              f"L4={val_metrics.get('intermediate_L4_loss', 0):.4f}, "
               f"L6={val_metrics.get('intermediate_L6_loss', 0):.4f}")
         print(f"LR: {current_lr:.6f}")
 

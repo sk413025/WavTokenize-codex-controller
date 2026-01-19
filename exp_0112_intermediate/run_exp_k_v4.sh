@@ -4,11 +4,17 @@
 # ============================================================
 #
 # 改進重點:
-#   1. 移除 L10 監督 (效果存疑，loss 僅佔 0.015%)
-#   2. L5 權重提高到 1.0 (收斂最好，val_loss 0.49)
-#   3. L6 權重降低到 0.5 (避免過擬合)
-#   4. 總權重降低到 0.5
-#   5. weight_decay 提高到 0.1 (正則化)
+#   1. 移除 L10 監督 (效果存疑)
+#   2. 修正: model[5] 是 ELU，改為 model[4] (ResBlock2)
+#   3. L4 權重 1.0，L6 權重 0.5
+#   4. 總權重 0.5
+#   5. weight_decay 0.1
+#
+# encoder.model 結構:
+#   model[3]: SConv1d (Downsample) - L3
+#   model[4]: ResBlock (修正後的 L4)
+#   model[5]: ELU (無效!)
+#   model[6]: SConv1d (Downsample) - L6
 #
 # 執行:
 #   bash exp_0112_intermediate/run_exp_k_v4.sh
@@ -39,9 +45,10 @@ echo "時間: $(date)"
 echo ""
 echo "V4 改進:"
 echo "  - 移除 L10 監督 (效果存疑)"
-echo "  - L3: 0.3, L5: 1.0 (best), L6: 0.5"
-echo "  - intermediate_weight: 0.5 (降低總權重)"
-echo "  - weight_decay: 0.1 (增強正則化)"
+echo "  - 修正: model[5] ELU -> model[4] ResBlock"
+echo "  - L3: 0.3, L4: 1.0, L6: 0.5"
+echo "  - intermediate_weight: 0.5"
+echo "  - weight_decay: 0.1"
 echo "============================================================"
 
 python exp_0112_intermediate/train_v4.py \
@@ -52,7 +59,7 @@ python exp_0112_intermediate/train_v4.py \
     --lora_dropout 0.2 \
     --intermediate_weight 0.5 \
     --intermediate_L3_weight 0.3 \
-    --intermediate_L5_weight 1.0 \
+    --intermediate_L4_weight 1.0 \
     --intermediate_L6_weight 0.5 \
     --num_epochs 300 \
     --batch_size 8 \
