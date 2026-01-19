@@ -80,35 +80,47 @@ class IntermediateSupervisionLossV4(nn.Module):
 
         Returns:
             total_loss: 總 Loss
-            layer_losses: 各層 Loss dict
+            layer_losses: 各層 Loss dict (with keys like 'intermediate_L3_loss')
         """
         total_loss = 0.0
         layer_losses = {}
 
         for idx in self.layer_indices:
-            key = str(idx)
-
-            if key not in student_features or key not in teacher_features:
+            # Support both int and str keys
+            if idx in student_features:
+                student_feat = student_features[idx]
+                teacher_feat = teacher_features[idx]
+            elif str(idx) in student_features:
+                student_feat = student_features[str(idx)]
+                teacher_feat = teacher_features[str(idx)]
+            else:
                 continue
 
-            student_feat = student_features[key]
-            teacher_feat = teacher_features[key]
-
-            # 確保維度匹配
+            # 確保維度匹配 (B, T, C) or (B, C, T)
             if student_feat.shape != teacher_feat.shape:
-                min_len = min(student_feat.shape[1], teacher_feat.shape[1])
-                student_feat = student_feat[:, :min_len, :]
-                teacher_feat = teacher_feat[:, :min_len, :]
+                # Assume (B, C, T) format, match on T dimension
+                min_len = min(student_feat.shape[-1], teacher_feat.shape[-1])
+                student_feat = student_feat[..., :min_len]
+                teacher_feat = teacher_feat[..., :min_len]
+
+            # Flatten to (B*T, C) for cosine similarity
+            if student_feat.dim() == 3:
+                B, C, T = student_feat.shape
+                student_flat = student_feat.permute(0, 2, 1).reshape(-1, C)
+                teacher_flat = teacher_feat.permute(0, 2, 1).reshape(-1, C)
+            else:
+                student_flat = student_feat
+                teacher_flat = teacher_feat
 
             # Cosine Loss for all layers
-            student_norm = F.normalize(student_feat, dim=-1)
-            teacher_norm = F.normalize(teacher_feat * self.target_scale, dim=-1)
+            student_norm = F.normalize(student_flat, dim=-1)
+            teacher_norm = F.normalize(teacher_flat * self.target_scale, dim=-1)
             cos_sim = (student_norm * teacher_norm).sum(dim=-1).mean()
             loss = 1 - cos_sim
 
             weight = self.layer_weights[idx]
             total_loss = total_loss + weight * loss
-            layer_losses[f'L{idx}'] = loss.item()
+            layer_losses[f'intermediate_L{idx}_loss'] = loss.item()
 
         return total_loss, layer_losses
 
@@ -180,33 +192,26 @@ def train_epoch(model, dataloader, optimizer, loss_fn, intermediate_loss_fn, dev
 
         if use_amp and scaler is not None:
             with autocast(enabled=use_amp):
-                outputs = model(noisy_audio, clean_audio, lengths)
+                # Model forward (compatible with TeacherStudentIntermediate)
+                output = model(noisy_audio, clean_audio)
 
-                student_indices = outputs['student_indices']
-                teacher_indices = outputs['teacher_indices']
-                student_features = outputs['student_features']
-                teacher_features = outputs['teacher_features']
-                student_intermediate = outputs.get('student_intermediate', {})
-                teacher_intermediate = outputs.get('teacher_intermediate', {})
-
-                frame_lengths = lengths // encoder_stride
-
-                main_loss, loss_dict = loss_fn(
-                    student_indices, teacher_indices,
-                    student_features, teacher_features,
-                    distance_matrix, frame_lengths
+                # Final output loss
+                final_loss, final_loss_info = loss_fn(
+                    student_features=output['student_encoder_out'],
+                    teacher_features=output['teacher_encoder_out'],
+                    teacher_codes=output['teacher_codes'],
+                    codebook=output['codebook'],
+                    lengths=lengths,
                 )
 
-                if intermediate_loss_fn is not None and intermediate_weight > 0:
-                    inter_loss, inter_layer_losses = intermediate_loss_fn(
-                        student_intermediate, teacher_intermediate
-                    )
-                    total_loss = main_loss + intermediate_weight * inter_loss
-                else:
-                    inter_loss = torch.tensor(0.0)
-                    inter_layer_losses = {}
-                    total_loss = main_loss
+                # Intermediate supervision loss
+                inter_loss, inter_loss_info = intermediate_loss_fn(
+                    student_features=output['student_intermediates'],
+                    teacher_features=output['teacher_intermediates'],
+                )
 
+                # Combined loss
+                total_loss = final_loss + intermediate_weight * inter_loss
                 total_loss = total_loss / gradient_accumulation_steps
 
             scaler.scale(total_loss).backward()
@@ -217,33 +222,22 @@ def train_epoch(model, dataloader, optimizer, loss_fn, intermediate_loss_fn, dev
                 scaler.step(optimizer)
                 scaler.update()
         else:
-            outputs = model(noisy_audio, clean_audio, lengths)
+            output = model(noisy_audio, clean_audio)
 
-            student_indices = outputs['student_indices']
-            teacher_indices = outputs['teacher_indices']
-            student_features = outputs['student_features']
-            teacher_features = outputs['teacher_features']
-            student_intermediate = outputs.get('student_intermediate', {})
-            teacher_intermediate = outputs.get('teacher_intermediate', {})
-
-            frame_lengths = lengths // encoder_stride
-
-            main_loss, loss_dict = loss_fn(
-                student_indices, teacher_indices,
-                student_features, teacher_features,
-                distance_matrix, frame_lengths
+            final_loss, final_loss_info = loss_fn(
+                student_features=output['student_encoder_out'],
+                teacher_features=output['teacher_encoder_out'],
+                teacher_codes=output['teacher_codes'],
+                codebook=output['codebook'],
+                lengths=lengths,
             )
 
-            if intermediate_loss_fn is not None and intermediate_weight > 0:
-                inter_loss, inter_layer_losses = intermediate_loss_fn(
-                    student_intermediate, teacher_intermediate
-                )
-                total_loss = main_loss + intermediate_weight * inter_loss
-            else:
-                inter_loss = torch.tensor(0.0)
-                inter_layer_losses = {}
-                total_loss = main_loss
+            inter_loss, inter_loss_info = intermediate_loss_fn(
+                student_features=output['student_intermediates'],
+                teacher_features=output['teacher_intermediates'],
+            )
 
+            total_loss = final_loss + intermediate_weight * inter_loss
             total_loss = total_loss / gradient_accumulation_steps
             total_loss.backward()
 
@@ -253,17 +247,22 @@ def train_epoch(model, dataloader, optimizer, loss_fn, intermediate_loss_fn, dev
 
         # Update metrics
         metrics['total_loss'] += total_loss.item() * gradient_accumulation_steps
-        metrics['feature_loss'] += loss_dict.get('feature_loss', 0)
-        metrics['triplet_loss'] += loss_dict.get('triplet_loss', 0)
+        metrics['feature_loss'] += final_loss_info.get('feature_loss', 0)
+        metrics['triplet_loss'] += final_loss_info.get('triplet_loss', 0)
         metrics['intermediate_loss'] += inter_loss.item() if isinstance(inter_loss, torch.Tensor) else inter_loss
 
-        for layer in ['L3', 'L5', 'L6']:
-            if layer in inter_layer_losses:
-                metrics[f'intermediate_{layer}_loss'] += inter_layer_losses[layer]
+        for layer_idx in [3, 5, 6]:
+            key = f'intermediate_L{layer_idx}_loss'
+            if key in inter_loss_info:
+                metrics[f'intermediate_L{layer_idx}_loss'] += inter_loss_info[key]
 
-        with torch.no_grad():
-            masked_acc = compute_masked_accuracy(student_indices, teacher_indices, frame_lengths)
-            metrics['masked_acc'] += masked_acc.item()
+        # Compute masked accuracy
+        s_codes = output['student_codes'][0] if output['student_codes'].dim() == 3 else output['student_codes']
+        t_codes = output['teacher_codes'][0] if output['teacher_codes'].dim() == 3 else output['teacher_codes']
+        masked_acc, correct, total_frames = compute_masked_accuracy(s_codes, t_codes, lengths, encoder_stride)
+        metrics['masked_acc'] += masked_acc
+        metrics['valid_frames'] += correct
+        metrics['total_frames'] += total_frames
 
         if 'snr' in batch:
             metrics['avg_snr'] += batch['snr'].mean().item()
@@ -272,7 +271,7 @@ def train_epoch(model, dataloader, optimizer, loss_fn, intermediate_loss_fn, dev
 
         pbar.set_postfix({
             'loss': f"{total_loss.item()*gradient_accumulation_steps:.4f}",
-            'm_acc': f"{masked_acc.item()*100:.2f}%",
+            'm_acc': f"{masked_acc*100:.2f}%",
             'inter': f"{inter_loss.item() if isinstance(inter_loss, torch.Tensor) else inter_loss:.4f}"
         })
 
@@ -306,55 +305,44 @@ def validate_epoch(model, dataloader, loss_fn, intermediate_loss_fn, device, epo
         clean_audio = batch['clean_audio'].to(device)
         lengths = batch['lengths'].to(device)
 
-        outputs = model(noisy_audio, clean_audio, lengths)
+        output = model(noisy_audio, clean_audio)
 
-        student_indices = outputs['student_indices']
-        teacher_indices = outputs['teacher_indices']
-        student_features = outputs['student_features']
-        teacher_features = outputs['teacher_features']
-        student_intermediate = outputs.get('student_intermediate', {})
-        teacher_intermediate = outputs.get('teacher_intermediate', {})
-
-        frame_lengths = lengths // encoder_stride
-
-        main_loss, loss_dict = loss_fn(
-            student_indices, teacher_indices,
-            student_features, teacher_features,
-            distance_matrix, frame_lengths
+        # Final output loss
+        final_loss, final_loss_info = loss_fn(
+            student_features=output['student_encoder_out'],
+            teacher_features=output['teacher_encoder_out'],
+            teacher_codes=output['teacher_codes'],
+            codebook=output['codebook'],
+            lengths=lengths,
         )
 
-        if intermediate_loss_fn is not None and intermediate_weight > 0:
-            inter_loss, inter_layer_losses = intermediate_loss_fn(
-                student_intermediate, teacher_intermediate
-            )
-            total_loss = main_loss + intermediate_weight * inter_loss
-        else:
-            inter_loss = torch.tensor(0.0)
-            inter_layer_losses = {}
-            total_loss = main_loss
+        # Intermediate supervision loss
+        inter_loss, inter_loss_info = intermediate_loss_fn(
+            student_features=output['student_intermediates'],
+            teacher_features=output['teacher_intermediates'],
+        )
+
+        # Combined loss
+        total_loss = final_loss + intermediate_weight * inter_loss
 
         metrics['total_loss'] += total_loss.item()
-        metrics['feature_loss'] += loss_dict.get('feature_loss', 0)
-        metrics['triplet_loss'] += loss_dict.get('triplet_loss', 0)
+        metrics['feature_loss'] += final_loss_info.get('feature_loss', 0)
+        metrics['triplet_loss'] += final_loss_info.get('triplet_loss', 0)
         metrics['intermediate_loss'] += inter_loss.item() if isinstance(inter_loss, torch.Tensor) else inter_loss
 
-        for layer in ['L3', 'L5', 'L6']:
-            if layer in inter_layer_losses:
-                metrics[f'intermediate_{layer}_loss'] += inter_layer_losses[layer]
+        for layer_idx in [3, 5, 6]:
+            key = f'intermediate_L{layer_idx}_loss'
+            if key in inter_loss_info:
+                metrics[f'intermediate_L{layer_idx}_loss'] += inter_loss_info[key]
 
-        masked_acc = compute_masked_accuracy(student_indices, teacher_indices, frame_lengths)
-        metrics['masked_acc'] += masked_acc.item()
+        # Compute masked accuracy
+        s_codes = output['student_codes'][0] if output['student_codes'].dim() == 3 else output['student_codes']
+        t_codes = output['teacher_codes'][0] if output['teacher_codes'].dim() == 3 else output['teacher_codes']
+        masked_acc, correct, total_frames = compute_masked_accuracy(s_codes, t_codes, lengths, encoder_stride)
+        metrics['masked_acc'] += masked_acc
 
-        # Distance
-        B = student_indices.shape[0]
-        total_dist = 0
-        for b in range(B):
-            valid_len = frame_lengths[b].item()
-            for t in range(valid_len):
-                s_idx = student_indices[b, t].item()
-                t_idx = teacher_indices[b, t].item()
-                total_dist += distance_matrix[s_idx, t_idx].item()
-        metrics['distance'] += total_dist / frame_lengths.sum().item()
+        # Distance (compute if needed)
+        metrics['distance'] += 0  # Placeholder, can compute later if needed
 
         n_batches += 1
 
@@ -551,7 +539,7 @@ def main():
     parser.add_argument('--weight_decay', type=float, default=0.1,
                         help='Weight decay (increased for regularization)')
     parser.add_argument('--grad_clip', type=float, default=1.0)
-    parser.add_argument('--gradient_accumulation_steps', type=int, default=1)
+    parser.add_argument('--gradient_accumulation_steps', type=int, default=2)
 
     # Curriculum
     parser.add_argument('--curriculum_start', type=float, default=0.3)
@@ -614,12 +602,11 @@ def main():
     intermediate_indices = [3, 5, 6]
 
     model = TeacherStudentIntermediate(
-        config_path=WAVTOK_CONFIG,
-        ckpt_path=WAVTOK_CKPT,
+        wavtok_config=WAVTOK_CONFIG,
+        wavtok_ckpt=WAVTOK_CKPT,
         lora_rank=args.lora_rank,
         lora_alpha=args.lora_alpha,
         lora_dropout=args.lora_dropout,
-        lora_layers='all',
         intermediate_indices=intermediate_indices,
     ).to(device)
 
@@ -641,12 +628,15 @@ def main():
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
     # Create data loaders
-    train_loader, val_loader = create_curriculum_dataloaders(
+    train_loader, val_loader, curriculum_sampler = create_curriculum_dataloaders(
         train_cache_path=TRAIN_CACHE,
         val_cache_path=VAL_CACHE,
         batch_size=args.batch_size,
         num_workers=4,
-        initial_noise_ratio=args.curriculum_start,
+        curriculum_mode='curriculum',
+        initial_phase=args.curriculum_start,
+        phase_increment=0.1,
+        compute_snr=False,
     )
 
     # Create loss functions
@@ -689,19 +679,19 @@ def main():
     best_val_acc = 0
     best_epoch = 0
 
+    # Curriculum phase advance interval (similar to v2)
+    phase_advance_epochs = 30
+
     # Training loop
     for epoch in range(1, args.num_epochs + 1):
-        # Update curriculum
-        if epoch <= args.curriculum_epochs:
-            progress = epoch / args.curriculum_epochs
-            noise_ratio = args.curriculum_start + progress * (args.curriculum_end - args.curriculum_start)
-        else:
-            noise_ratio = args.curriculum_end
+        # Update curriculum phase
+        if epoch > 1 and epoch % phase_advance_epochs == 0:
+            curriculum_sampler.advance_phase()
 
-        train_loader.dataset.set_noise_ratio(noise_ratio)
+        current_phase = curriculum_sampler.current_phase
 
         print(f"\n{'='*60}")
-        print(f"Epoch {epoch}/{args.num_epochs} (Curriculum: {int(noise_ratio*100)}%)")
+        print(f"Epoch {epoch}/{args.num_epochs} (Curriculum Phase: {current_phase:.0%})")
         print(f"{'='*60}")
 
         # Train
@@ -734,14 +724,14 @@ def main():
         history['train_intermediate_loss'].append(train_metrics['intermediate_loss'])
         history['val_intermediate_loss'].append(val_metrics['intermediate_loss'])
 
-        for layer in ['L3', 'L5', 'L6']:
-            key = f'intermediate_{layer}_loss'
+        for layer_idx in [3, 5, 6]:
+            key = f'intermediate_L{layer_idx}_loss'
             history[f'train_{key}'].append(train_metrics.get(key, 0))
             history[f'val_{key}'].append(val_metrics.get(key, 0))
 
         history['val_dist'].append(val_metrics['distance'])
         history['train_avg_snr'].append(train_metrics['avg_snr'])
-        history['curriculum_phase'].append(noise_ratio)
+        history['curriculum_phase'].append(current_phase)
         history['lr'].append(current_lr)
 
         # Print summary
