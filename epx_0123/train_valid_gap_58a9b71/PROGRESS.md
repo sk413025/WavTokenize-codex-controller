@@ -165,7 +165,75 @@ Commands / Entrypoints：
 ---
 
 ### Follow-up (Exp 0123)
-- [ ] Step F: Global shift tolerant
-- [ ] Step G: SNR-matched eval
-- [ ] Step H: Token collapse robustness + correlation
+- [x] Step F: Global shift tolerant
+- [x] Step G: SNR-matched eval
+- [x] Step H: Token collapse robustness + correlation
 - [ ] Step I: Anti-collapse ablation (optional)
+
+---
+
+## Step F：Global shift tolerant（完成）
+
+結果摘要：
+- 產出 `metrics_global_shift.json`、`global_shift_hist_train_vs_val.png`。
+- Strict → Global-shift(k3) frame-weighted：train 0.03358 → 0.03440（+0.00083）；val 0.00888 → 0.01278（+0.00390）。
+- gap 由 0.02469 降至約 0.02162，僅回補約 0.39% 絕對值，說明單一全域 shift 只能解釋部分落差。
+
+下一步：
+- 進行 Step G（SNR-matched eval）。
+
+Blockers：
+- 無。
+
+Commands / Entrypoints：
+- `source /home/sbplab/miniconda3/etc/profile.d/conda.sh && conda activate test && CUDA_VISIBLE_DEVICES=1 python epx_0123/train_valid_gap_58a9b71/stepF_global_shift_tolerant_eval.py --batch_size 4 --num_workers 4 --progress_every 200 |& tee epx_0123/train_valid_gap_58a9b71/stepF_global_shift_tolerant_eval.log`
+
+---
+
+## Step G：SNR-matched eval（完成）
+
+結果摘要：
+- 產出 `snr_matched_stats.json`、`snr_matched_eval.md`（bin_width=2 dB，matched_train_len=1712）。
+- train_matched strict frame-weighted = 0.03222；val strict frame-weighted = 0.00888；gap 仍約 0.02334。
+- 即使 SNR 分佈匹配，gap 仍大幅存在，H3 無法解釋主要差距。
+
+下一步：
+- 進行 Step H（token collapse robust + correlation）。
+
+Blockers：
+- 無。
+
+Commands / Entrypoints：
+- `source /home/sbplab/miniconda3/etc/profile.d/conda.sh && conda activate test && CUDA_VISIBLE_DEVICES=1 python epx_0123/train_valid_gap_58a9b71/stepG_snr_matched_eval.py --batch_size 4 --num_workers 4 --progress_every 200 |& tee epx_0123/train_valid_gap_58a9b71/stepG_snr_matched_eval.log`
+
+---
+
+## Step H：Token collapse robustness + correlation（完成）
+
+結果摘要：
+- 產出 `token_usage_stats_val_full.json`、`token_entropy_vs_acc_val.json`、`token_entropy_vs_acc_val.png`（val full 1728）。
+- val per-sample entropy vs strict acc 相關：Pearson 0.269、Spearman 0.217（正相關）。
+- val entropy mean 6.67；top‑k mass mean 0.304，與低 acc 樣本呈集中趨勢。
+
+下一步：
+- 更新 `CONCLUSION.md`（強化 H5、下修 H3/H4）。
+
+Blockers：
+- 無。
+
+Commands / Entrypoints：
+- `source /home/sbplab/miniconda3/etc/profile.d/conda.sh && conda activate test && CUDA_VISIBLE_DEVICES=1 python epx_0123/train_valid_gap_58a9b71/stepH_token_entropy_vs_acc.py --batch_size 4 --num_workers 4 |& tee epx_0123/train_valid_gap_58a9b71/stepH_token_entropy_vs_acc.log`
+
+---
+
+## 結論更新（Exp0123）
+
+結果摘要：
+- `CONCLUSION.md` 已更新：H3/H4/H5 以 Step F/G/H 新證據強化；Top‑3 調整為 **H5 > H4 > H3**。
+- H4 global-shift 僅補回 val +0.00390；H3 SNR‑matched 後 gap 仍 0.02334；H5 以 entropy‑acc 相關性強化主因結論。
+
+下一步：
+- （可選）Step I anti‑collapse 小規模 ablation。
+
+Blockers：
+- 無。

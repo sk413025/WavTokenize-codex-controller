@@ -1,0 +1,110 @@
+{
+  "timestamp": "2026-01-23T04:15:53",
+  "run_dir": "exp_0112_intermediate/runs/exp_k_v5_20260120_003843_20260120_003848",
+  "checkpoint": "exp_0112_intermediate/runs/exp_k_v5_20260120_003843_20260120_003848/best_model.pt",
+  "device": "cuda:0",
+  "batch_size": 4,
+  "num_workers": 4,
+  "seed": 42,
+  "bin_width": 2.0,
+  "bin_edges": [
+    -10.0,
+    -8.0,
+    -6.0,
+    -4.0,
+    -2.0,
+    0.0,
+    2.0,
+    4.0,
+    6.0
+  ],
+  "train_len": 10368,
+  "val_len": 1728,
+  "matched_train_len": 1712,
+  "bin_stats": [
+    {
+      "bin": [
+        -10.0,
+        -8.0
+      ],
+      "train_count": 13,
+      "val_count": 29,
+      "matched_train": 13
+    },
+    {
+      "bin": [
+        -8.0,
+        -6.0
+      ],
+      "train_count": 485,
+      "val_count": 279,
+      "matched_train": 279
+    },
+    {
+      "bin": [
+        -6.0,
+        -4.0
+      ],
+      "train_count": 2149,
+      "val_count": 606,
+      "matched_train": 606
+    },
+    {
+      "bin": [
+        -4.0,
+        -2.0
+      ],
+      "train_count": 2552,
+      "val_count": 196,
+      "matched_train": 196
+    },
+    {
+      "bin": [
+        -2.0,
+        0.0
+      ],
+      "train_count": 2321,
+      "val_count": 218,
+      "matched_train": 218
+    },
+    {
+      "bin": [
+        0.0,
+        2.0
+      ],
+      "train_count": 2292,
+      "val_count": 346,
+      "matched_train": 346
+    },
+    {
+      "bin": [
+        2.0,
+        4.0
+      ],
+      "train_count": 519,
+      "val_count": 51,
+      "matched_train": 51
+    },
+    {
+      "bin": [
+        4.0,
+        6.0
+      ],
+      "train_count": 37,
+      "val_count": 3,
+      "matched_train": 3
+    }
+  ],
+  "train_matched_strict": {
+    "acc_batch_mean": 0.032775519355896544,
+    "acc_frame_weighted": 0.03222384023299355,
+    "num_samples": 1712,
+    "num_frames": 384560
+  },
+  "val_strict": {
+    "acc_batch_mean": 0.008975075199150187,
+    "acc_frame_weighted": 0.008882690775191668,
+    "num_samples": 1728,
+    "num_frames": 436692
+  }
+}

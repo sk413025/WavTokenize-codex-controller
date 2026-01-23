@@ -6,6 +6,7 @@
 - 報告主指標採 `acc_frame_weighted`；因 batch-mean 與 frame-weighted 幾乎一致，聚合方式不是主因。
 
 > **2026-01-23 更新**：全量 SNR 分析（10,368/1,728 筆）顯示之前抽樣結果有偏差，SNR 差異較小（1.29 dB），主因排序已調整。
+> **2026-01-23（Exp0123 後續驗證）**：global-shift tolerant 僅回補 val 約 +0.39%；SNR‑matched 仍保留 ~2.33% gap；val token entropy 與 acc 呈正相關（Pearson 0.269 / Spearman 0.217）。
 
 ## H1–H7 判定（證據 → 判斷）
 
@@ -17,21 +18,24 @@
 - 證據：`sanity_check.md` 顯示離線 eval（eval mode）val ≈ log；gap 仍存在。
 - 判斷：模式差異不是主因（但 train offline vs log 有差異，僅影響 train 絕對值）。
 
-### H3：train/val 噪音難度分佈不同（SNR）→ **弱支持**
+### H3：train/val 噪音難度分佈不同（SNR）→ **弱支持（僅次要）**
 - 證據（抽樣 2000/500）：`snr_lag_stats.json` 顯示 SNR mean train 0.63 dB vs val -2.15 dB（差 2.78 dB）。
 - **全量驗證（10,368/1,728）**：`full_snr_analysis/snr_lag_stats.json` 顯示 SNR mean train **-1.95 dB** vs val **-3.24 dB**（差 **1.29 dB**）。
-- 判斷：之前抽樣有偏差（高估 train SNR）。全量數據顯示 val 確實稍難，但差異較小（1.29 dB ≈ 1.4 倍功率差），**不足以解釋 2.47% 的 gap**。降級為次要因素。
+- **SNR-matched 驗證（Exp0123 Step G）**：`snr_matched_stats.json` 顯示 train_matched strict fw **0.03222** vs val strict fw **0.00888**（gap **0.02334**），在分佈匹配下仍幾乎保留原 gap。
+- 判斷：SNR 差異存在但無法解釋主要落差；僅能作為次要因素。
 
-### H4：對齊偏移在 val 較嚴重 → **弱支持**
+### H4：對齊偏移在 val 較嚴重 → **弱支持（次要）**
 - 證據：`metrics_summary.json` tolerant k3 frame-weighted：val 0.00888 → 0.03210；`snr_lag_stats.json` 顯示 val lag mean 6.27 ms、std 41.59 ms（train mean -3.93 ms、std 26.21 ms）。
 - 補充：此 tolerant 計算是「逐 frame 在 ±k shift 內取最大匹配」（per-frame max over offsets），屬於**偏樂觀的上界**，不等價於「整段序列做單一全域 shift 校正」。
 - **全量驗證（500/500 samples）**：`full_snr_analysis/snr_lag_stats.json` 顯示 lag mean train **-1.9 ms** vs val **-0.1 ms**（幾乎相同），但 val std **46.5 ms** > train std **20.6 ms**。
-- 判斷：lag 均值差異不大，但 val 變異較大；strict 指標對偏移確實敏感，但需要用「全域 shift / sequence-level」的 tolerant 來量化真實可補救幅度。依既有 exp_1226 的 sequence-level 結果（+0.70%）推測時間偏移不是主因，暫列為次要因素。
+- **Global-shift 驗證（Exp0123 Step F）**：`metrics_global_shift.json` 顯示 val strict fw **0.00888 → 0.01278**（+0.00390），train strict fw **0.03358 → 0.03440**；gap 僅縮小約 **0.00307**。
+- 判斷：單一全域 shift 只能補回少量差距，對齊偏移非主因，但仍可能貢獻部分落差。
 
 ### H5：token 分佈/多樣性問題（mode collapse）→ **強支持** ⭐ 主因
 - 證據：`token_usage_stats.json` 顯示 student entropy train 7.20 → val 5.89、top‑k mass 0.031 → 0.270、KL(student||teacher) 0.245 → 1.089。
 - **歷史驗證**：exp_1226 的 `quick_token_acc_check.py` 診斷顯示 Student codes 集中在少數幾個值（top code 出現 24-34 次 vs Teacher 3-6 次），unique codes 也明顯少於 Teacher。
-- 判斷：val 上 token 分佈更集中且偏離 teacher，與 acc 下降一致。**這是 gap 的核心原因**——模型在 val 上退化成只預測少數幾個 token。
+- **相關性驗證（Exp0123 Step H）**：`token_entropy_vs_acc_val.json` 顯示 entropy vs strict acc 相關（Pearson **0.269** / Spearman **0.217**），`token_usage_stats_val_full.json` 顯示 val entropy mean **6.67**、top‑k mass mean **0.304**。
+- 判斷：低 entropy 對應低 acc，提供「collapse ↔ acc」的直接關聯證據；仍為 gap 主因。
 
 ### H6：資料切分/快取問題 → **不支持**
 - 證據：`cache_overlap_report.md` 顯示 speaker_id、filename、noisy/clean path 皆無交集；noisy/clean path 組合亦為 0 交集。
@@ -42,13 +46,13 @@
 - 補充：中間層（3/4/6）在 cosine 指標下未必更差（本次抽樣甚至更高），但 MSE 對尺度非常敏感且未做 channel normalize，波動大；而 token codes 由 final encoder out 經 quantizer 得到，因此 H7 的判定主要以 **final layer 對齊是否良好** 為準。
 - 判斷：不屬於「feature alignment 良好但 token acc 差」的指標不一致型態。
 
-## Top-3 主因排序（含關鍵證據）— 2026-01-23 更新
+## Top-3 主因排序（含關鍵證據）— 2026-01-23（Exp0123 後續）
 
 | 排名 | 假說 | 狀態 | 關鍵證據 |
 |------|------|------|----------|
-| **1** | **H5: Token 崩塌** | ⭐ 主因 | val entropy 5.89, top-k mass 27%, KL 1.089 |
-| 2 | H3: SNR 難度差 | 次要 | 全量差異僅 1.29 dB（之前抽樣有偏差） |
-| 3 | H4: 對齊偏移 | 次要 | exp_1226 已驗證 Frame-Tolerant 只改善 +0.70% |
+| **1** | **H5: Token 崩塌** | ⭐ 主因 | entropy-acc 相關（Pearson 0.269 / Spearman 0.217），val top‑k mass mean 0.304 |
+| 2 | H4: 對齊偏移 | 次要 | global-shift k3 僅補回 val +0.00390（gap 仍 0.02162） |
+| 3 | H3: SNR 難度差 | 次要 | SNR‑matched 後 gap 仍 0.02334 |
 
 **排除的假說**：
 - H1 聚合方式 ❌
@@ -68,6 +72,9 @@
 - `snr_hist_train_vs_val.png`, `lag_hist_train_vs_val.png`, `snr_lag_stats.json`（抽樣）
 - **`full_snr_analysis/snr_lag_stats.json`**（全量，2026-01-23 新增）
 - `token_usage_train_vs_val.png`, `token_usage_stats.json`
+- `metrics_global_shift.json`, `global_shift_hist_train_vs_val.png`
+- `snr_matched_stats.json`, `snr_matched_eval.md`
+- `token_usage_stats_val_full.json`, `token_entropy_vs_acc_val.json`, `token_entropy_vs_acc_val.png`
 - `feature_alignment_stats.json`
 - `cache_overlap_report.md`, `cache_overlap_stats.json`
 

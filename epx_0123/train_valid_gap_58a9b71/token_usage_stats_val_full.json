@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-01-23T04:16:58",
+  "run_dir": "exp_0112_intermediate/runs/exp_k_v5_20260120_003843_20260120_003848",
+  "checkpoint": "exp_0112_intermediate/runs/exp_k_v5_20260120_003843_20260120_003848/best_model.pt",
+  "device": "cuda:0",
+  "max_val_samples": null,
+  "num_samples": 1728,
+  "entropy": {
+    "mean": 6.673387807828409,
+    "std": 0.3030115673301413,
+    "min": 5.752408027648926,
+    "max": 7.671291351318359
+  },
+  "topk_mass": {
+    "mean": 0.30394300599410023,
+    "std": 0.08384909036186389,
+    "min": 0.1111111044883728,
+    "max": 0.5166667103767395
+  }
+}
