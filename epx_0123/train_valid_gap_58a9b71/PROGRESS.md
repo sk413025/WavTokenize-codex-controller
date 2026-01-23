@@ -168,7 +168,7 @@ Commands / Entrypoints：
 - [x] Step F: Global shift tolerant
 - [x] Step G: SNR-matched eval
 - [x] Step H: Token collapse robustness + correlation
-- [ ] Step I: Anti-collapse ablation (optional)
+- [x] Step I: Anti-collapse ablation (optional)
 
 ---
 
@@ -237,3 +237,24 @@ Commands / Entrypoints：
 
 Blockers：
 - 無。
+
+---
+
+## Step I：Anti-collapse ablation（完成）
+
+結果摘要：
+- 產出 `ablation_anticollapse_summary.md`、`ablation_anticollapse_summary.json`（λ∈{0.0,0.005,0.01}；max_steps=200；train/val=2000/500）。
+- val strict fw：0.008693（λ=0.0）→ 0.008217（λ=0.005）→ 0.008684（λ=0.01），短跑未見提升。
+- val entropy：6.169（λ=0.0）→ 6.052（λ=0.005）→ 6.092（λ=0.01）；top‑k mass 與 KL 亦未改善為更分散。
+- **高 λ 掃描（選項2）**：`ablation_anticollapse_summary_highlambda.md`（λ∈{0.02,0.05,0.1}；max_steps=400；train/val=2000/500）。val strict fw：0.007987 / 0.006733 / 0.008225（均未優於 baseline 0.008693）。entropy 與 top‑k mass 有輕微改善但 acc 未提升。
+- **KL-to-teacher 正則（更嚴謹驗證）**：`ablation_anticollapse_summary_kl.md`（λ∈{0.02,0.05,0.1}；max_steps=400；train/val=2000/500）。val strict fw：0.006954 / 0.007922 / **0.009021**（λ=0.1 略高於 baseline 0.008693，但提升幅度小且仍低於 full‑val 0.00888）。KL(student||teacher) 明顯下降（1.189 → 0.784）。
+
+下一步：
+- 若要驗證 anti‑collapse 的真實效果，需更長訓練或不同正則設計（KL-to-teacher 已驗證，仍僅輕微改善）。
+
+Blockers：
+- 無。
+
+Commands / Entrypoints：
+- `source /home/sbplab/miniconda3/etc/profile.d/conda.sh && conda activate test && CUDA_VISIBLE_DEVICES=1 PYTHONUNBUFFERED=1 python epx_0123/train_valid_gap_58a9b71/stepI_anticollapse_ablation.py --batch_size 2 --num_workers 0 --num_epochs 2 --max_steps 200 --max_train_samples 2000 --max_val_samples 500 --use_amp --gradient_accumulation_steps 2 |& tee epx_0123/train_valid_gap_58a9b71/stepI_anticollapse_ablation_retry3.log`
+- `source /home/sbplab/miniconda3/etc/profile.d/conda.sh && conda activate test && CUDA_VISIBLE_DEVICES=1 PYTHONUNBUFFERED=1 python epx_0123/train_valid_gap_58a9b71/stepI_anticollapse_ablation.py --reg_type kl --entropy_weights 0.02,0.05,0.1 --batch_size 2 --num_workers 0 --num_epochs 2 --max_steps 400 --max_train_samples 2000 --max_val_samples 500 --use_amp --gradient_accumulation_steps 2 --output_root epx_0123/train_valid_gap_58a9b71/ablation_anticollapse_kl |& tee epx_0123/train_valid_gap_58a9b71/stepI_anticollapse_ablation_kl.log`

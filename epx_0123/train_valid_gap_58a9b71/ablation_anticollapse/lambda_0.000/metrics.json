@@ -1,0 +1,44 @@
+{
+  "timestamp": "2026-01-23T05:24:52",
+  "run_dir": "epx_0123/train_valid_gap_58a9b71/ablation_anticollapse/lambda_0.000",
+  "checkpoint_init": "exp_0112_intermediate/runs/exp_k_v5_20260120_003843_20260120_003848/best_model.pt",
+  "entropy_weight": 0.0,
+  "num_epochs": 2,
+  "max_steps": 200,
+  "gradient_accumulation_steps": 2,
+  "max_train_samples": 2000,
+  "max_val_samples": 500,
+  "batch_size": 2,
+  "num_workers": 0,
+  "train_metrics": {
+    "total_loss": 1.0287895420193671,
+    "feature_loss": 0.19440623849630356,
+    "triplet_loss": 0.5788384194672108,
+    "intermediate_loss": 0.5110897687077522,
+    "entropy_loss": 0.010179329663515091,
+    "masked_acc": 0.04244215865613641,
+    "num_steps": 400,
+    "num_micro_steps": 400
+  },
+  "val_metrics": {
+    "strict": {
+      "acc_batch_mean": 0.008132518501020968,
+      "acc_frame_weighted": 0.008692657164881665,
+      "num_samples": 500,
+      "num_frames": 121942
+    },
+    "student": {
+      "total": 125060,
+      "unique": 1616,
+      "entropy": 6.168675907422534,
+      "top_k_mass": 0.1946905485367024
+    },
+    "teacher": {
+      "total": 125060,
+      "unique": 1804,
+      "entropy": 6.822431448174227,
+      "top_k_mass": 0.09956021109867264
+    },
+    "kl_student_teacher": 1.324629534005321
+  }
+}

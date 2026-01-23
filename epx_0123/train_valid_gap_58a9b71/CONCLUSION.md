@@ -35,6 +35,11 @@
 - 證據：`token_usage_stats.json` 顯示 student entropy train 7.20 → val 5.89、top‑k mass 0.031 → 0.270、KL(student||teacher) 0.245 → 1.089。
 - **歷史驗證**：exp_1226 的 `quick_token_acc_check.py` 診斷顯示 Student codes 集中在少數幾個值（top code 出現 24-34 次 vs Teacher 3-6 次），unique codes 也明顯少於 Teacher。
 - **相關性驗證（Exp0123 Step H）**：`token_entropy_vs_acc_val.json` 顯示 entropy vs strict acc 相關（Pearson **0.269** / Spearman **0.217**），`token_usage_stats_val_full.json` 顯示 val entropy mean **6.67**、top‑k mass mean **0.304**。
+- **小規模抑制實驗（Exp0123 Step I）**：
+  - 低 λ：`ablation_anticollapse_summary_lowlambda.md`（λ=0.005/0.01，max_steps=200）未提升 val strict（0.008217/0.008684 vs 0.008693）。
+  - 高 λ：`ablation_anticollapse_summary_highlambda.md`（λ=0.02/0.05/0.1，max_steps=400）val strict 分別 0.007987/0.006733/0.008225，亦未優於 baseline；entropy/top‑k mass 有些改善但不足以帶來 acc 提升。
+  - **KL‑to‑teacher 正則**：`ablation_anticollapse_summary_kl.md`（λ=0.02/0.05/0.1，max_steps=400）val strict = 0.006954/0.007922/**0.009021**；KL(student||teacher) 明顯下降（1.189→0.784），顯示分佈對齊改善但 acc 提升有限。
+  - 結論：KL 正則可改善分佈對齊，但對 strict acc 的提升仍小；若要更嚴謹驗證因果，需更長訓練或與其他正則/對齊策略組合。
 - 判斷：低 entropy 對應低 acc，提供「collapse ↔ acc」的直接關聯證據；仍為 gap 主因。
 
 ### H6：資料切分/快取問題 → **不支持**
@@ -75,6 +80,9 @@
 - `metrics_global_shift.json`, `global_shift_hist_train_vs_val.png`
 - `snr_matched_stats.json`, `snr_matched_eval.md`
 - `token_usage_stats_val_full.json`, `token_entropy_vs_acc_val.json`, `token_entropy_vs_acc_val.png`
+- `ablation_anticollapse_summary_lowlambda.md`, `ablation_anticollapse_summary_lowlambda.json`
+- `ablation_anticollapse_summary_highlambda.md`, `ablation_anticollapse_summary_highlambda.json`
+- `ablation_anticollapse_summary_kl.md`, `ablation_anticollapse_summary_kl.json`
 - `feature_alignment_stats.json`
 - `cache_overlap_report.md`, `cache_overlap_stats.json`
 

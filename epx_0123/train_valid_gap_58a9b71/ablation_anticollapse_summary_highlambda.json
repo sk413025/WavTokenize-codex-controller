@@ -1,0 +1,134 @@
+[
+  {
+    "timestamp": "2026-01-23T05:32:48",
+    "run_dir": "epx_0123/train_valid_gap_58a9b71/ablation_anticollapse_highlambda/lambda_0.020",
+    "checkpoint_init": "exp_0112_intermediate/runs/exp_k_v5_20260120_003843_20260120_003848/best_model.pt",
+    "entropy_weight": 0.02,
+    "num_epochs": 2,
+    "max_steps": 400,
+    "gradient_accumulation_steps": 2,
+    "max_train_samples": 2000,
+    "max_val_samples": 500,
+    "batch_size": 2,
+    "num_workers": 0,
+    "train_metrics": {
+      "total_loss": 1.0372432205826043,
+      "feature_loss": 0.19676706828176976,
+      "triplet_loss": 0.5879491193220019,
+      "intermediate_loss": 0.5046443749964237,
+      "entropy_loss": 0.010242182984948158,
+      "masked_acc": 0.04211153063972727,
+      "num_steps": 800,
+      "num_micro_steps": 800
+    },
+    "val_metrics": {
+      "strict": {
+        "acc_batch_mean": 0.007422448638360947,
+        "acc_frame_weighted": 0.007987403847730888,
+        "num_samples": 500,
+        "num_frames": 121942
+      },
+      "student": {
+        "total": 125060,
+        "unique": 1634,
+        "entropy": 6.151266369151879,
+        "top_k_mass": 0.2099872061410523
+      },
+      "teacher": {
+        "total": 125060,
+        "unique": 1804,
+        "entropy": 6.822431448174227,
+        "top_k_mass": 0.09956021109867264
+      },
+      "kl_student_teacher": 1.241666071093076
+    }
+  },
+  {
+    "timestamp": "2026-01-23T05:34:27",
+    "run_dir": "epx_0123/train_valid_gap_58a9b71/ablation_anticollapse_highlambda/lambda_0.050",
+    "checkpoint_init": "exp_0112_intermediate/runs/exp_k_v5_20260120_003843_20260120_003848/best_model.pt",
+    "entropy_weight": 0.05,
+    "num_epochs": 2,
+    "max_steps": 400,
+    "gradient_accumulation_steps": 2,
+    "max_train_samples": 2000,
+    "max_val_samples": 500,
+    "batch_size": 2,
+    "num_workers": 0,
+    "train_metrics": {
+      "total_loss": 1.0298185096681118,
+      "feature_loss": 0.1947624313645065,
+      "triplet_loss": 0.5819890433177352,
+      "intermediate_loss": 0.5051161228120327,
+      "entropy_loss": 0.010179499164223671,
+      "masked_acc": 0.04287792474647487,
+      "num_steps": 800,
+      "num_micro_steps": 800
+    },
+    "val_metrics": {
+      "strict": {
+        "acc_batch_mean": 0.006298010380938649,
+        "acc_frame_weighted": 0.006732708992799856,
+        "num_samples": 500,
+        "num_frames": 121942
+      },
+      "student": {
+        "total": 125060,
+        "unique": 1583,
+        "entropy": 6.192107195193688,
+        "top_k_mass": 0.16484887254118025
+      },
+      "teacher": {
+        "total": 125060,
+        "unique": 1804,
+        "entropy": 6.822431448174227,
+        "top_k_mass": 0.09956021109867264
+      },
+      "kl_student_teacher": 1.94802944649242
+    }
+  },
+  {
+    "timestamp": "2026-01-23T05:37:38",
+    "run_dir": "epx_0123/train_valid_gap_58a9b71/ablation_anticollapse_highlambda/lambda_0.100",
+    "checkpoint_init": "exp_0112_intermediate/runs/exp_k_v5_20260120_003843_20260120_003848/best_model.pt",
+    "entropy_weight": 0.1,
+    "num_epochs": 2,
+    "max_steps": 400,
+    "gradient_accumulation_steps": 2,
+    "max_train_samples": 2000,
+    "max_val_samples": 500,
+    "batch_size": 2,
+    "num_workers": 0,
+    "train_metrics": {
+      "total_loss": 1.0336474913358689,
+      "feature_loss": 0.19552175687626006,
+      "triplet_loss": 0.5834968505427242,
+      "intermediate_loss": 0.5072133143618703,
+      "entropy_loss": 0.0102222790569067,
+      "masked_acc": 0.04345104687228101,
+      "num_steps": 800,
+      "num_micro_steps": 800
+    },
+    "val_metrics": {
+      "strict": {
+        "acc_batch_mean": 0.0077267284356057645,
+        "acc_frame_weighted": 0.008225221826770103,
+        "num_samples": 500,
+        "num_frames": 121942
+      },
+      "student": {
+        "total": 125060,
+        "unique": 1653,
+        "entropy": 6.321341947447186,
+        "top_k_mass": 0.15247081400927553
+      },
+      "teacher": {
+        "total": 125060,
+        "unique": 1804,
+        "entropy": 6.822431448174227,
+        "top_k_mass": 0.09956021109867264
+      },
+      "kl_student_teacher": 1.2008996487914476
+    }
+  }
+]

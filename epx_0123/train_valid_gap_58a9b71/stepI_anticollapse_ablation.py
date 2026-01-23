@@ -28,6 +28,49 @@ ENCODER_STRIDE = 320
 NUM_CODES = 4096
 
 
+class CodeDistKLLoss(torch.nn.Module):
+    """
+    KL(student || teacher) over code distribution.
+
+    - student: soft assignment from student features to codebook (masked)
+    - teacher: hard counts from teacher codes (masked)
+    """
+
+    def __init__(self, num_codes: int = 4096, temperature: float = 1.0):
+        super().__init__()
+        self.num_codes = num_codes
+        self.temperature = temperature
+
+    def forward(self, student_features, teacher_codes, codebook, lengths, encoder_stride=320):
+        B, D, T = student_features.shape
+        max_audio_len = T * encoder_stride
+        mask = create_length_mask(lengths, max_audio_len, encoder_stride, device=student_features.device)
+
+        # student soft assignment
+        z = student_features.permute(0, 2, 1).reshape(-1, D)
+        distances = torch.cdist(z, codebook)
+        logits = -distances / self.temperature
+        probs = F.softmax(logits, dim=-1)
+        mask_flat = mask.reshape(-1).unsqueeze(-1)
+        probs_masked = probs * mask_flat
+        student_dist = probs_masked.sum(dim=0)
+        student_dist = student_dist / (student_dist.sum() + 1e-8)
+
+        # teacher hard distribution
+        t_codes = teacher_codes
+        if t_codes.dim() == 3:
+            t_codes = t_codes[0]
+        t_flat = t_codes.reshape(-1).long()
+        mask_flat_1d = mask.reshape(-1)
+        teacher_counts = torch.bincount(t_flat, weights=mask_flat_1d, minlength=self.num_codes)
+        teacher_dist = teacher_counts / (teacher_counts.sum() + 1e-8)
+
+        # KL(student || teacher)
+        eps = 1e-8
+        kl = (student_dist * (student_dist + eps).log() - student_dist * (teacher_dist + eps).log()).sum()
+        return kl
+
+
 def select_device(requested: str) -> str:
     if requested and requested != 'auto':
         return requested
@@ -142,7 +185,7 @@ def evaluate_val(model, loader, device):
     }
 
 
-def train_one_run(args, entropy_weight, run_dir):
+def train_one_run(args, reg_weight, run_dir):
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # load config for hyperparams
@@ -183,7 +226,8 @@ def train_one_run(args, entropy_weight, run_dir):
         },
         target_scale=cfg.get('target_scale', 1.0),
     )
-    entropy_loss_fn = CodeEntropyLoss(num_codes=NUM_CODES, temperature=1.0)
+    entropy_loss_fn = CodeEntropyLoss(num_codes=NUM_CODES, temperature=args.reg_temperature)
+    kl_loss_fn = CodeDistKLLoss(num_codes=NUM_CODES, temperature=args.reg_temperature)
 
     optimizer = torch.optim.AdamW(
         [p for p in model.parameters() if p.requires_grad],
@@ -239,13 +283,25 @@ def train_one_run(args, entropy_weight, run_dir):
                     output['teacher_intermediates'],
                     layer_scale=1.0,
                 )
-                ent_loss = entropy_loss_fn(
-                    output['student_encoder_out'],
-                    output['codebook'],
-                    lengths=lengths,
-                    encoder_stride=ENCODER_STRIDE,
-                )
-                total_loss = base_loss + cfg.get('intermediate_weight', 0.5) * inter_loss + entropy_weight * ent_loss
+                if args.reg_type == 'entropy':
+                    reg_loss = entropy_loss_fn(
+                        output['student_encoder_out'],
+                        output['codebook'],
+                        lengths=lengths,
+                        encoder_stride=ENCODER_STRIDE,
+                    )
+                elif args.reg_type == 'kl':
+                    reg_loss = kl_loss_fn(
+                        output['student_encoder_out'],
+                        output['teacher_codes'],
+                        output['codebook'],
+                        lengths=lengths,
+                        encoder_stride=ENCODER_STRIDE,
+                    )
+                else:
+                    raise ValueError(f"Unknown reg_type: {args.reg_type}")
+
+                total_loss = base_loss + cfg.get('intermediate_weight', 0.5) * inter_loss + reg_weight * reg_loss
 
             scaled_loss = total_loss / args.gradient_accumulation_steps
             scaler.scale(scaled_loss).backward()
@@ -268,7 +324,7 @@ def train_one_run(args, entropy_weight, run_dir):
             train_metrics['feature_loss'] += float(base_info.get('feature_loss', 0.0))
             train_metrics['triplet_loss'] += float(base_info.get('triplet_loss', 0.0))
             train_metrics['intermediate_loss'] += float(inter_loss.item())
-            train_metrics['entropy_loss'] += float(ent_loss.item())
+            train_metrics['entropy_loss'] += float(reg_loss.item())
             train_metrics['masked_acc'] += float(masked_acc)
             train_metrics['num_steps'] += 1
             train_metrics['num_micro_steps'] += 1
@@ -294,7 +350,9 @@ def train_one_run(args, entropy_weight, run_dir):
         'timestamp': datetime.now().isoformat(timespec='seconds'),
         'run_dir': str(run_dir),
         'checkpoint_init': ckpt_path,
-        'entropy_weight': entropy_weight,
+        'reg_type': args.reg_type,
+        'reg_weight': reg_weight,
+        'reg_temperature': args.reg_temperature,
         'num_epochs': args.num_epochs,
         'max_steps': args.max_steps,
         'gradient_accumulation_steps': args.gradient_accumulation_steps,
@@ -324,6 +382,8 @@ def parse_args():
     parser.add_argument('--max_train_samples', type=int, default=None)
     parser.add_argument('--max_val_samples', type=int, default=None)
     parser.add_argument('--entropy_weights', type=str, default='0.0,0.005,0.01')
+    parser.add_argument('--reg_type', type=str, default='entropy', choices=['entropy', 'kl'])
+    parser.add_argument('--reg_temperature', type=float, default=1.0)
     parser.add_argument('--use_amp', action='store_true')
     parser.add_argument('--gradient_accumulation_steps', type=int, default=1)
     parser.add_argument('--output_root', type=str, default='epx_0123/train_valid_gap_58a9b71/ablation_anticollapse')
@@ -349,6 +409,8 @@ def main():
         '',
         f'- timestamp: {datetime.now().isoformat(timespec="seconds")}',
         f'- run_dir: {args.run_dir}',
+        f'- reg_type: {args.reg_type}',
+        f'- reg_temperature: {args.reg_temperature}',
         f'- max_steps: {args.max_steps}',
         f'- num_epochs: {args.num_epochs}',
         f'- max_train_samples: {args.max_train_samples}',
@@ -362,7 +424,7 @@ def main():
     for p in summary:
         val = p['val_metrics']
         lines.append(
-            f"| {p['entropy_weight']:.3f} | {val['strict']['acc_frame_weighted']:.6f} | "
+            f"| {p['reg_weight']:.3f} | {val['strict']['acc_frame_weighted']:.6f} | "
             f"{val['student']['entropy']:.6f} | {val['student']['top_k_mass']:.6f} | {val['kl_student_teacher']:.6f} |"
         )
 
