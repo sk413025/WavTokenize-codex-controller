@@ -1,0 +1,329 @@
+{
+  "summary": {
+    "total_samples": 2592,
+    "total_tokens_analyzed": 614112,
+    "unique_tokens": 1810,
+    "overall_error_rate": 0.9953856534337685
+  },
+  "noise_type_difficulty": {
+    "plastic": {
+      "match_rate": 0.14013657872096358,
+      "error_rate": 0.8598634212790364,
+      "total_tokens": 111584
+    },
+    "box": {
+      "match_rate": 0.20213016240051623,
+      "error_rate": 0.7978698375994837,
+      "total_tokens": 297536
+    },
+    "papercup": {
+      "match_rate": 0.21438397596003747,
+      "error_rate": 0.7856160240399626,
+      "total_tokens": 204992
+    }
+  },
+  "top_error_tokens": [
+    {
+      "token_id": 152,
+      "error_rate": 1.0,
+      "total_count": 427,
+      "correct_count": 0
+    },
+    {
+      "token_id": 479,
+      "error_rate": 1.0,
+      "total_count": 237,
+      "correct_count": 0
+    },
+    {
+      "token_id": 128,
+      "error_rate": 1.0,
+      "total_count": 267,
+      "correct_count": 0
+    },
+    {
+      "token_id": 1349,
+      "error_rate": 1.0,
+      "total_count": 163,
+      "correct_count": 0
+    },
+    {
+      "token_id": 356,
+      "error_rate": 1.0,
+      "total_count": 495,
+      "correct_count": 0
+    },
+    {
+      "token_id": 372,
+      "error_rate": 1.0,
+      "total_count": 472,
+      "correct_count": 0
+    },
+    {
+      "token_id": 592,
+      "error_rate": 1.0,
+      "total_count": 485,
+      "correct_count": 0
+    },
+    {
+      "token_id": 276,
+      "error_rate": 1.0,
+      "total_count": 385,
+      "correct_count": 0
+    },
+    {
+      "token_id": 81,
+      "error_rate": 1.0,
+      "total_count": 314,
+      "correct_count": 0
+    },
+    {
+      "token_id": 1325,
+      "error_rate": 1.0,
+      "total_count": 337,
+      "correct_count": 0
+    },
+    {
+      "token_id": 1078,
+      "error_rate": 1.0,
+      "total_count": 311,
+      "correct_count": 0
+    },
+    {
+      "token_id": 58,
+      "error_rate": 1.0,
+      "total_count": 183,
+      "correct_count": 0
+    },
+    {
+      "token_id": 461,
+      "error_rate": 1.0,
+      "total_count": 220,
+      "correct_count": 0
+    },
+    {
+      "token_id": 847,
+      "error_rate": 1.0,
+      "total_count": 256,
+      "correct_count": 0
+    },
+    {
+      "token_id": 436,
+      "error_rate": 1.0,
+      "total_count": 183,
+      "correct_count": 0
+    },
+    {
+      "token_id": 1514,
+      "error_rate": 1.0,
+      "total_count": 930,
+      "correct_count": 0
+    },
+    {
+      "token_id": 138,
+      "error_rate": 1.0,
+      "total_count": 357,
+      "correct_count": 0
+    },
+    {
+      "token_id": 756,
+      "error_rate": 1.0,
+      "total_count": 326,
+      "correct_count": 0
+    },
+    {
+      "token_id": 1613,
+      "error_rate": 1.0,
+      "total_count": 308,
+      "correct_count": 0
+    },
+    {
+      "token_id": 1474,
+      "error_rate": 1.0,
+      "total_count": 3411,
+      "correct_count": 0
+    }
+  ],
+  "detailed_analysis": [
+    {
+      "token_id": 152,
+      "overall_error_rate": 1.0,
+      "by_noise": {
+        "plastic": {
+          "error_rate": 1.0,
+          "total": 95
+        },
+        "box": {
+          "error_rate": 1.0,
+          "total": 201
+        },
+        "papercup": {
+          "error_rate": 1.0,
+          "total": 131
+        }
+      }
+    },
+    {
+      "token_id": 479,
+      "overall_error_rate": 1.0,
+      "by_noise": {
+        "plastic": {
+          "error_rate": 1.0,
+          "total": 46
+        },
+        "box": {
+          "error_rate": 1.0,
+          "total": 105
+        },
+        "papercup": {
+          "error_rate": 1.0,
+          "total": 86
+        }
+      }
+    },
+    {
+      "token_id": 128,
+      "overall_error_rate": 1.0,
+      "by_noise": {
+        "plastic": {
+          "error_rate": 1.0,
+          "total": 52
+        },
+        "box": {
+          "error_rate": 1.0,
+          "total": 124
+        },
+        "papercup": {
+          "error_rate": 1.0,
+          "total": 91
+        }
+      }
+    },
+    {
+      "token_id": 1349,
+      "overall_error_rate": 1.0,
+      "by_noise": {
+        "plastic": {
+          "error_rate": 1.0,
+          "total": 36
+        },
+        "box": {
+          "error_rate": 1.0,
+          "total": 76
+        },
+        "papercup": {
+          "error_rate": 1.0,
+          "total": 51
+        }
+      }
+    },
+    {
+      "token_id": 356,
+      "overall_error_rate": 1.0,
+      "by_noise": {
+        "plastic": {
+          "error_rate": 1.0,
+          "total": 117
+        },
+        "box": {
+          "error_rate": 1.0,
+          "total": 215
+        },
+        "papercup": {
+          "error_rate": 1.0,
+          "total": 163
+        }
+      }
+    },
+    {
+      "token_id": 372,
+      "overall_error_rate": 1.0,
+      "by_noise": {
+        "plastic": {
+          "error_rate": 1.0,
+          "total": 103
+        },
+        "box": {
+          "error_rate": 1.0,
+          "total": 225
+        },
+        "papercup": {
+          "error_rate": 1.0,
+          "total": 144
+        }
+      }
+    },
+    {
+      "token_id": 592,
+      "overall_error_rate": 1.0,
+      "by_noise": {
+        "plastic": {
+          "error_rate": 1.0,
+          "total": 92
+        },
+        "box": {
+          "error_rate": 1.0,
+          "total": 245
+        },
+        "papercup": {
+          "error_rate": 1.0,
+          "total": 148
+        }
+      }
+    },
+    {
+      "token_id": 276,
+      "overall_error_rate": 1.0,
+      "by_noise": {
+        "plastic": {
+          "error_rate": 1.0,
+          "total": 75
+        },
+        "box": {
+          "error_rate": 1.0,
+          "total": 199
+        },
+        "papercup": {
+          "error_rate": 1.0,
+          "total": 111
+        }
+      }
+    },
+    {
+      "token_id": 81,
+      "overall_error_rate": 1.0,
+      "by_noise": {
+        "plastic": {
+          "error_rate": 1.0,
+          "total": 31
+        },
+        "box": {
+          "error_rate": 1.0,
+          "total": 166
+        },
+        "papercup": {
+          "error_rate": 1.0,
+          "total": 117
+        }
+      }
+    },
+    {
+      "token_id": 1325,
+      "overall_error_rate": 1.0,
+      "by_noise": {
+        "plastic": {
+          "error_rate": 1.0,
+          "total": 52
+        },
+        "box": {
+          "error_rate": 1.0,
+          "total": 177
+        },
+        "papercup": {
+          "error_rate": 1.0,
+          "total": 108
+        }
+      }
+    }
+  ]
+}
