@@ -1,0 +1,34 @@
+{
+  "timestamp": "2026-01-23T03:22:41",
+  "device": "cuda:0",
+  "snr_samples_train": null,
+  "snr_samples_val": null,
+  "acc_snr_samples_train": 10368,
+  "acc_snr_samples_val": 1728,
+  "lag_samples_train": 500,
+  "lag_samples_val": 500,
+  "snr_train": {
+    "mean": -1.9507187102387047,
+    "std": 2.5831206367188235,
+    "min": -8.852672576904297,
+    "max": 5.710855007171631
+  },
+  "snr_val": {
+    "mean": -3.2428809508107777,
+    "std": 3.0420027997266184,
+    "min": -9.476532936096191,
+    "max": 4.278395652770996
+  },
+  "lag_train": {
+    "mean_ms": -1.9,
+    "std_ms": 20.61312958070926,
+    "min_ms": -186.66666666666666,
+    "max_ms": 190.0
+  },
+  "lag_val": {
+    "mean_ms": -0.10000000000000034,
+    "std_ms": 46.48788372612087,
+    "min_ms": -200.0,
+    "max_ms": 196.66666666666666
+  }
+}

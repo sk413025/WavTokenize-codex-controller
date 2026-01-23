@@ -1,0 +1,38 @@
+{
+  "timestamp": "2026-01-23T02:20:45",
+  "device": "cuda:0",
+  "max_train_samples": 2000,
+  "max_val_samples": 500,
+  "student": {
+    "train": {
+      "total": 428367,
+      "unique": 1810,
+      "entropy": 7.195194115240563,
+      "top_k_mass": 0.03115786230031725
+    },
+    "val": {
+      "total": 121942,
+      "unique": 1474,
+      "entropy": 5.893431592564504,
+      "top_k_mass": 0.2704646471273228
+    }
+  },
+  "teacher": {
+    "train": {
+      "total": 428367,
+      "unique": 1831,
+      "entropy": 7.347783211925009,
+      "top_k_mass": 0.013553798495215551
+    },
+    "val": {
+      "total": 121942,
+      "unique": 1791,
+      "entropy": 6.844829968622603,
+      "top_k_mass": 0.09124009775139001
+    }
+  },
+  "kl_divergence": {
+    "train": 0.24501244833407668,
+    "val": 1.0885470327503197
+  }
+}

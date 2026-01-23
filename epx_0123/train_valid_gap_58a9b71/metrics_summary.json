@@ -1,0 +1,63 @@
+{
+  "timestamp": "2026-01-23T01:50:18",
+  "run_dir": "exp_0112_intermediate/runs/exp_k_v5_20260120_003843_20260120_003848",
+  "checkpoint": "exp_0112_intermediate/runs/exp_k_v5_20260120_003843_20260120_003848/best_model.pt",
+  "checkpoint_epoch": 141,
+  "device": "cuda:0",
+  "batch_size": 4,
+  "num_workers": 4,
+  "max_train_samples": null,
+  "max_val_samples": null,
+  "encoder_stride": 320,
+  "tolerances": [
+    1,
+    2,
+    3
+  ],
+  "splits": {
+    "train": {
+      "num_batches": 2592,
+      "num_frames": 2303718,
+      "strict": {
+        "acc_batch_mean": 0.033957632907290376,
+        "acc_frame_weighted": 0.03357702635478808
+      },
+      "tolerant": {
+        "k1": {
+          "acc_batch_mean": 0.03939945256563147,
+          "acc_frame_weighted": 0.03908117226153532
+        },
+        "k2": {
+          "acc_batch_mean": 0.0446784592818702,
+          "acc_frame_weighted": 0.044427312717962686
+        },
+        "k3": {
+          "acc_batch_mean": 0.050541007146751735,
+          "acc_frame_weighted": 0.05042153596924602
+        }
+      }
+    },
+    "val": {
+      "num_batches": 432,
+      "num_frames": 436692,
+      "strict": {
+        "acc_batch_mean": 0.008991203583381038,
+        "acc_frame_weighted": 0.008882690775191465
+      },
+      "tolerant": {
+        "k1": {
+          "acc_batch_mean": 0.0181319262788268,
+          "acc_frame_weighted": 0.018090553525138584
+        },
+        "k2": {
+          "acc_batch_mean": 0.02552515280198313,
+          "acc_frame_weighted": 0.025564929057550274
+        },
+        "k3": {
+          "acc_batch_mean": 0.03202259367900365,
+          "acc_frame_weighted": 0.03210042776144211
+        }
+      }
+    }
+  }
+}

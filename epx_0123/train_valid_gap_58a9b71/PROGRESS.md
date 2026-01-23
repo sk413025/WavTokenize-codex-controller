@@ -1,0 +1,171 @@
+# Progress: Train/Valid Gap Analysis (commit 58a9b71)
+
+## Checklist
+- [x] Step A：從 `history.json` 重建 gap 行為（gap_curve.png + best_epoch/gap）
+- [x] Step B：離線 eval（strict：batch-mean + frame-weighted；train/val；含 sanity_check.md）
+- [x] Step C：資料難度/對齊分佈（SNR/lag + acc_vs_* 圖）
+- [x] Step D：token 多樣性/崩塌（hist/entropy/unique/top-k mass/divergence）
+- [x] Step E：feature-space 對照（final + layers 3/4/6）
+- [x] 結論：完成 `CONCLUSION.md`（H1–H7 判定 + Top-3 + 下一步）
+
+---
+
+## Step A：gap 行為重建（完成）
+
+結果摘要：
+- `gap_curve.png` 已生成（train_masked_acc - val_masked_acc vs epoch）。
+- best epoch = 141；train/val = 0.02570 / 0.00899；gap = 0.01671。
+- final epoch = 300；train/val = 0.03046 / 0.00845；gap = 0.02200。
+
+下一步：
+- 進行離線 eval（Step B），統一 eval 模式與聚合方式，重現 gap 並產出 `metrics_summary.json` + `sanity_check.md`。
+
+Blockers：
+- 無。
+
+Commands / Entrypoints：
+- `python exp_0112_intermediate/analysis/train_valid_gap_58a9b71/stepA_gap_curve.py`
+
+---
+
+## Step B：離線 eval（完成：full）
+
+結果摘要：
+- 已產出 `metrics_summary.json`、`sanity_check.md`（checkpoint epoch=141；train/val 全量）。
+- Strict acc（batch-mean / frame-weighted）：train 0.03396 / 0.03358；val 0.00899 / 0.00888；gap ≈ 0.0247。
+- Tolerant acc 顯著提升 val（k3 frame-weighted=0.03210），顯示 strict 指標對對齊偏移敏感。
+- 離線 eval 與訓練 log 對照：val 幾乎一致，gap 仍存在（見 `sanity_check.md`）。
+
+下一步：
+- 進行 Step C（資料難度/對齊分佈）。
+
+Blockers：
+- 無。
+
+Commands / Entrypoints：
+- `bash exp_0112_intermediate/analysis/train_valid_gap_58a9b71/run_stepB_full.sh`
+
+---
+
+## Step C：資料難度/對齊分佈（完成：抽樣）
+
+結果摘要：
+- 已產出 `snr_hist_train_vs_val.png`、`acc_vs_snr_train.png`、`acc_vs_snr_val.png`、`lag_hist_train_vs_val.png`、`acc_vs_lag_train.png`、`acc_vs_lag_val.png`、`snr_lag_stats.json`。
+- SNR（train vs val, samples=2000/500）：mean 0.63 dB vs -2.15 dB，val 明顯更難。
+- Lag（train vs val, samples=100/100）：mean -3.93 ms vs +6.27 ms；val 偏移量更大且變異更高（std 41.59 ms）。
+
+下一步：
+- 進行 Step D token 多樣性/崩塌分析。
+
+Blockers：
+- 無。
+
+Commands / Entrypoints：
+- `tmux new-session -d -s stepC_lag "bash -lc '... stepC_data_difficulty_alignment.py --snr_samples_train 2000 --snr_samples_val 500 --acc_snr_samples_train 2000 --acc_snr_samples_val 500 --lag_samples_train 100 --lag_samples_val 100 |& tee exp_0112_intermediate/analysis/train_valid_gap_58a9b71/stepC_lag_reduced.log'"`
+
+---
+
+## Step D：token 多樣性/崩塌（完成：抽樣）
+
+結果摘要：
+- 產出 `token_usage_train_vs_val.png`、`token_usage_stats.json`（train=2000 / val=500）。
+- Student entropy (train/val): 7.20 → 5.89；top‑k mass: 0.031 → 0.270（val 明顯更集中）。
+- KL(student||teacher): train 0.245 → val 1.089，val 分佈偏離 teacher 更大。
+
+下一步：
+- 進入 Step E（feature alignment）。
+
+Blockers：
+- 無。
+
+Commands / Entrypoints：
+- `tmux new-session -d -s stepD_token "bash -lc '... stepD_token_usage.py --max_train_samples 2000 --max_val_samples 500 |& tee exp_0112_intermediate/analysis/train_valid_gap_58a9b71/stepD_token_usage.log'"`
+
+---
+
+## Step E：feature-space 對照（完成：抽樣）
+
+結果摘要：
+- 產出 `feature_alignment_stats.json`（train=1000 / val=500）。
+- Final layer cos(mean): train 0.414 → val 0.226（val 顯著較低）；MSE: 98.41 → 134.22。
+- 補充：中間層（3/4/6）在 cosine 指標下未必更差（本次抽樣甚至更高），但 MSE 對尺度敏感且未做 channel normalize，波動大；本 step 的關鍵結論以 **final layer** 為主（因 token codes 由 quantizer(final out) 產生）。
+
+下一步：
+- 完成 Acceptance self-check。
+
+Blockers：
+- 無。
+
+Commands / Entrypoints：
+- `tmux new-session -d -s stepE_align "bash -lc '... stepE_feature_alignment.py --max_train_samples 1000 --max_val_samples 500 |& tee exp_0112_intermediate/analysis/train_valid_gap_58a9b71/stepE_feature_alignment.log'"`
+
+---
+
+## 結論：CONCLUSION.md（完成）
+
+結果摘要：
+- `CONCLUSION.md` 已完成，逐條判定 H1–H7，並提供 Top‑3 主因與最小下一步建議。
+- 主因排序（更新後，見「全量 SNR 驗證」段落）：token 分佈崩塌（H5）> SNR 難度差（H3）> 對齊偏移敏感度（H4）。
+- 重要證據來源：`metrics_summary.json`、`snr_lag_stats.json`、`token_usage_stats.json`、`feature_alignment_stats.json`。
+
+下一步：
+- 完成 Acceptance self-check（M1–M4）。
+
+Blockers：
+- 無。
+
+Commands / Entrypoints：
+- `cat exp_0112_intermediate/analysis/train_valid_gap_58a9b71/CONCLUSION.md`
+
+---
+
+## H6：cache/split 交集檢查（完成）
+
+結果摘要：
+- 產出 `cache_overlap_report.md`、`cache_overlap_stats.json`。
+- speaker_id / filename / noisy_path / clean_path 皆無交集；noisy+clean path 組合交集為 0。
+- content_id 完全重疊但 speaker_id 完全不重疊，較像「相同內容、不同說話人」設計而非樣本洩漏。
+
+下一步：
+- 無（已回填至 `CONCLUSION.md`）。
+
+Blockers：
+- 無。
+
+Commands / Entrypoints：
+- `source /home/sbplab/miniconda3/etc/profile.d/conda.sh && conda activate test && python exp_0112_intermediate/analysis/train_valid_gap_58a9b71/stepH6_cache_overlap.py`
+
+---
+
+## 全量 SNR 驗證（2026-01-23 新增）
+
+結果摘要：
+- 產出 `full_snr_analysis/snr_lag_stats.json`、`full_snr_analysis/snr_hist_train_vs_val.png` 等圖檔。
+- **全量 SNR（10,368/1,728）**：train mean **-1.95 dB** vs val mean **-3.24 dB**（差 **1.29 dB**）。
+- **之前抽樣有偏差**：抽樣顯示 train mean +0.63 dB，全量顯示 -1.95 dB（高估了 2.58 dB）。
+- **全量 Lag（500/500）**：train mean -1.9 ms vs val mean -0.1 ms（幾乎相同），但 val std 46.5 ms > train std 20.6 ms。
+
+結論：
+- SNR 差異從主因降級為**次要因素**（1.29 dB 不足以解釋 2.47% gap）。
+- 時間偏移差異不大，exp_1226 已驗證 Frame-Tolerant 只改善 +0.70%，降級為**次要因素**。
+- **Token Collapse (H5) 升級為主因**。
+
+Commands / Entrypoints：
+- `source /home/sbplab/miniconda3/etc/profile.d/conda.sh && conda activate test && python exp_0112_intermediate/analysis/train_valid_gap_58a9b71/stepC_data_difficulty_alignment.py --acc_snr_samples_train 10368 --acc_snr_samples_val 1728 --lag_samples_train 500 --lag_samples_val 500 --num_workers 4 --output_dir exp_0112_intermediate/analysis/train_valid_gap_58a9b71/full_snr_analysis`
+
+---
+
+## Acceptance self-check（完成）
+- M1: 已滿足（train/val 同時回報 batch-mean + frame-weighted；報告主指標採 frame-weighted，見 `CONCLUSION.md`）
+- M2: 已滿足（`best_model.pt` 離線 eval 完成；gap 量級與方向明確，見 `metrics_summary.json`）
+- M3: 已滿足（H1–H7 逐條判定，含支持/不支持/證據不足，見 `CONCLUSION.md`）
+- M4: 已滿足（Top‑3 主因排序 + 最小下一步建議，見 `CONCLUSION.md`）
+- **M5: 全量 SNR 驗證完成**（2026-01-23），主因排序已更新
+
+---
+
+### Follow-up (Exp 0123)
+- [ ] Step F: Global shift tolerant
+- [ ] Step G: SNR-matched eval
+- [ ] Step H: Token collapse robustness + correlation
+- [ ] Step I: Anti-collapse ablation (optional)
