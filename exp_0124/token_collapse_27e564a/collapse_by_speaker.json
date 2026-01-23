@@ -1,0 +1,46 @@
+{
+  "meta": {
+    "timestamp": "2026-01-23T11:33:42",
+    "run_dir": "exp_0112_intermediate/runs/exp_k_v5_20260120_003843_20260120_003848",
+    "checkpoint": "exp_0112_intermediate/runs/exp_k_v5_20260120_003843_20260120_003848/best_model.pt",
+    "seed": 42,
+    "sample_strategy": "full",
+    "max_val_samples": null,
+    "snr_bin_width": 2.0,
+    "energy_bins_quantiles": [
+      0.06743251532316208,
+      0.12018918395042419,
+      0.13470959067344665,
+      0.14822396636009216,
+      0.16751751899719242,
+      0.2931695878505707
+    ],
+    "num_samples": 1728
+  },
+  "by_speaker": {
+    "girl9": {
+      "count": 576,
+      "acc_mean": 0.007713686930300254,
+      "entropy_mean": 4.671340382761425,
+      "topk_mean": 0.2571397208246506,
+      "unique_mean": 134.24479166666666,
+      "collapse_score_mean": -5.782411586589357e-18
+    },
+    "boy7": {
+      "count": 864,
+      "acc_mean": 0.007986313281300547,
+      "entropy_mean": 4.503318534957038,
+      "topk_mean": 0.36536868158038016,
+      "unique_mean": 149.67592592592592,
+      "collapse_score_mean": -6.424901762877063e-18
+    },
+    "boy8": {
+      "count": 288,
+      "acc_mean": 0.014464137732930895,
+      "entropy_mean": 4.9012035512261924,
+      "topk_mean": 0.21327255436012316,
+      "unique_mean": 161.02430555555554,
+      "collapse_score_mean": -3.0839528461809902e-18
+    }
+  }
+}
