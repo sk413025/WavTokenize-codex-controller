@@ -121,14 +121,52 @@ Blockers：
 結果摘要：
 - 完成 λ=0.0/0.05/0.10；產出 `invariance_short_run/summary.{json,md}` 與各 lambda metrics。
 - token_change_rate 僅小幅下降（0.9366 → 0.9218），未達 Go 門檻；collapse 指標有改善但 strict acc 僅小幅提升。
-- **Global‑shift invariance (k=3)** 亦完成（`invariance_short_run_shift/summary.{json,md}`），token_change_rate 仍未顯著下降。
+- **Global‑shift invariance (k=3)** 完成（`invariance_short_run_shift/summary.{json,md}`），token_change_rate 仍未顯著下降。
+- **Feature‑level invariance** 完成（`invariance_short_run_feat/summary.{json,md}`），token_change_rate 仍未顯著下降。
 - `CONCLUSION.md` 已補上 Decision：No‑Go（需調整 invariance 設計或 pivot）。
 
 下一步：
-- 若要繼續，建議改用 feature‑level invariance 或轉向 probe/disentanglement。
+- 若要繼續，建議轉向 probe/disentanglement 或設計新的 factorization 原型。
 
 Blockers：
 - 無。
 
 Commands / Entrypoints：
 - `source /home/sbplab/miniconda3/etc/profile.d/conda.sh && conda activate test && CUDA_VISIBLE_DEVICES=1 PYTHONUNBUFFERED=1 python exp_0124/token_collapse_27e564a/invariance_short_run/run_invariance_short.py --lambdas 0.0 --max_steps 800 --max_train_samples 2000 --max_val_samples 500 --batch_size 2 --num_workers 2 --use_amp --gradient_accumulation_steps 2 |& tee exp_0124/token_collapse_27e564a/invariance_short_run/baseline_lambda0.log`
+
+---
+
+## Probe: noise type / SNR (completed)
+
+結果摘要：
+- 產出 `probe_noise/probe_results.json`、`probe_noise/probe_report.md`、`probe_noise/probe_features.npz`。
+- noise type 線性 probe（3 類）val accuracy = 0.632（chance=0.333），顯示 noise 資訊可線性解碼。
+- SNR 線性回歸 R2 = -0.107（無法線性解碼）。
+
+下一步：
+- 若要強化 superposition 證據，需加入「noise 可解碼 + 內容對齊下降」的聯合分析或 factorization 原型。
+
+Blockers：
+- 無。
+
+Commands / Entrypoints：
+- `source /home/sbplab/miniconda3/etc/profile.d/conda.sh && conda activate test && CUDA_VISIBLE_DEVICES=1 PYTHONUNBUFFERED=1 python exp_0124/token_collapse_27e564a/step_probe_noise_snr.py --batch_size 2 |& tee exp_0124/token_collapse_27e564a/probe_noise.log`
+
+---
+
+## Probe: noise decodeability × alignment (completed)
+
+結果摘要：
+- 產出 `probe_noise_alignment/probe_noise_alignment.json`、`probe_noise_alignment.md`、`probe_noise_alignment.png`。
+- noise type probe accuracy = **0.632**（chance=0.333），與前次結果一致。
+- 噪音可解碼與內容對齊（strict acc）**相關性極弱**：corr(true prob, acc) Pearson **-0.129** / Spearman **-0.116**。
+- high‑confidence vs low‑confidence 的 acc 差異很小（0.00800 vs 0.00925），不支持「noise 可解碼 → 對齊顯著下降」。
+
+下一步：
+- 若要轉向 disentanglement / factorization，需先決定最小原型（例如雙路 token 或 residual VQ）。
+
+Blockers：
+- 無。
+
+Commands / Entrypoints：
+- `source /home/sbplab/miniconda3/etc/profile.d/conda.sh && conda activate test && CUDA_VISIBLE_DEVICES=1 PYTHONUNBUFFERED=1 python exp_0124/token_collapse_27e564a/step_probe_noise_alignment.py --batch_size 2 |& tee exp_0124/token_collapse_27e564a/probe_noise_alignment.log`

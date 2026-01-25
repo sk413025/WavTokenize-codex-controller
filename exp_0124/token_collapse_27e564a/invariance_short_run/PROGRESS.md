@@ -108,3 +108,21 @@ Blockers:
 
 Commands / Entrypoints:
 - `source /home/sbplab/miniconda3/etc/profile.d/conda.sh && conda activate test && CUDA_VISIBLE_DEVICES=1 PYTHONUNBUFFERED=1 python exp_0124/token_collapse_27e564a/invariance_short_run/run_invariance_short.py --output_root exp_0124/token_collapse_27e564a/invariance_short_run_shift/runs --lambdas 0.05,0.10 --global_shift_k 3 --max_steps 800 --max_train_samples 2000 --max_val_samples 500 --batch_size 1 --num_workers 0 --use_amp --gradient_accumulation_steps 2 --log_every 50`
+
+---
+
+## Step 6: Feature-level invariance (done)
+
+Summary:
+- 完成 `invar_mode=feature`（λ=0.05/0.10），輸出 `invariance_short_run_feat/summary.{json,md}`。
+- λ=0.05：val strict fw=0.006903；entropy=5.702；top‑k mass=0.281；KL=1.402；token_change_rate=0.9324；p50=0.009169。
+- λ=0.10：val strict fw=0.006712；entropy=5.404；top‑k mass=0.338；KL=1.956；token_change_rate=0.9220；p50=0.008872。
+
+Next:
+- 更新 CONCLUSION Decision（feature‑level 仍未顯著降低 token_change_rate）。
+
+Blockers:
+- 無。
+
+Commands / Entrypoints:
+- `source /home/sbplab/miniconda3/etc/profile.d/conda.sh && conda activate test && CUDA_VISIBLE_DEVICES=1 PYTHONUNBUFFERED=1 python exp_0124/token_collapse_27e564a/invariance_short_run/run_invariance_short.py --output_root exp_0124/token_collapse_27e564a/invariance_short_run_feat/runs --lambdas 0.05,0.10 --invar_mode feature --max_steps 800 --max_train_samples 2000 --max_val_samples 500 --batch_size 1 --num_workers 0 --use_amp --gradient_accumulation_steps 2 --log_every 50`

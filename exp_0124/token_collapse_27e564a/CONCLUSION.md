@@ -24,10 +24,11 @@
 ---
 
 ### Q2) Student 是否學到 `token(signal, noise_train)`（聯合編碼）？
-**結論：** **支持（但尚需更強證據）**。
+**結論：** **部分支持，但聯合證據仍不足**。
 - **支持點**：Controlled pairs 中「同 clean 不同 noise」token change rate ≈ **0.897**，表徵高度 noise‑dependent（`superposition_pair_tests.json`）。
-- **保留點**：alignment_drop 均值接近 0（baseline 已低），需用 **probe（noise type/SNR 可分性）** 或「同內容多噪聲的對齊穩定性」補強。
-- **缺口**：尚未完成 probe；若 probe 顯示 noise 可被線性解碼且內容對齊下降，則可更強支持 superposition。
+- **補強點（Probe）**：noise type 線性 probe val accuracy = **0.632**（chance=0.333），顯示 noise 資訊可線性解碼（`probe_noise/probe_results.json`）。
+- **新證據（聯合分析）**：noise 可解碼的置信度與 strict acc 幾乎不相關：corr(true prob, acc) Pearson **-0.129** / Spearman **-0.116**，且 high‑conf vs low‑conf acc 差異很小（0.00800 vs 0.00925）（`probe_noise_alignment/probe_noise_alignment.json`）。
+- **缺口**：SNR 線性回歸 R2 = -0.107（未能線性解碼），仍缺「noise 可解碼 + 內容對齊顯著下降」的聯合證據。
 
 ---
 
@@ -104,6 +105,11 @@
 - λ=0.10：val strict 0.006030，token_change_rate 0.9167（下降幅度仍不足）。
 - 判斷：global‑shift 對齊後依然未達「noise‑sensitivity 顯著下降」門檻，維持 No‑Go。
 
+**Feature‑level invariance 補測：**
+- λ=0.05：val strict 0.006903，token_change_rate 0.9324（幾乎未降）。
+- λ=0.10：val strict 0.006712，token_change_rate 0.9220（下降幅度仍不足）。
+- 判斷：feature‑level 一致性同樣未達「noise‑sensitivity 顯著下降」門檻，維持 No‑Go。
+
 **下一步（Pivot / 調整方向）：**
-1) **強化 invariance 設計**：改用 sequence‑level global shift 對齊後再算一致性，或在 feature 層做一致性；同時提高 λ 或拉長 steps 重新確認 token_change_rate 是否顯著下降。  
-2) **Probe / disentanglement**：先做 noise‑type/SNR probe，若 noise 可線性解碼且內容對齊變差，轉向 factorization/disentanglement 原型。
+1) **聯合分析已完成**：noise 可解碼，但與 strict acc 的相關性極弱（|ρ|<0.13），暫不支持「可解碼噪音 → 對齊顯著下降」作為直接因果證據。  
+2) **轉向 factorization/disentanglement 原型**：若仍要追 superposition，建議做最小原型（content/noise 雙路 token 或 residual VQ），以「token_change_rate ↓ + strict acc ↑」作為判準；否則需更強的控制實驗（同內容、多噪音、可控內容 proxy）。

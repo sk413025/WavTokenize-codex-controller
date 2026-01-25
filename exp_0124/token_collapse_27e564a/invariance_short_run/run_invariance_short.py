@@ -209,6 +209,25 @@ def _shift_mask_1d(mask, shift):
     return out
 
 
+def _shift_tensor_3d(x, shift):
+    """Shift (D, T) or (T, D) with zero padding; expects (D, T)."""
+    if shift == 0:
+        return x
+    out = torch.zeros_like(x)
+    if shift > 0:
+        out[:, shift:] = x[:, :-shift]
+    else:
+        out[:, :shift] = x[:, -shift:]
+    return out
+
+
+def masked_feature_mse(f1, f2, mask):
+    """Masked MSE between (B, D, T) features with (B, T) mask."""
+    diff = (f1 - f2) ** 2
+    mask_exp = mask.unsqueeze(1)
+    return (diff * mask_exp).sum() / (mask_exp.sum() * f1.shape[1] + 1e-8)
+
+
 def evaluate_split(model, loader, device):
     model.eval()
     ensure_frozen(model)
@@ -514,35 +533,56 @@ def train_one_run(args, lambda_invar, run_dir, train_indices, val_indices):
                 inter_loss = 0.5 * (inter1 + inter2)
                 anchor_loss = base_loss + cfg.get("intermediate_weight", 0.5) * inter_loss
 
-                codebook = out1["codebook"]
-                probs1 = soft_assign(out1["student_encoder_out"], codebook, temperature=args.invar_temperature)
-                probs2 = soft_assign(out2["student_encoder_out"], codebook, temperature=args.invar_temperature)
-
                 B, D, T = out1["student_encoder_out"].shape
                 max_audio_len = T * ENCODER_STRIDE
                 mask = create_length_mask(lengths, max_audio_len, ENCODER_STRIDE, device=device)
-                mask_flat = mask.reshape(-1)
 
-                if args.global_shift_k > 0:
-                    s1 = out1["student_codes"][0] if out1["student_codes"].dim() == 3 else out1["student_codes"]
-                    s2 = out2["student_codes"][0] if out2["student_codes"].dim() == 3 else out2["student_codes"]
-                    shifts = _best_shift_per_sample(s1, s2, mask, args.global_shift_k)
+                if args.invar_mode == "soft":
+                    codebook = out1["codebook"]
+                    probs1 = soft_assign(out1["student_encoder_out"], codebook, temperature=args.invar_temperature)
+                    probs2 = soft_assign(out2["student_encoder_out"], codebook, temperature=args.invar_temperature)
+                    mask_flat = mask.reshape(-1)
 
-                    probs2_shifted = []
-                    mask_overlap = []
-                    for b in range(s1.shape[0]):
-                        p2 = probs2.view(s1.shape[0], -1, probs2.shape[-1])[b]
-                        p2s = _shift_tensor_2d(p2, shifts[b])
-                        probs2_shifted.append(p2s)
+                    if args.global_shift_k > 0:
+                        s1 = out1["student_codes"][0] if out1["student_codes"].dim() == 3 else out1["student_codes"]
+                        s2 = out2["student_codes"][0] if out2["student_codes"].dim() == 3 else out2["student_codes"]
+                        shifts = _best_shift_per_sample(s1, s2, mask, args.global_shift_k)
 
-                        m = mask[b]
-                        ms = _shift_mask_1d(m, shifts[b])
-                        mask_overlap.append(m * ms)
+                        probs2_shifted = []
+                        mask_overlap = []
+                        for b in range(s1.shape[0]):
+                            p2 = probs2.view(s1.shape[0], -1, probs2.shape[-1])[b]
+                            p2s = _shift_tensor_2d(p2, shifts[b])
+                            probs2_shifted.append(p2s)
 
-                    probs2 = torch.stack(probs2_shifted, dim=0).reshape(-1, probs2.shape[-1])
-                    mask_flat = torch.stack(mask_overlap, dim=0).reshape(-1)
+                            m = mask[b]
+                            ms = _shift_mask_1d(m, shifts[b])
+                            mask_overlap.append(m * ms)
 
-                invar_loss = masked_symmetric_kl(probs1, probs2, mask_flat)
+                        probs2 = torch.stack(probs2_shifted, dim=0).reshape(-1, probs2.shape[-1])
+                        mask_flat = torch.stack(mask_overlap, dim=0).reshape(-1)
+
+                    invar_loss = masked_symmetric_kl(probs1, probs2, mask_flat)
+                else:
+                    f1 = out1["student_encoder_out"]
+                    f2 = out2["student_encoder_out"]
+                    mask_use = mask
+                    if args.global_shift_k > 0:
+                        s1 = out1["student_codes"][0] if out1["student_codes"].dim() == 3 else out1["student_codes"]
+                        s2 = out2["student_codes"][0] if out2["student_codes"].dim() == 3 else out2["student_codes"]
+                        shifts = _best_shift_per_sample(s1, s2, mask, args.global_shift_k)
+                        f2_shifted = []
+                        mask_overlap = []
+                        for b in range(s1.shape[0]):
+                            f2b = f2[b]
+                            f2s = _shift_tensor_3d(f2b, shifts[b])
+                            f2_shifted.append(f2s)
+                            m = mask[b]
+                            ms = _shift_mask_1d(m, shifts[b])
+                            mask_overlap.append(m * ms)
+                        f2 = torch.stack(f2_shifted, dim=0)
+                        mask_use = torch.stack(mask_overlap, dim=0)
+                    invar_loss = masked_feature_mse(f1, f2, mask_use)
                 total_loss = anchor_loss + lambda_invar * invar_loss
 
             scaled_loss = total_loss / args.gradient_accumulation_steps
@@ -656,6 +696,7 @@ def parse_args():
     parser.add_argument("--gradient_accumulation_steps", type=int, default=2)
     parser.add_argument("--log_every", type=int, default=50)
     parser.add_argument("--global_shift_k", type=int, default=0)
+    parser.add_argument("--invar_mode", type=str, default="soft", choices=["soft", "feature"])
     return parser.parse_args()
 
 
