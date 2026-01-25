@@ -93,13 +93,15 @@ Commands / Entrypoints:
 
 ---
 
-## Step 5: Global-shift aligned invariance (pending)
+## Step 5: Global-shift aligned invariance (done)
 
 Summary:
-- 新增 `--global_shift_k` 參數，將 invariance loss 做 sequence-level shift 對齊。
+- 完成 `global_shift_k=3` 的短跑（λ=0.05/0.10），輸出 `invariance_short_run_shift/summary.{json,md}`。
+- λ=0.05：val strict fw=0.007204；entropy=5.681；top‑k mass=0.306；KL=2.268；token_change_rate=0.9354；p50=0.008885。
+- λ=0.10：val strict fw=0.006030；entropy=5.485；top‑k mass=0.311；KL=1.608；token_change_rate=0.9167；p50=0.009547。
 
 Next:
-- 以 `global_shift_k=3` 跑 λ=0.05/0.10，輸出至 `invariance_short_run_shift/`。
+- 更新 CONCLUSION Decision（global‑shift 仍未顯著降低 token_change_rate）。
 
 Blockers:
 - 無。

@@ -121,10 +121,11 @@ Blockers：
 結果摘要：
 - 完成 λ=0.0/0.05/0.10；產出 `invariance_short_run/summary.{json,md}` 與各 lambda metrics。
 - token_change_rate 僅小幅下降（0.9366 → 0.9218），未達 Go 門檻；collapse 指標有改善但 strict acc 僅小幅提升。
-- 已在 `CONCLUSION.md` 補上 Decision：No‑Go（需調整 invariance 設計或 pivot）。
+- **Global‑shift invariance (k=3)** 亦完成（`invariance_short_run_shift/summary.{json,md}`），token_change_rate 仍未顯著下降。
+- `CONCLUSION.md` 已補上 Decision：No‑Go（需調整 invariance 設計或 pivot）。
 
 下一步：
-- 若要繼續，建議改用 global‑shift 對齊或 feature‑level invariance；或轉向 probe/disentanglement。
+- 若要繼續，建議改用 feature‑level invariance 或轉向 probe/disentanglement。
 
 Blockers：
 - 無。

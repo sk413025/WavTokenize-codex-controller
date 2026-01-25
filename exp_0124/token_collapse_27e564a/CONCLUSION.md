@@ -99,6 +99,11 @@
 
 **判斷：** 目前 L_invar 對「noise‑sensitivity」的降低不足，未達 Go 門檻；雖有分佈改善，但不足以證明可投入長訓練。
 
+**Global‑shift invariance 補測（k=3）：**
+- λ=0.05：val strict 0.007204，token_change_rate 0.9354（幾乎未降）。
+- λ=0.10：val strict 0.006030，token_change_rate 0.9167（下降幅度仍不足）。
+- 判斷：global‑shift 對齊後依然未達「noise‑sensitivity 顯著下降」門檻，維持 No‑Go。
+
 **下一步（Pivot / 調整方向）：**
 1) **強化 invariance 設計**：改用 sequence‑level global shift 對齊後再算一致性，或在 feature 層做一致性；同時提高 λ 或拉長 steps 重新確認 token_change_rate 是否顯著下降。  
 2) **Probe / disentanglement**：先做 noise‑type/SNR probe，若 noise 可線性解碼且內容對齊變差，轉向 factorization/disentanglement 原型。
