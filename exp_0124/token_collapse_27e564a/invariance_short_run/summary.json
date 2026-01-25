@@ -1,0 +1,287 @@
+[
+  {
+    "timestamp": "2026-01-24T11:12:36",
+    "run_dir": "exp_0124/token_collapse_27e564a/invariance_short_run/runs/lambda_0.000",
+    "checkpoint_init": "exp_0112_intermediate/runs/exp_k_v5_20260120_003843_20260120_003848/best_model.pt",
+    "lambda_invar": 0.0,
+    "invar_temperature": 1.0,
+    "snr_list": [
+      0.0,
+      5.0,
+      10.0
+    ],
+    "num_pairs": 30,
+    "train_subset_size": 2000,
+    "val_subset_size": 500,
+    "train_subset_hash": "1c4cac193917",
+    "val_subset_hash": "5fa7e7d3d40a",
+    "num_epochs": 5,
+    "max_steps": 800,
+    "batch_size": 2,
+    "gradient_accumulation_steps": 2,
+    "use_amp": true,
+    "train_metrics": {
+      "total_loss": 1.3017438601702451,
+      "anchor_loss": 1.3017438601702451,
+      "invar_loss": 0.14968370465619954,
+      "masked_acc": 0.01589379218019998,
+      "num_steps": 1600,
+      "num_micro_steps": 1600
+    },
+    "train_eval": {
+      "strict": {
+        "acc_batch_mean": 0.019947519380250016,
+        "acc_frame_weighted": 0.01987523607336191,
+        "num_samples": 2000,
+        "num_frames": 443718
+      },
+      "student": {
+        "total": 484150,
+        "unique": 1788,
+        "entropy": 6.623493291129004,
+        "top_k_mass": 0.14085097593720955
+      },
+      "teacher": {
+        "total": 484150,
+        "unique": 1834,
+        "entropy": 7.0522884324275,
+        "top_k_mass": 0.09040586595063513
+      },
+      "kl_student_teacher": 1.1892854597861433
+    },
+    "val_eval": {
+      "strict": {
+        "acc_batch_mean": 0.006063369305804372,
+        "acc_frame_weighted": 0.006053729827512337,
+        "num_samples": 500,
+        "num_frames": 126038
+      },
+      "student": {
+        "total": 136060,
+        "unique": 1405,
+        "entropy": 5.586136310725289,
+        "top_k_mass": 0.328480082316625
+      },
+      "teacher": {
+        "total": 136060,
+        "unique": 1786,
+        "entropy": 6.616103745227136,
+        "top_k_mass": 0.14229016610318976
+      },
+      "kl_student_teacher": 2.5676277818172806
+    },
+    "train_margin": {
+      "count": 443718,
+      "mean": 0.015906871623815044,
+      "p50": 0.011041641235351562,
+      "p90": 0.03414726257324219
+    },
+    "val_margin": {
+      "count": 126038,
+      "mean": 0.011465328846968397,
+      "p50": 0.008518218994140625,
+      "p90": 0.02475099563598633
+    },
+    "noise_sensitivity": {
+      "num_pairs": 30,
+      "token_change_rate_mean": 0.9365606290247084,
+      "token_change_rate_std": 0.03835877461357522,
+      "snr_list": [
+        0.0,
+        5.0,
+        10.0
+      ],
+      "seed": 45
+    }
+  },
+  {
+    "timestamp": "2026-01-24T13:32:21",
+    "run_dir": "exp_0124/token_collapse_27e564a/invariance_short_run/runs/lambda_0.050",
+    "checkpoint_init": "exp_0112_intermediate/runs/exp_k_v5_20260120_003843_20260120_003848/best_model.pt",
+    "lambda_invar": 0.05,
+    "invar_temperature": 1.0,
+    "snr_list": [
+      0.0,
+      5.0,
+      10.0
+    ],
+    "num_pairs": 30,
+    "train_subset_size": 2000,
+    "val_subset_size": 500,
+    "train_subset_hash": "1c4cac193917",
+    "val_subset_hash": "5fa7e7d3d40a",
+    "num_epochs": 5,
+    "max_steps": 800,
+    "batch_size": 2,
+    "gradient_accumulation_steps": 2,
+    "use_amp": true,
+    "train_metrics": {
+      "total_loss": 1.314881892055273,
+      "anchor_loss": 1.3081487686559559,
+      "invar_loss": 0.13466245335061103,
+      "masked_acc": 0.015404123737511335,
+      "num_steps": 1600,
+      "num_micro_steps": 1600
+    },
+    "train_eval": {
+      "strict": {
+        "acc_batch_mean": 0.017972355092759244,
+        "acc_frame_weighted": 0.01787847236307745,
+        "num_samples": 2000,
+        "num_frames": 443718
+      },
+      "student": {
+        "total": 484150,
+        "unique": 1776,
+        "entropy": 6.592387422229679,
+        "top_k_mass": 0.13912010740472994
+      },
+      "teacher": {
+        "total": 484150,
+        "unique": 1834,
+        "entropy": 7.0522884324275,
+        "top_k_mass": 0.09040586595063513
+      },
+      "kl_student_teacher": 1.3480864021350045
+    },
+    "val_eval": {
+      "strict": {
+        "acc_batch_mean": 0.0068230428150855005,
+        "acc_frame_weighted": 0.006767800187245116,
+        "num_samples": 500,
+        "num_frames": 126038
+      },
+      "student": {
+        "total": 136060,
+        "unique": 1467,
+        "entropy": 5.7114679704338505,
+        "top_k_mass": 0.28597677495222695
+      },
+      "teacher": {
+        "total": 136060,
+        "unique": 1786,
+        "entropy": 6.616103745227136,
+        "top_k_mass": 0.14229016610318976
+      },
+      "kl_student_teacher": 3.0750405552164555
+    },
+    "train_margin": {
+      "count": 443718,
+      "mean": 0.015438378190615344,
+      "p50": 0.010937690734863281,
+      "p90": 0.033351898193359375
+    },
+    "val_margin": {
+      "count": 126038,
+      "mean": 0.011980179738241,
+      "p50": 0.008790969848632812,
+      "p90": 0.025696754455566406
+    },
+    "noise_sensitivity": {
+      "num_pairs": 30,
+      "token_change_rate_mean": 0.9262235679435762,
+      "token_change_rate_std": 0.04309678802891543,
+      "snr_list": [
+        0.0,
+        5.0,
+        10.0
+      ],
+      "seed": 45
+    }
+  },
+  {
+    "timestamp": "2026-01-24T13:38:46",
+    "run_dir": "exp_0124/token_collapse_27e564a/invariance_short_run/runs/lambda_0.100",
+    "checkpoint_init": "exp_0112_intermediate/runs/exp_k_v5_20260120_003843_20260120_003848/best_model.pt",
+    "lambda_invar": 0.1,
+    "invar_temperature": 1.0,
+    "snr_list": [
+      0.0,
+      5.0,
+      10.0
+    ],
+    "num_pairs": 30,
+    "train_subset_size": 2000,
+    "val_subset_size": 500,
+    "train_subset_hash": "1c4cac193917",
+    "val_subset_hash": "5fa7e7d3d40a",
+    "num_epochs": 5,
+    "max_steps": 800,
+    "batch_size": 2,
+    "gradient_accumulation_steps": 2,
+    "use_amp": true,
+    "train_metrics": {
+      "total_loss": 1.3155019354447723,
+      "anchor_loss": 1.3032792568951845,
+      "invar_loss": 0.12222678713325877,
+      "masked_acc": 0.015615242909470375,
+      "num_steps": 1600,
+      "num_micro_steps": 1600
+    },
+    "train_eval": {
+      "strict": {
+        "acc_batch_mean": 0.021987406436353923,
+        "acc_frame_weighted": 0.02172100297936978,
+        "num_samples": 2000,
+        "num_frames": 443718
+      },
+      "student": {
+        "total": 484070,
+        "unique": 1791,
+        "entropy": 6.653426074384003,
+        "top_k_mass": 0.1371144669159419
+      },
+      "teacher": {
+        "total": 484070,
+        "unique": 1834,
+        "entropy": 7.052892345817021,
+        "top_k_mass": 0.09031751606172661
+      },
+      "kl_student_teacher": 1.154109691781294
+    },
+    "val_eval": {
+      "strict": {
+        "acc_batch_mean": 0.006357903052121401,
+        "acc_frame_weighted": 0.006307621510972881,
+        "num_samples": 500,
+        "num_frames": 126038
+      },
+      "student": {
+        "total": 136060,
+        "unique": 1395,
+        "entropy": 5.619120138997614,
+        "top_k_mass": 0.311847714243716
+      },
+      "teacher": {
+        "total": 136060,
+        "unique": 1786,
+        "entropy": 6.616103745227136,
+        "top_k_mass": 0.14229016610318976
+      },
+      "kl_student_teacher": 2.157572030748318
+    },
+    "train_margin": {
+      "count": 443718,
+      "mean": 0.01619955482023136,
+      "p50": 0.011263847351074219,
+      "p90": 0.03502845764160156
+    },
+    "val_margin": {
+      "count": 126038,
+      "mean": 0.011746500679421318,
+      "p50": 0.008826255798339844,
+      "p90": 0.025102233886718756
+    },
+    "noise_sensitivity": {
+      "num_pairs": 30,
+      "token_change_rate_mean": 0.9218263365741381,
+      "token_change_rate_std": 0.04013607678123539,
+      "snr_list": [
+        0.0,
+        5.0,
+        10.0
+      ],
+      "seed": 45
+    }
+  }
+]

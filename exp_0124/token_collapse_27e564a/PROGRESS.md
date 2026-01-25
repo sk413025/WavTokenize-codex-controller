@@ -113,3 +113,21 @@ Commands / Entrypoints：
 
 Blockers：
 - 無。
+
+---
+
+## Invariance short-run (Exp0124-2) — completed
+
+結果摘要：
+- 完成 λ=0.0/0.05/0.10；產出 `invariance_short_run/summary.{json,md}` 與各 lambda metrics。
+- token_change_rate 僅小幅下降（0.9366 → 0.9218），未達 Go 門檻；collapse 指標有改善但 strict acc 僅小幅提升。
+- 已在 `CONCLUSION.md` 補上 Decision：No‑Go（需調整 invariance 設計或 pivot）。
+
+下一步：
+- 若要繼續，建議改用 global‑shift 對齊或 feature‑level invariance；或轉向 probe/disentanglement。
+
+Blockers：
+- 無。
+
+Commands / Entrypoints：
+- `source /home/sbplab/miniconda3/etc/profile.d/conda.sh && conda activate test && CUDA_VISIBLE_DEVICES=1 PYTHONUNBUFFERED=1 python exp_0124/token_collapse_27e564a/invariance_short_run/run_invariance_short.py --lambdas 0.0 --max_steps 800 --max_train_samples 2000 --max_val_samples 500 --batch_size 2 --num_workers 2 --use_amp --gradient_accumulation_steps 2 |& tee exp_0124/token_collapse_27e564a/invariance_short_run/baseline_lambda0.log`

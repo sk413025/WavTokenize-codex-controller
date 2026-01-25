@@ -85,3 +85,20 @@
 - S1: ✅（VQ margin 完成）
 - S2: ✅（speaker/SNR/energy 完成）
 - C2: ✅（短跑限制已說明）
+
+---
+
+## Decision (Exp0124-2 short run: noise‑invariant training)
+
+**結論：No‑Go（暫不投入長訓練，需調整或轉向）**
+
+**依據（λ_invar ∈ {0.0, 0.05, 0.10}，N=2k/500，steps=800）：**
+- **token_change_rate**：0.9366 → 0.9262 → 0.9218（絕對下降 < 0.05，未達成功門檻）。
+- **collapse 指標**：entropy ↑、top‑k mass ↓ 在 0.05/0.10 有改善；KL 在 0.10 下降、0.05 上升（改善不穩定）。
+- **val strict acc**：0.00605 → 0.00677 → 0.00631（未惡化，僅小幅提升）。
+
+**判斷：** 目前 L_invar 對「noise‑sensitivity」的降低不足，未達 Go 門檻；雖有分佈改善，但不足以證明可投入長訓練。
+
+**下一步（Pivot / 調整方向）：**
+1) **強化 invariance 設計**：改用 sequence‑level global shift 對齊後再算一致性，或在 feature 層做一致性；同時提高 λ 或拉長 steps 重新確認 token_change_rate 是否顯著下降。  
+2) **Probe / disentanglement**：先做 noise‑type/SNR probe，若 noise 可線性解碼且內容對齊變差，轉向 factorization/disentanglement 原型。
