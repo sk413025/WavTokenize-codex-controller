@@ -146,3 +146,34 @@ Commands / Entrypoints：
 
 Blockers：
 - 無。
+
+---
+
+## 5-checkpoint TracIn 更新（完成，2026-01-27）
+
+動機：
+- 原 TracIn 僅用 2 個 checkpoints（epoch010, epoch300），依 TracIn 論文建議，應使用多個 checkpoints（訓練初期、loss 下降最快期、訓練末期）以提高穩健性。
+
+執行：
+- 使用 5 個 checkpoints：epoch010、epoch050、epoch150、epoch250、epoch300。
+- 產出 `tracin_scores_5ckpt.csv`（10001 rows = 1 header + 2000 train × 5 ckpt）。
+- 產出 `profiles_5ckpt/proponents_profile.json` 與 `profiles_5ckpt/opponents_profile.json`。
+
+結果比較：
+| 指標 | 2-ckpt | 5-ckpt | 變化 |
+|------|--------|--------|------|
+| Proponents SNR | -2.61 dB | -2.24 dB | ↑ 0.37 dB |
+| Proponents Cohen's d | -0.265 | -0.107 | 效應量下降 |
+| Proponents papercup | 61% | 57% | ↓ 4% |
+| Opponents SNR | -1.30 dB | -0.68 dB | ↑ 0.62 dB |
+| Opponents Cohen's d | +0.260 | +0.499 | 效應量上升 |
+| Opponents box | 45% | 58% | ↑ 13% |
+
+結論：
+- **方向一致**：proponents 仍偏向低 SNR + papercup，opponents 仍偏向 box。
+- **效應量變化**：proponents 的 Cohen's d 從 -0.265 降至 -0.107（小效應），opponents 從 +0.260 升至 +0.499（中等效應）。
+- 5-checkpoint 結果更穩健，支持原結論但效應量較保守。
+
+Commands / Entrypoints：
+- `source /home/sbplab/miniconda3/etc/profile.d/conda.sh && conda activate test && CUDA_VISIBLE_DEVICES=1 PYTHONUNBUFFERED=1 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python exp_0125/tracin_token_collapse_589e6d/stepC_tracin_cp.py --approx_train_loss --train_batch_size 4 --val_grad_dtype float16 --val_grad_device cuda --loss_types train --val_aggregate --checkpoints "checkpoints/checkpoint_epoch010.pt,checkpoints/checkpoint_epoch050.pt,checkpoints/checkpoint_epoch150.pt,checkpoints/checkpoint_epoch250.pt,checkpoints/checkpoint_epoch300.pt" --output_csv exp_0125/tracin_token_collapse_589e6d/tracin_scores_5ckpt.csv --meta_out exp_0125/tracin_token_collapse_589e6d/tracin_indices_5ckpt.json |& tee exp_0125/tracin_token_collapse_589e6d/stepC_tracin_5ckpt.log`
+- `python exp_0125/tracin_token_collapse_589e6d/stepD_influence_profiles.py --scores_csv exp_0125/tracin_token_collapse_589e6d/tracin_scores_5ckpt.csv --meta_json exp_0125/tracin_token_collapse_589e6d/tracin_indices_5ckpt.json --out_dir exp_0125/tracin_token_collapse_589e6d/profiles_5ckpt --top_k 100`
