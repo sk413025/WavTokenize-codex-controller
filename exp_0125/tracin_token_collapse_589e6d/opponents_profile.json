@@ -1,0 +1,198 @@
+{
+  "summary": {
+    "count": 100,
+    "snr_mean": -1.3015116392821073,
+    "snr_std": 2.638223682117625,
+    "energy_mean": 0.02167874763254076,
+    "energy_std": 0.012717769618273913,
+    "noise_type_counts": {
+      "box": 45,
+      "plastic": 52,
+      "papercup": 3
+    },
+    "snr_cohen_d_vs_all": 0.2603693768885855,
+    "energy_cohen_d_vs_all": -0.02231089914504812
+  },
+  "top_examples": [
+    {
+      "index": 8177,
+      "score": 0.0011140108108520007,
+      "snr_db": -4.107828617095947,
+      "noisy_energy": 0.01324575673788786,
+      "noisy_path": "nor_girl3_plastic_LDV_107.wav",
+      "clean_path": "nor_girl3_clean_107.wav",
+      "noise_type": "plastic"
+    },
+    {
+      "index": 7966,
+      "score": 0.0011140108108520007,
+      "snr_db": -0.32928621768951416,
+      "noisy_energy": 0.015019731596112251,
+      "noisy_path": "nor_girl4_plastic_LDV_190.wav",
+      "clean_path": "nor_girl4_clean_190.wav",
+      "noise_type": "plastic"
+    },
+    {
+      "index": 3317,
+      "score": 0.0011140108108520007,
+      "snr_db": -5.764523029327393,
+      "noisy_energy": 0.02890847623348236,
+      "noisy_path": "nor_girl8_box_LDV_147.wav",
+      "clean_path": "nor_girl8_clean_147.wav",
+      "noise_type": "box"
+    },
+    {
+      "index": 1568,
+      "score": 0.0011140108108520007,
+      "snr_db": 1.7122693061828613,
+      "noisy_energy": 0.02472751960158348,
+      "noisy_path": "nor_boy5_box_LDV_128.wav",
+      "clean_path": "nor_boy5_clean_128.wav",
+      "noise_type": "box"
+    },
+    {
+      "index": 9854,
+      "score": 0.001111030578613225,
+      "snr_db": 1.460141897201538,
+      "noisy_energy": 0.010304589755833149,
+      "noisy_path": "nor_boy6_plastic_LDV_062.wav",
+      "clean_path": "nor_boy6_clean_062.wav",
+      "noise_type": "plastic"
+    },
+    {
+      "index": 1631,
+      "score": 0.001111030578613225,
+      "snr_db": -2.991602897644043,
+      "noisy_energy": 0.043115951120853424,
+      "noisy_path": "nor_boy5_box_LDV_191.wav",
+      "clean_path": "nor_boy5_clean_191.wav",
+      "noise_type": "box"
+    },
+    {
+      "index": 1369,
+      "score": 0.001111030578613225,
+      "snr_db": 1.4524178504943848,
+      "noisy_energy": 0.020489608868956566,
+      "noisy_path": "nor_boy6_box_LDV_217.wav",
+      "clean_path": "nor_boy6_clean_217.wav",
+      "noise_type": "box"
+    },
+    {
+      "index": 1149,
+      "score": 0.001111030578613225,
+      "snr_db": -0.42927682399749756,
+      "noisy_energy": 0.029801873490214348,
+      "noisy_path": "nor_girl2_box_LDV_285.wav",
+      "clean_path": "nor_girl2_clean_285.wav",
+      "noise_type": "box"
+    },
+    {
+      "index": 8247,
+      "score": 0.0011060237884520548,
+      "snr_db": -1.4352400302886963,
+      "noisy_energy": 0.006645286455750465,
+      "noisy_path": "nor_girl3_plastic_LDV_177.wav",
+      "clean_path": "nor_girl3_clean_177.wav",
+      "noise_type": "plastic"
+    },
+    {
+      "index": 5199,
+      "score": 0.0011060237884520548,
+      "snr_db": -0.21893484890460968,
+      "noisy_energy": 0.013064404018223286,
+      "noisy_path": "nor_boy3_papercup_LDV_085.wav",
+      "clean_path": "nor_boy3_clean_085.wav",
+      "noise_type": "papercup"
+    },
+    {
+      "index": 788,
+      "score": 0.0011060237884520548,
+      "snr_db": -0.5962880253791809,
+      "noisy_energy": 0.011837787926197052,
+      "noisy_path": "nor_girl3_box_LDV_212.wav",
+      "clean_path": "nor_girl3_clean_212.wav",
+      "noise_type": "box"
+    },
+    {
+      "index": 292,
+      "score": 0.0011060237884520548,
+      "snr_db": 2.8962697982788086,
+      "noisy_energy": 0.0318414680659771,
+      "noisy_path": "nor_girl4_box_LDV_096.wav",
+      "clean_path": "nor_girl4_clean_096.wav",
+      "noise_type": "box"
+    },
+    {
+      "index": 9702,
+      "score": 0.001101911067962609,
+      "snr_db": -2.5827882289886475,
+      "noisy_energy": 0.00713318819180131,
+      "noisy_path": "nor_boy5_plastic_LDV_197.wav",
+      "clean_path": "nor_boy5_clean_197.wav",
+      "noise_type": "plastic"
+    },
+    {
+      "index": 9391,
+      "score": 0.001101911067962609,
+      "snr_db": -2.068446636199951,
+      "noisy_energy": 0.014422057196497917,
+      "noisy_path": "nor_boy1_plastic_LDV_175.wav",
+      "clean_path": "nor_boy1_clean_175.wav",
+      "noise_type": "plastic"
+    },
+    {
+      "index": 7812,
+      "score": 0.001101911067962609,
+      "snr_db": -0.3370647132396698,
+      "noisy_energy": 0.01594117097556591,
+      "noisy_path": "nor_girl4_plastic_LDV_064.wav",
+      "clean_path": "nor_girl4_clean_064.wav",
+      "noise_type": "plastic"
+    },
+    {
+      "index": 1683,
+      "score": 0.001101911067962609,
+      "snr_db": 1.571759581565857,
+      "noisy_energy": 0.011576524935662746,
+      "noisy_path": "nor_boy5_box_LDV_243.wav",
+      "clean_path": "nor_boy5_clean_243.wav",
+      "noise_type": "box"
+    },
+    {
+      "index": 9026,
+      "score": 0.0010944604873656977,
+      "snr_db": -3.149803876876831,
+      "noisy_energy": 0.009982242248952389,
+      "noisy_path": "nor_boy3_plastic_LDV_002.wav",
+      "clean_path": "nor_boy3_clean_002.wav",
+      "noise_type": "plastic"
+    },
+    {
+      "index": 8823,
+      "score": 0.0010944604873656977,
+      "snr_db": -1.6812704801559448,
+      "noisy_energy": 0.013948554173111916,
+      "noisy_path": "nor_boy4_plastic_LDV_181.wav",
+      "clean_path": "nor_boy4_clean_181.wav",
+      "noise_type": "plastic"
+    },
+    {
+      "index": 8774,
+      "score": 0.0010944604873656977,
+      "snr_db": -4.359729766845703,
+      "noisy_energy": 0.011828895658254623,
+      "noisy_path": "nor_boy4_plastic_LDV_132.wav",
+      "clean_path": "nor_boy4_clean_132.wav",
+      "noise_type": "plastic"
+    },
+    {
+      "index": 5007,
+      "score": 0.0010944604873656977,
+      "snr_db": -3.981280565261841,
+      "noisy_energy": 0.01980646885931492,
+      "noisy_path": "nor_boy4_papercup_LDV_111.wav",
+      "clean_path": "nor_boy4_clean_111.wav",
+      "noise_type": "papercup"
+    }
+  ]
+}

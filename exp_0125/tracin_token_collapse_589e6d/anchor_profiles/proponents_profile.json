@@ -1,0 +1,198 @@
+{
+  "summary": {
+    "count": 100,
+    "snr_mean": -2.6702150767319837,
+    "snr_std": 2.4760297451526188,
+    "energy_mean": 0.02461681405082345,
+    "energy_std": 0.008923253803081954,
+    "noise_type_counts": {
+      "plastic": 1,
+      "papercup": 62,
+      "box": 37
+    },
+    "snr_cohen_d_vs_all": -0.2919139724019467,
+    "energy_cohen_d_vs_all": 0.23266792046470422
+  },
+  "top_examples": [
+    {
+      "index": 8274,
+      "score": 3.504330277442932,
+      "snr_db": -0.5894666314125061,
+      "noisy_energy": 0.01732637546956539,
+      "noisy_path": "nor_girl3_plastic_LDV_204.wav",
+      "clean_path": "nor_girl3_clean_204.wav",
+      "noise_type": "plastic"
+    },
+    {
+      "index": 7637,
+      "score": 1.8945584446191792,
+      "snr_db": -3.6925532817840576,
+      "noisy_energy": 0.00712453480809927,
+      "noisy_path": "nor_girl11_papercup_LDV_150.wav",
+      "clean_path": "nor_girl11_clean_150.wav",
+      "noise_type": "papercup"
+    },
+    {
+      "index": 7707,
+      "score": 1.7761481031775475,
+      "snr_db": -4.886250019073486,
+      "noisy_energy": 0.026455901563167572,
+      "noisy_path": "nor_girl11_papercup_LDV_220.wav",
+      "clean_path": "nor_girl11_clean_220.wav",
+      "noise_type": "papercup"
+    },
+    {
+      "index": 6393,
+      "score": 1.477880866965279,
+      "snr_db": 0.4887975752353668,
+      "noisy_energy": 0.022761236876249313,
+      "noisy_path": "nor_girl7_papercup_LDV_057.wav",
+      "clean_path": "nor_girl7_clean_057.wav",
+      "noise_type": "papercup"
+    },
+    {
+      "index": 4162,
+      "score": 1.46666221274063,
+      "snr_db": 0.9444156289100647,
+      "noisy_energy": 0.02402305044233799,
+      "noisy_path": "nor_girl4_papercup_LDV_130.wav",
+      "clean_path": "nor_girl4_clean_130.wav",
+      "noise_type": "papercup"
+    },
+    {
+      "index": 7616,
+      "score": 1.365183960646391,
+      "snr_db": -3.0273630619049072,
+      "noisy_energy": 0.022505246102809906,
+      "noisy_path": "nor_girl11_papercup_LDV_129.wav",
+      "clean_path": "nor_girl11_clean_129.wav",
+      "noise_type": "papercup"
+    },
+    {
+      "index": 7612,
+      "score": 1.3291162922978401,
+      "snr_db": -4.195199966430664,
+      "noisy_energy": 0.02472861483693123,
+      "noisy_path": "nor_girl11_papercup_LDV_125.wav",
+      "clean_path": "nor_girl11_clean_125.wav",
+      "noise_type": "papercup"
+    },
+    {
+      "index": 7525,
+      "score": 1.3201479129493237,
+      "snr_db": -5.801881790161133,
+      "noisy_energy": 0.028604192659258842,
+      "noisy_path": "nor_girl11_papercup_LDV_038.wav",
+      "clean_path": "nor_girl11_clean_038.wav",
+      "noise_type": "papercup"
+    },
+    {
+      "index": 4127,
+      "score": 1.2886698010843247,
+      "snr_db": 2.1410014629364014,
+      "noisy_energy": 0.027621544897556305,
+      "noisy_path": "nor_girl4_papercup_LDV_005.wav",
+      "clean_path": "nor_girl4_clean_005.wav",
+      "noise_type": "papercup"
+    },
+    {
+      "index": 7551,
+      "score": 1.279797412455082,
+      "snr_db": -2.0493392944335938,
+      "noisy_energy": 0.032235223799943924,
+      "noisy_path": "nor_girl11_papercup_LDV_064.wav",
+      "clean_path": "nor_girl11_clean_064.wav",
+      "noise_type": "papercup"
+    },
+    {
+      "index": 4194,
+      "score": 1.2581500876694918,
+      "snr_db": 0.49038079380989075,
+      "noisy_energy": 0.029064763337373734,
+      "noisy_path": "nor_girl4_papercup_LDV_162.wav",
+      "clean_path": "nor_girl4_clean_162.wav",
+      "noise_type": "papercup"
+    },
+    {
+      "index": 6984,
+      "score": 1.2313184272497892,
+      "snr_db": -5.411429405212402,
+      "noisy_energy": 0.018827173858880997,
+      "noisy_path": "nor_boy10_papercup_LDV_073.wav",
+      "clean_path": "nor_boy10_clean_073.wav",
+      "noise_type": "papercup"
+    },
+    {
+      "index": 7626,
+      "score": 1.2198602631688118,
+      "snr_db": -1.0547949075698853,
+      "noisy_energy": 0.009518974460661411,
+      "noisy_path": "nor_girl11_papercup_LDV_139.wav",
+      "clean_path": "nor_girl11_clean_139.wav",
+      "noise_type": "papercup"
+    },
+    {
+      "index": 7654,
+      "score": 1.1957299541682005,
+      "snr_db": -3.4914863109588623,
+      "noisy_energy": 0.030709270387887955,
+      "noisy_path": "nor_girl11_papercup_LDV_167.wav",
+      "clean_path": "nor_girl11_clean_167.wav",
+      "noise_type": "papercup"
+    },
+    {
+      "index": 3578,
+      "score": 1.1769872866570947,
+      "snr_db": -5.255346775054932,
+      "noisy_energy": 0.02352970279753208,
+      "noisy_path": "nor_boy10_box_LDV_118.wav",
+      "clean_path": "nor_boy10_clean_118.wav",
+      "noise_type": "box"
+    },
+    {
+      "index": 7510,
+      "score": 1.1765436828136444,
+      "snr_db": -3.1901955604553223,
+      "noisy_energy": 0.015014233998954296,
+      "noisy_path": "nor_girl11_papercup_LDV_023.wav",
+      "clean_path": "nor_girl11_clean_023.wav",
+      "noise_type": "papercup"
+    },
+    {
+      "index": 6842,
+      "score": 1.175573917105794,
+      "snr_db": -1.2339584827423096,
+      "noisy_energy": 0.030289193615317345,
+      "noisy_path": "nor_boy9_papercup_LDV_219.wav",
+      "clean_path": "nor_boy9_clean_219.wav",
+      "noise_type": "papercup"
+    },
+    {
+      "index": 7552,
+      "score": 1.1748246029019356,
+      "snr_db": -2.3941538333892822,
+      "noisy_energy": 0.021295513957738876,
+      "noisy_path": "nor_girl11_papercup_LDV_065.wav",
+      "clean_path": "nor_girl11_clean_065.wav",
+      "noise_type": "papercup"
+    },
+    {
+      "index": 3541,
+      "score": 1.1560616437345743,
+      "snr_db": -5.457434177398682,
+      "noisy_energy": 0.021313657984137535,
+      "noisy_path": "nor_boy10_box_LDV_081.wav",
+      "clean_path": "nor_boy10_clean_081.wav",
+      "noise_type": "box"
+    },
+    {
+      "index": 7550,
+      "score": 1.1548960097134113,
+      "snr_db": -2.479408025741577,
+      "noisy_energy": 0.010587183758616447,
+      "noisy_path": "nor_girl11_papercup_LDV_063.wav",
+      "clean_path": "nor_girl11_clean_063.wav",
+      "noise_type": "papercup"
+    }
+  ]
+}

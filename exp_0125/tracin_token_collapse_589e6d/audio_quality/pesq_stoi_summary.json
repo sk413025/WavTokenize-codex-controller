@@ -1,0 +1,62 @@
+{
+  "timestamp": "2026-01-27T03:34:30",
+  "run_dir": "exp_0112_intermediate/runs/exp_k_v6_20260125_234609_20260125_234613",
+  "epoch": "epoch_300",
+  "target_sr": 16000,
+  "splits": {
+    "train": {
+      "num_samples": 2,
+      "pesq_noisy_mean": 1.4460318088531494,
+      "pesq_recon_mean": 1.2338051199913025,
+      "stoi_noisy_mean": 0.6512026529549081,
+      "stoi_recon_mean": 0.7117327407747509,
+      "pesq_noisy_std": 0.10857486724853516,
+      "pesq_recon_std": 0.05816751718521118,
+      "stoi_noisy_std": 0.0015470288983649993,
+      "stoi_recon_std": 0.01492479091847776
+    },
+    "val": {
+      "num_samples": 2,
+      "pesq_noisy_mean": 1.8111067414283752,
+      "pesq_recon_mean": 1.0962110757827759,
+      "stoi_noisy_mean": 0.5613985081355689,
+      "stoi_recon_mean": 0.47032566557363525,
+      "pesq_noisy_std": 0.023594796657562256,
+      "pesq_recon_std": 0.01831817626953125,
+      "stoi_noisy_std": 0.027970036936542764,
+      "stoi_recon_std": 0.0009392282113541706
+    }
+  },
+  "train_records": [
+    {
+      "sample": "sample_1",
+      "pesq_noisy": 1.5546066761016846,
+      "stoi_noisy": 0.6527496818532731,
+      "pesq_recon": 1.2919726371765137,
+      "stoi_recon": 0.6968079498562731
+    },
+    {
+      "sample": "sample_2",
+      "pesq_noisy": 1.3374569416046143,
+      "stoi_noisy": 0.6496556240565431,
+      "pesq_recon": 1.1756376028060913,
+      "stoi_recon": 0.7266575316932287
+    }
+  ],
+  "val_records": [
+    {
+      "sample": "sample_1",
+      "pesq_noisy": 1.8347015380859375,
+      "stoi_noisy": 0.5334284711990261,
+      "pesq_recon": 1.1145292520523071,
+      "stoi_recon": 0.4693864373622811
+    },
+    {
+      "sample": "sample_2",
+      "pesq_noisy": 1.787511944770813,
+      "stoi_noisy": 0.5893685450721117,
+      "pesq_recon": 1.0778928995132446,
+      "stoi_recon": 0.4712648937849894
+    }
+  ]
+}

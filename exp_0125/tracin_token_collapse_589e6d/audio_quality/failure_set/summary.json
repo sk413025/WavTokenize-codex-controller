@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-01-27T04:03:36",
+  "run_dir": "exp_0112_intermediate/runs/exp_k_v6_20260125_234609_20260125_234613",
+  "checkpoint": "exp_0112_intermediate/runs/exp_k_v6_20260125_234609_20260125_234613/best_model.pt",
+  "checkpoint_type": "model_state_dict",
+  "num_samples": 50,
+  "student_pesq": {
+    "mean": 1.0816352486610412,
+    "median": 1.074690341949463
+  },
+  "student_stoi": {
+    "mean": 0.5330218865924453,
+    "median": 0.5346275783437523
+  },
+  "student_si_sdr": {
+    "mean": -31.01647596359253,
+    "median": -27.899370193481445
+  }
+}

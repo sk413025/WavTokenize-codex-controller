@@ -1,0 +1,98 @@
+{
+  "timestamp": "2026-01-27T04:03:36",
+  "source_failure_set": "exp_0125/tracin_token_collapse_589e6d/failure_set.json",
+  "bottom_metric": "pesq",
+  "bottom_n": 30,
+  "failure_set": [
+    {
+      "index": 58
+    },
+    {
+      "index": 159
+    },
+    {
+      "index": 104
+    },
+    {
+      "index": 36
+    },
+    {
+      "index": 74
+    },
+    {
+      "index": 144
+    },
+    {
+      "index": 71
+    },
+    {
+      "index": 19
+    },
+    {
+      "index": 152
+    },
+    {
+      "index": 119
+    },
+    {
+      "index": 93
+    },
+    {
+      "index": 90
+    },
+    {
+      "index": 94
+    },
+    {
+      "index": 135
+    },
+    {
+      "index": 164
+    },
+    {
+      "index": 133
+    },
+    {
+      "index": 77
+    },
+    {
+      "index": 63
+    },
+    {
+      "index": 115
+    },
+    {
+      "index": 8
+    },
+    {
+      "index": 173
+    },
+    {
+      "index": 166
+    },
+    {
+      "index": 17
+    },
+    {
+      "index": 64
+    },
+    {
+      "index": 11
+    },
+    {
+      "index": 106
+    },
+    {
+      "index": 56
+    },
+    {
+      "index": 4
+    },
+    {
+      "index": 156
+    },
+    {
+      "index": 154
+    }
+  ]
+}
