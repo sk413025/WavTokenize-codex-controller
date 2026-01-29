@@ -1,0 +1,21 @@
+{
+  "experiment": "exp_0128_tracin_weighted_soft_reweighting",
+  "alpha": 0.5,
+  "baseline": {
+    "entropy": 6.07,
+    "top_10_mass": 0.197,
+    "strict_acc": 0.0091
+  },
+  "final": {
+    "entropy": 5.6263508796691895,
+    "top_10_mass": 0.2903605103492737,
+    "strict_acc": 0.006022647778943686,
+    "unique_tokens": 1437
+  },
+  "improvement": {
+    "entropy": -0.44364912033081083,
+    "top_10_mass": 0.09336051034927367,
+    "strict_acc": -0.003077352221056314
+  },
+  "success": false
+}
