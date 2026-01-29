@@ -1,0 +1,15 @@
+✓ Applied WavTokenizer-LoRA compatibility patch
+============================================================
+Exp 0128: TracIn-Weighted Soft Reweighting Short-Run
+============================================================
+Steps: 1000
+Batch size: 8
+Grad accum: 2
+Effective batch size: 16
+Alpha (reweighting strength): 0.5
+TracIn scores CSV: exp_0125/tracin_token_collapse_589e6d/tracin_scores_5ckpt.csv
+Output dir: exp_0128/soft_reweighting/run_exp1_20260129_023536
+============================================================
+============================================================
+Creating TracIn-Weighted DataLoaders
+============================================================

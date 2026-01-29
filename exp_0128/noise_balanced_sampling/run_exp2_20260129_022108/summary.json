@@ -1,0 +1,19 @@
+{
+  "baseline": {
+    "entropy": 6.07,
+    "top_10_mass": 0.197,
+    "strict_acc": 0.0091
+  },
+  "final": {
+    "entropy": 5.558465957641602,
+    "top_10_mass": 0.2826436460018158,
+    "strict_acc": 0.005224728926197971,
+    "unique_tokens": 1268
+  },
+  "improvement": {
+    "entropy": -0.5115340423583987,
+    "top_10_mass": 0.08564364600181579,
+    "strict_acc": -0.003875271073802029
+  },
+  "success": false
+}
