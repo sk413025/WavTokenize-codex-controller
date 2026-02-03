@@ -5,6 +5,7 @@
 # ============================================================
 
 set -e
+set -o pipefail
 
 # 啟動 conda 環境
 source ~/miniconda3/etc/profile.d/conda.sh

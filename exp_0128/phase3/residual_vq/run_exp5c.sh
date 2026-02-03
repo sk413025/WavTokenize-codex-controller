@@ -5,6 +5,7 @@
 # ============================================================
 
 set -e
+set -o pipefail
 
 # 啟動 conda 環境
 source ~/miniconda3/etc/profile.d/conda.sh
@@ -44,7 +45,7 @@ PYTHONUNBUFFERED=1 python exp_0128/phase3/residual_vq/train_rvq_short_run.py \
     --rvq_codebook_size ${CODEBOOK_SIZE} \
     --output_dir ${OUTPUT_DIR} \
     --seed 42 \
-    --device cuda:1 \
+    --device cuda:0 \
     --eval_interval 200 \
     |& tee ${OUTPUT_DIR}.log
 

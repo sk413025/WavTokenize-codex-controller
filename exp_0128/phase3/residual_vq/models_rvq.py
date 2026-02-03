@@ -110,11 +110,15 @@ class ResidualVectorQuantizer(nn.Module):
             # 展平時間維度
             residual_flat = residual.reshape(-1, dim)  # [batch*time, dim]
 
-            # 計算距離
-            distances = torch.cdist(
-                residual_flat.unsqueeze(1),  # [batch*time, 1, dim]
-                codebook.weight.unsqueeze(0)  # [1, codebook_size, dim]
-            ).squeeze(1)  # [batch*time, codebook_size]
+            # 計算距離 (memory-efficient; avoid torch.cdist O(N*K*D) expansion)
+            # We only need argmin, so squared L2 distance is sufficient:
+            # ||x - y||^2 = ||x||^2 + ||y||^2 - 2 x·y
+            #
+            # residual_flat: [N, dim], codebook.weight: [K, dim]
+            # distances: [N, K]
+            x2 = (residual_flat ** 2).sum(dim=1, keepdim=True)  # [N, 1]
+            y2 = (codebook.weight ** 2).sum(dim=1).unsqueeze(0)  # [1, K]
+            distances = x2 + y2 - 2.0 * (residual_flat @ codebook.weight.t())
 
             # 找最近的 code
             indices = torch.argmin(distances, dim=1)  # [batch*time]

@@ -83,8 +83,8 @@ def evaluate_collapse_metrics(model, val_loader, device, max_batches=50):
     """
     model.eval()
 
-    all_layer0_codes = []  # Layer 0 codes for diversity check
-    all_layer_codes_list = []  # All layers for joint analysis
+    all_layer0_codes = []  # 1D tensors of codes (masked, no padding)
+    all_layer_codes_list = []  # [n_layers, n_tokens] tensors (masked, no padding)
     feature_distances = []  # Feature space alignment
 
     with torch.no_grad():
@@ -92,26 +92,67 @@ def evaluate_collapse_metrics(model, val_loader, device, max_batches=50):
             if i >= max_batches:
                 break
 
+            lengths = batch.get('lengths', None)  # (B,) in audio samples (24kHz)
+            if lengths is not None:
+                lengths = lengths.cpu()
+
             noisy_audio = batch['noisy_audio'].to(device)
             clean_audio = batch['clean_audio'].to(device)
+
+            # Dataset may provide [B, T]; WavTokenizer expects [B, 1, T]
+            if clean_audio.dim() == 1:
+                clean_audio = clean_audio.unsqueeze(0).unsqueeze(0)
+            elif clean_audio.dim() == 2:
+                clean_audio = clean_audio.unsqueeze(1)
+            if noisy_audio.dim() == 1:
+                noisy_audio = noisy_audio.unsqueeze(0).unsqueeze(0)
+            elif noisy_audio.dim() == 2:
+                noisy_audio = noisy_audio.unsqueeze(1)
 
             output = model(clean_audio, noisy_audio)
 
             # Extract RVQ layer codes: [n_layers, batch, time]
-            all_layer_codes = output['all_layer_codes']
+            all_layer_codes = output['all_layer_codes'].cpu()
+            n_layers, batch_size, time = all_layer_codes.shape
 
-            # Layer 0 codes (for primary diversity metric)
-            layer0_codes = all_layer_codes[0]  # [batch, time]
-            all_layer0_codes.append(layer0_codes.cpu())
+            # Mask out padding using audio lengths.
+            # Dataset is 24kHz and quantizer frame_rate=75 => hop ~ 24000/75 = 320 samples/frame.
+            if lengths is not None:
+                hop = 320
+                frame_lens = (lengths + hop - 1) // hop  # ceil(length/hop)
+                frame_lens = torch.clamp(frame_lens, min=0, max=time)
 
-            # All layers for joint analysis
-            all_layer_codes_list.append(all_layer_codes.cpu())
+                for b in range(batch_size):
+                    L = int(frame_lens[b].item())
+                    if L <= 0:
+                        continue
+                    all_layer0_codes.append(all_layer_codes[0, b, :L])
+                    all_layer_codes_list.append(all_layer_codes[:, b, :L])
+            else:
+                # No lengths available: include all tokens
+                all_layer0_codes.append(all_layer_codes[0].reshape(-1))
+                all_layer_codes_list.append(all_layer_codes.reshape(n_layers, -1))
 
             # Feature space distance
             student_quantized = output['student_quantized']  # [batch, 512, time]
             teacher_encoder_out = output['teacher_encoder_out']  # [batch, 512, time]
-            feat_dist = F.mse_loss(student_quantized, teacher_encoder_out).item()
-            feature_distances.append(feat_dist)
+            if lengths is not None:
+                mse_sum = 0.0
+                n_valid = 0
+                for b in range(student_quantized.shape[0]):
+                    L = int(frame_lens[b].item())
+                    if L <= 0:
+                        continue
+                    mse_sum += F.mse_loss(
+                        student_quantized[b, :, :L],
+                        teacher_encoder_out[b, :, :L],
+                    ).item()
+                    n_valid += 1
+                feature_distances.append(mse_sum / max(1, n_valid))
+            else:
+                feature_distances.append(
+                    F.mse_loss(student_quantized, teacher_encoder_out).item()
+                )
 
     # ===== Layer 0 Diversity Metrics =====
     all_layer0_codes = torch.cat(all_layer0_codes, dim=0).flatten()  # [total_tokens]
@@ -133,21 +174,13 @@ def evaluate_collapse_metrics(model, val_loader, device, max_batches=50):
     used_codes_layer0 = (code_counts > 0).sum().item()
 
     # ===== Joint Code Diversity =====
-    # Combine all layers into joint codes
-    all_layer_codes_cat = torch.cat(all_layer_codes_list, dim=1)  # [n_layers, total_batch, time]
-    n_layers = all_layer_codes_cat.shape[0]
+    # Combine all layers into joint codes: [n_layers, total_tokens]
+    all_layer_codes_flat = torch.cat(all_layer_codes_list, dim=1)
+    joint_codes = all_layer_codes_flat.t().contiguous()  # [total_tokens, n_layers]
 
-    # Create joint codes by treating each (layer0, layer1, ...) tuple as unique
-    # Flatten to [n_layers, n_tokens]
-    all_layer_codes_flat = all_layer_codes_cat.reshape(n_layers, -1)  # [n_layers, n_tokens]
-
-    # Count unique tuples
-    # Convert to hashable format for unique counting
-    joint_codes_str = ['_'.join(map(str, all_layer_codes_flat[:, i].tolist()))
-                       for i in range(all_layer_codes_flat.shape[1])]
-    unique_joint = len(set(joint_codes_str))
-    total_joint = len(joint_codes_str)
-    joint_diversity = unique_joint / total_joint
+    unique_joint = torch.unique(joint_codes, dim=0).shape[0]
+    total_joint = joint_codes.shape[0]
+    joint_diversity = float(unique_joint) / float(total_joint)
 
     # ===== Feature Space Alignment =====
     mean_feature_dist = sum(feature_distances) / len(feature_distances)
@@ -510,6 +543,15 @@ def main():
 
         noisy_audio = batch['noisy_audio'].to(device)
         clean_audio = batch['clean_audio'].to(device)
+        # Dataset may provide [B, T]; WavTokenizer expects [B, 1, T]
+        if clean_audio.dim() == 1:
+            clean_audio = clean_audio.unsqueeze(0).unsqueeze(0)
+        elif clean_audio.dim() == 2:
+            clean_audio = clean_audio.unsqueeze(1)
+        if noisy_audio.dim() == 1:
+            noisy_audio = noisy_audio.unsqueeze(0).unsqueeze(0)
+        elif noisy_audio.dim() == 2:
+            noisy_audio = noisy_audio.unsqueeze(1)
         lengths = batch.get('lengths', None)
         if lengths is not None:
             lengths = lengths.to(device)
@@ -527,10 +569,10 @@ def main():
                 lengths=lengths,
             )
 
-            # Intermediate loss
-            loss_inter = inter_loss_fn(
-                student_intermediates=output['student_intermediates'],
-                teacher_intermediates=output['teacher_intermediates'],
+            # Intermediate loss (V6 API returns: (loss_tensor, layer_losses_dict))
+            loss_inter, _ = inter_loss_fn(
+                student_features=output['student_intermediates'],
+                teacher_features=output['teacher_intermediates'],
             )
 
             # RVQ commitment loss
@@ -582,11 +624,19 @@ def main():
             # Analyze RVQ layer usage
             # Get a batch for layer analysis
             val_batch = next(iter(val_loader))
+            val_clean = val_batch['clean_audio'].to(device)
+            val_noisy = val_batch['noisy_audio'].to(device)
+            # Dataset may provide [B, T]; WavTokenizer expects [B, 1, T]
+            if val_clean.dim() == 1:
+                val_clean = val_clean.unsqueeze(0).unsqueeze(0)
+            elif val_clean.dim() == 2:
+                val_clean = val_clean.unsqueeze(1)
+            if val_noisy.dim() == 1:
+                val_noisy = val_noisy.unsqueeze(0).unsqueeze(0)
+            elif val_noisy.dim() == 2:
+                val_noisy = val_noisy.unsqueeze(1)
             with torch.no_grad():
-                val_output = model(
-                    val_batch['clean_audio'].to(device),
-                    val_batch['noisy_audio'].to(device)
-                )
+                val_output = model(val_clean, val_noisy)
                 layer_metrics = analyze_rvq_layer_usage(
                     model,
                     val_output['all_layer_codes']
