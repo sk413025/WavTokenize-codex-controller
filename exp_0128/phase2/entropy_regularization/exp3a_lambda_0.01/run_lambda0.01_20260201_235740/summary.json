@@ -1,0 +1,21 @@
+{
+  "experiment": "exp_0128_phase2_entropy_regularization",
+  "lambda_entropy": 0.01,
+  "baseline": {
+    "entropy": 6.07,
+    "top_10_mass": 0.197,
+    "strict_acc": 0.0091
+  },
+  "final": {
+    "entropy": 5.577268600463867,
+    "top_10_mass": 0.28498953580856323,
+    "strict_acc": 0.004563552833078101,
+    "unique_tokens": 1262
+  },
+  "improvement": {
+    "entropy": -0.4927313995361331,
+    "top_10_mass": 0.08798953580856322,
+    "strict_acc": -0.0045364471669219
+  },
+  "success": false
+}

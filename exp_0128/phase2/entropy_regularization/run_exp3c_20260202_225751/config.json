@@ -1,0 +1,17 @@
+{
+  "steps": 1000,
+  "batch_size": 8,
+  "grad_accum": 2,
+  "lr": 0.0001,
+  "lambda_entropy": 0.1,
+  "output_dir": "exp_0128/phase2/entropy_regularization/run_exp3c_20260202_225751",
+  "seed": 42,
+  "device": "cuda:0",
+  "eval_interval": 200,
+  "save_checkpoint_every": 200,
+  "save_audio_interval": 500,
+  "experiment": "exp_0128_phase2_entropy_regularization",
+  "baseline": "exp_k_v6",
+  "timestamp": "2026-02-02T22:57:56.922698",
+  "method": "entropy_regularization"
+}
