@@ -1,0 +1,32 @@
+{
+  "experiment": "exp_0128_phase2_codebook_refresh",
+  "method": "codebook_refresh",
+  "refresh_interval": 50,
+  "usage_threshold": 10,
+  "refresh_strategy": "random",
+  "baseline": {
+    "entropy": 6.07,
+    "top_10_mass": 0.197,
+    "strict_acc": 0.0091
+  },
+  "final": {
+    "entropy": 5.272334575653076,
+    "top_10_mass": 0.3254689574241638,
+    "strict_acc": 0.005929739419377405,
+    "unique_tokens": 521
+  },
+  "final_usage_stats": {
+    "total_codes": 4096,
+    "used_codes": 522,
+    "unused_codes": 3574,
+    "min_usage": 0,
+    "max_usage": 6424,
+    "mean_usage": 27.283203125
+  },
+  "improvement": {
+    "entropy": -0.7976654243469241,
+    "top_10_mass": 0.1284689574241638,
+    "strict_acc": -0.0031702605806225954
+  },
+  "success": false
+}

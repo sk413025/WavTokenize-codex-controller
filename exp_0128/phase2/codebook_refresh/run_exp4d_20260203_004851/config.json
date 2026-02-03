@@ -1,0 +1,19 @@
+{
+  "steps": 1000,
+  "batch_size": 8,
+  "grad_accum": 2,
+  "lr": 0.0001,
+  "refresh_interval": 50,
+  "usage_threshold": 5,
+  "refresh_strategy": "random",
+  "output_dir": "exp_0128/phase2/codebook_refresh/run_exp4d_20260203_004851",
+  "seed": 42,
+  "device": "cuda:0",
+  "eval_interval": 200,
+  "save_checkpoint_every": 200,
+  "save_audio_interval": 500,
+  "experiment": "exp_0128_phase2_codebook_refresh",
+  "baseline": "exp_k_v6",
+  "timestamp": "2026-02-03T00:48:56.614720",
+  "method": "codebook_refresh"
+}

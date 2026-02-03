@@ -1,0 +1,202 @@
+[
+  {
+    "step": 50,
+    "num_refreshed": 3247,
+    "total_codes": 4096,
+    "used_codes": 1298,
+    "unused_codes": 2798,
+    "min_usage": 0,
+    "max_usage": 4101,
+    "mean_usage": 26.923828125
+  },
+  {
+    "step": 100,
+    "num_refreshed": 3426,
+    "total_codes": 4096,
+    "used_codes": 770,
+    "unused_codes": 3326,
+    "min_usage": 0,
+    "max_usage": 8613,
+    "mean_usage": 27.39453125
+  },
+  {
+    "step": 150,
+    "num_refreshed": 3450,
+    "total_codes": 4096,
+    "used_codes": 665,
+    "unused_codes": 3431,
+    "min_usage": 0,
+    "max_usage": 9828,
+    "mean_usage": 28.3203125
+  },
+  {
+    "step": 200,
+    "num_refreshed": 3456,
+    "total_codes": 4096,
+    "used_codes": 646,
+    "unused_codes": 3450,
+    "min_usage": 0,
+    "max_usage": 5182,
+    "mean_usage": 27.455078125
+  },
+  {
+    "step": 250,
+    "num_refreshed": 3459,
+    "total_codes": 4096,
+    "used_codes": 640,
+    "unused_codes": 3456,
+    "min_usage": 0,
+    "max_usage": 4720,
+    "mean_usage": 27.6171875
+  },
+  {
+    "step": 300,
+    "num_refreshed": 3463,
+    "total_codes": 4096,
+    "used_codes": 636,
+    "unused_codes": 3460,
+    "min_usage": 0,
+    "max_usage": 5138,
+    "mean_usage": 27.619140625
+  },
+  {
+    "step": 350,
+    "num_refreshed": 3463,
+    "total_codes": 4096,
+    "used_codes": 633,
+    "unused_codes": 3463,
+    "min_usage": 0,
+    "max_usage": 5812,
+    "mean_usage": 28.09375
+  },
+  {
+    "step": 400,
+    "num_refreshed": 3463,
+    "total_codes": 4096,
+    "used_codes": 633,
+    "unused_codes": 3463,
+    "min_usage": 0,
+    "max_usage": 5745,
+    "mean_usage": 27.748046875
+  },
+  {
+    "step": 450,
+    "num_refreshed": 3463,
+    "total_codes": 4096,
+    "used_codes": 633,
+    "unused_codes": 3463,
+    "min_usage": 0,
+    "max_usage": 5475,
+    "mean_usage": 27.8046875
+  },
+  {
+    "step": 500,
+    "num_refreshed": 3464,
+    "total_codes": 4096,
+    "used_codes": 632,
+    "unused_codes": 3464,
+    "min_usage": 0,
+    "max_usage": 4812,
+    "mean_usage": 27.373046875
+  },
+  {
+    "step": 550,
+    "num_refreshed": 3464,
+    "total_codes": 4096,
+    "used_codes": 632,
+    "unused_codes": 3464,
+    "min_usage": 0,
+    "max_usage": 6079,
+    "mean_usage": 27.228515625
+  },
+  {
+    "step": 600,
+    "num_refreshed": 3465,
+    "total_codes": 4096,
+    "used_codes": 632,
+    "unused_codes": 3464,
+    "min_usage": 0,
+    "max_usage": 7039,
+    "mean_usage": 27.53125
+  },
+  {
+    "step": 650,
+    "num_refreshed": 3465,
+    "total_codes": 4096,
+    "used_codes": 631,
+    "unused_codes": 3465,
+    "min_usage": 0,
+    "max_usage": 6184,
+    "mean_usage": 26.9140625
+  },
+  {
+    "step": 700,
+    "num_refreshed": 3465,
+    "total_codes": 4096,
+    "used_codes": 631,
+    "unused_codes": 3465,
+    "min_usage": 0,
+    "max_usage": 6804,
+    "mean_usage": 27.861328125
+  },
+  {
+    "step": 750,
+    "num_refreshed": 3467,
+    "total_codes": 4096,
+    "used_codes": 631,
+    "unused_codes": 3465,
+    "min_usage": 0,
+    "max_usage": 5123,
+    "mean_usage": 27.419921875
+  },
+  {
+    "step": 800,
+    "num_refreshed": 3467,
+    "total_codes": 4096,
+    "used_codes": 629,
+    "unused_codes": 3467,
+    "min_usage": 0,
+    "max_usage": 5261,
+    "mean_usage": 27.89453125
+  },
+  {
+    "step": 850,
+    "num_refreshed": 3471,
+    "total_codes": 4096,
+    "used_codes": 629,
+    "unused_codes": 3467,
+    "min_usage": 0,
+    "max_usage": 6424,
+    "mean_usage": 27.7578125
+  },
+  {
+    "step": 900,
+    "num_refreshed": 3471,
+    "total_codes": 4096,
+    "used_codes": 625,
+    "unused_codes": 3471,
+    "min_usage": 0,
+    "max_usage": 7641,
+    "mean_usage": 27.544921875
+  },
+  {
+    "step": 950,
+    "num_refreshed": 3471,
+    "total_codes": 4096,
+    "used_codes": 625,
+    "unused_codes": 3471,
+    "min_usage": 0,
+    "max_usage": 5325,
+    "mean_usage": 27.52734375
+  },
+  {
+    "step": 1000,
+    "num_refreshed": 3471,
+    "total_codes": 4096,
+    "used_codes": 625,
+    "unused_codes": 3471,
+    "min_usage": 0,
+    "max_usage": 6302,
+    "mean_usage": 27.095703125
+  }
+]
