@@ -50,7 +50,7 @@ from exp_1201.config import WAVTOK_CONFIG, WAVTOK_CKPT, TRAIN_CACHE, VAL_CACHE
 from exp_0112_intermediate.models import TeacherStudentIntermediate
 from exp_0112_intermediate.train_v6 import IntermediateSupervisionLossV6
 from exp_1219.losses import MaskedCombinedLossV2, compute_masked_accuracy
-from exp_1219.data import create_curriculum_dataloaders
+from exp_1226.data_curriculum import create_curriculum_dataloaders
 
 
 class CodebookUsageTracker:
@@ -274,13 +274,15 @@ def plot_loss_curves(loss_history, refresh_history, save_path):
 
     # Collapse metrics
     ax = axes[0, 1]
-    metrics_steps = [x['step'] for x in loss_history if 'entropy' in x]
-    entropy = [x['entropy'] for x in loss_history if 'entropy' in x]
-    top_10_mass = [x['top_10_mass'] * 100 for x in loss_history if 'top_10_mass' in x]
+    # Extract evaluation metrics (only these have top_10_mass)
+    eval_metrics = [x for x in loss_history if 'top_10_mass' in x]
+    eval_steps = [x['step'] for x in eval_metrics]
+    eval_entropy = [x['entropy'] for x in eval_metrics]
+    eval_top_10_mass = [x['top_10_mass'] * 100 for x in eval_metrics]
 
     ax2 = ax.twinx()
-    line1 = ax.plot(metrics_steps, entropy, 'g-', label='Entropy', marker='o')
-    line2 = ax2.plot(metrics_steps, top_10_mass, 'orange', label='Top-10 Mass (%)', marker='s')
+    line1 = ax.plot(eval_steps, eval_entropy, 'g-', label='Entropy', marker='o')
+    line2 = ax2.plot(eval_steps, eval_top_10_mass, 'orange', label='Top-10 Mass (%)', marker='s')
 
     ax.set_title('Collapse Metrics')
     ax.set_xlabel('Step')
@@ -381,12 +383,13 @@ def main():
     print("=" * 60)
 
     # Create dataloaders (standard curriculum dataset with random sampling)
-    train_loader, val_loader = create_curriculum_dataloaders(
+    train_loader, val_loader, curriculum_sampler = create_curriculum_dataloaders(
         train_cache_path=TRAIN_CACHE,
         val_cache_path=VAL_CACHE,
         batch_size=args.batch_size,
         num_workers=4,
         filter_clean_to_clean=True,  # Same as baseline
+        compute_snr=False,  # Skip SNR computation for faster loading
     )
 
     # Create model (same as exp_k v6)

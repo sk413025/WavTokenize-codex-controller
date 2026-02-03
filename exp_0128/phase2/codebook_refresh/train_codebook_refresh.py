@@ -235,49 +235,10 @@ def evaluate_collapse_metrics(model, val_loader, device):
 
 
 def save_audio_samples(model, dataloader, device, output_dir, step, num_samples=2, split='val'):
-    """保存音檔樣本"""
-    model.eval()
-    audio_dir = output_dir / 'audio_samples' / split / f'step_{step:04d}'
-    audio_dir.mkdir(parents=True, exist_ok=True)
-
-    sample_rate = 24000
-    data_iter = iter(dataloader)
-    torch.cuda.empty_cache()
-
-    for i in range(min(num_samples, len(dataloader))):
-        try:
-            batch = next(data_iter)
-        except StopIteration:
-            break
-
-        noisy_audio = batch['noisy_audio'][:1].to(device)
-        clean_audio = batch['clean_audio'][:1].to(device)
-
-        if noisy_audio.dim() == 1:
-            noisy_audio = noisy_audio.unsqueeze(0)
-        if clean_audio.dim() == 1:
-            clean_audio = clean_audio.unsqueeze(0)
-
-        torchaudio.save(str(audio_dir / f'sample_{i+1}_noisy.wav'), noisy_audio.cpu(), sample_rate)
-        torchaudio.save(str(audio_dir / f'sample_{i+1}_clean.wav'), clean_audio.cpu(), sample_rate)
-
-        try:
-            student_features, _, _ = model.student.feature_extractor(noisy_audio, bandwidth_id=0)
-            student_recon = model.teacher.decode(student_features, bandwidth_id=torch.tensor([0]).to(device))
-            if student_recon.dim() == 3:
-                student_recon = student_recon.squeeze(1)
-            torchaudio.save(str(audio_dir / f'sample_{i+1}_student_recon.wav'), student_recon.cpu(), sample_rate)
-            del student_features, student_recon
-            torch.cuda.empty_cache()
-        except RuntimeError as e:
-            if "out of memory" in str(e):
-                print(f"  OOM when saving audio sample {i+1}, skipping")
-                torch.cuda.empty_cache()
-            else:
-                raise e
-
-    print(f"  Saved {min(num_samples, len(dataloader))} {split} audio samples")
-    model.train()  # Restore training mode
+    """保存音檔樣本（跳過以避免 torchcodec 依賴問題）"""
+    print(f"  Skipping audio sample saving (torchcodec not available)")
+    model.train()  # IMPORTANT: Restore training mode
+    return  # Skip audio saving to avoid torchcodec dependency issue
 
 
 def plot_loss_curves(loss_history, codebook_tracker, save_path, refresh_interval, usage_threshold):
