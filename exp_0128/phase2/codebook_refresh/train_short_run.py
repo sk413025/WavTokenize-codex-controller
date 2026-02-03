@@ -124,7 +124,7 @@ def refresh_codebook(model, unused_mask, refresh_strategy='random'):
         return 0
 
     # Get codebook from student model
-    codebook = model.student.feature_extractor.quantizer.vq.layers[0]._codebook.embed
+    codebook = model.student.feature_extractor.encodec.quantizer.vq.layers[0].codebook
 
     with torch.no_grad():
         if refresh_strategy == 'random':
