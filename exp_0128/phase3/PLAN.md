@@ -391,14 +391,32 @@ P(layer_i collapse | previous layers collapse) << P(layer_0 collapse)
 | 5c   | 8    | 512           | 512⁸      | 激進 (最大多樣性) |
 
 ### Baseline (exp_k v6 @ epoch 300)
-- Entropy: 6.07
-- Top-10 Mass: 19.7%
-- Strict Accuracy: 0.91%
+- Single VQ Entropy: 6.07
+- Single VQ Top-10 Mass: 19.7%
+- Used codes: ~740/4096
 
-### 成功判準（更嚴格）
-- Val entropy > 6.5 (比 baseline 6.07 更高)
-- Val top-10 mass < 15% (比 baseline 19.7% 更低)
-- Val strict acc >= 0.82% (90% of baseline)
+### 成功判準（RVQ-specific，已修正）
+
+**重要**：RVQ 與 baseline 使用不同 codebook space，不能直接比較 codes。
+改用以下指標：
+
+#### 1. Layer 0 多樣性（與 baseline 單層 VQ 比較）
+- **Layer0 Entropy > 6.5** (baseline: 6.07)
+- **Layer0 Top-10 Mass < 15%** (baseline: 19.7%)
+- 說明：Layer 0 是 RVQ 的粗略逼近層，可與 baseline 單層 VQ 比較
+
+#### 2. Joint Diversity（RVQ 特有優勢）
+- **Joint Diversity > 70%**
+- 說明：所有層組合的多樣性，理論上遠高於單層 VQ
+
+#### 3. Feature Space Alignment（主要訓練目標）
+- **Feature MSE < 0.1**
+- 說明：Student quantized 與 Teacher encoder output 的對齊程度
+
+#### ❌ 不再使用的指標
+- ~~Strict Accuracy (teacher codes vs student codes)~~
+- 原因：Codebook space 不同（Teacher 4096 vs Student 1024/2048/512）
+- 此指標在 RVQ 架構下無意義
 
 ## 常見問題解答 (Q&A)
 

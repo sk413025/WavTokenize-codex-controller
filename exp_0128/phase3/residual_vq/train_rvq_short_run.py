@@ -70,20 +70,22 @@ from exp_1226.data_curriculum import create_curriculum_dataloaders
 
 def evaluate_collapse_metrics(model, val_loader, device, max_batches=50):
     """
-    評估 token collapse metrics
+    評估 RVQ collapse metrics (針對 RVQ 架構修正)
+
+    注意：不再比較 teacher codes vs student codes (不同 codebook space)
+    改為評估：
+    1. RVQ Layer 0 的多樣性 (與 baseline 比較)
+    2. Joint code diversity (所有層組合)
+    3. Feature space alignment (quantized vs teacher encoder)
 
     Returns:
-        dict with:
-            - entropy: token distribution entropy
-            - top_10_mass: probability mass of top-10 tokens
-            - strict_accuracy: exact match accuracy
-            - perplexity: token perplexity
-            - used_codes: number of unique codes used
+        dict with RVQ-specific metrics
     """
     model.eval()
 
-    all_codes = []
-    all_teacher_codes = []
+    all_layer0_codes = []  # Layer 0 codes for diversity check
+    all_layer_codes_list = []  # All layers for joint analysis
+    feature_distances = []  # Feature space alignment
 
     with torch.no_grad():
         for i, batch in enumerate(val_loader):
@@ -95,55 +97,83 @@ def evaluate_collapse_metrics(model, val_loader, device, max_batches=50):
 
             output = model(clean_audio, noisy_audio)
 
-            # Extract codes from RVQ
-            # student_codes: [1, batch, 1, time]
-            # all_layer_codes: [n_layers, batch, time]
-            student_codes = output['student_codes'].squeeze()  # [batch, time]
-            teacher_codes = output['teacher_codes'].squeeze()  # [batch, time]
+            # Extract RVQ layer codes: [n_layers, batch, time]
+            all_layer_codes = output['all_layer_codes']
 
-            all_codes.append(student_codes.cpu())
-            all_teacher_codes.append(teacher_codes.cpu())
+            # Layer 0 codes (for primary diversity metric)
+            layer0_codes = all_layer_codes[0]  # [batch, time]
+            all_layer0_codes.append(layer0_codes.cpu())
 
-    # Concatenate all codes
-    all_codes = torch.cat(all_codes, dim=0).flatten()  # [total_tokens]
-    all_teacher_codes = torch.cat(all_teacher_codes, dim=0).flatten()
+            # All layers for joint analysis
+            all_layer_codes_list.append(all_layer_codes.cpu())
 
-    # Compute metrics
-    codebook_size = model.rvq_codebook_size  # Per-layer codebook size
+            # Feature space distance
+            student_quantized = output['student_quantized']  # [batch, 512, time]
+            teacher_encoder_out = output['teacher_encoder_out']  # [batch, 512, time]
+            feat_dist = F.mse_loss(student_quantized, teacher_encoder_out).item()
+            feature_distances.append(feat_dist)
 
-    # Count code frequencies
-    code_counts = torch.bincount(all_codes, minlength=codebook_size)
+    # ===== Layer 0 Diversity Metrics =====
+    all_layer0_codes = torch.cat(all_layer0_codes, dim=0).flatten()  # [total_tokens]
+    codebook_size = model.rvq_codebook_size
+
+    # Count code frequencies for Layer 0
+    code_counts = torch.bincount(all_layer0_codes, minlength=codebook_size)
     code_probs = code_counts.float() / code_counts.sum()
-
-    # Remove zero probabilities for entropy calculation
     nonzero_probs = code_probs[code_probs > 0]
 
-    # Entropy
-    entropy = -(nonzero_probs * torch.log2(nonzero_probs)).sum().item()
+    # Entropy (Layer 0)
+    entropy_layer0 = -(nonzero_probs * torch.log2(nonzero_probs)).sum().item()
 
-    # Top-10 mass
+    # Top-10 mass (Layer 0)
     top_10_probs, _ = torch.topk(code_probs, k=min(10, len(nonzero_probs)))
-    top_10_mass = top_10_probs.sum().item()
+    top_10_mass_layer0 = top_10_probs.sum().item()
 
-    # Perplexity
-    perplexity = 2 ** entropy
+    # Used codes (Layer 0)
+    used_codes_layer0 = (code_counts > 0).sum().item()
 
-    # Used codes
-    used_codes = (code_counts > 0).sum().item()
+    # ===== Joint Code Diversity =====
+    # Combine all layers into joint codes
+    all_layer_codes_cat = torch.cat(all_layer_codes_list, dim=1)  # [n_layers, total_batch, time]
+    n_layers = all_layer_codes_cat.shape[0]
 
-    # Strict accuracy (compared to teacher)
-    strict_acc = (all_codes == all_teacher_codes).float().mean().item()
+    # Create joint codes by treating each (layer0, layer1, ...) tuple as unique
+    # Flatten to [n_layers, n_tokens]
+    all_layer_codes_flat = all_layer_codes_cat.reshape(n_layers, -1)  # [n_layers, n_tokens]
+
+    # Count unique tuples
+    # Convert to hashable format for unique counting
+    joint_codes_str = ['_'.join(map(str, all_layer_codes_flat[:, i].tolist()))
+                       for i in range(all_layer_codes_flat.shape[1])]
+    unique_joint = len(set(joint_codes_str))
+    total_joint = len(joint_codes_str)
+    joint_diversity = unique_joint / total_joint
+
+    # ===== Feature Space Alignment =====
+    mean_feature_dist = sum(feature_distances) / len(feature_distances)
 
     model.train()
 
     return {
-        'entropy': entropy,
-        'top_10_mass': top_10_mass,
-        'strict_accuracy': strict_acc,
-        'perplexity': perplexity,
-        'used_codes': used_codes,
-        'total_codes': codebook_size,
-        'usage_pct': 100.0 * used_codes / codebook_size,
+        # Layer 0 metrics (comparable to baseline single VQ)
+        'layer0_entropy': entropy_layer0,
+        'layer0_top10_mass': top_10_mass_layer0,
+        'layer0_used_codes': used_codes_layer0,
+        'layer0_total_codes': codebook_size,
+        'layer0_usage_pct': 100.0 * used_codes_layer0 / codebook_size,
+
+        # Joint diversity (RVQ-specific)
+        'joint_unique_codes': unique_joint,
+        'joint_total_codes': total_joint,
+        'joint_diversity': joint_diversity,  # Higher = better
+
+        # Feature space alignment (primary training objective)
+        'feature_mse': mean_feature_dist,  # Lower = better
+
+        # Legacy for reference (but not meaningful for comparison)
+        'entropy': entropy_layer0,  # For backward compatibility
+        'top_10_mass': top_10_mass_layer0,
+        'used_codes': used_codes_layer0,
     }
 
 
@@ -239,8 +269,8 @@ def save_audio_samples(model, data_loader, device, output_dir, step, num_samples
 
 
 def plot_loss_curves(loss_history, metrics_history, output_dir):
-    """繪製 loss 和 metrics 曲線"""
-    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+    """繪製 loss 和 metrics 曲線（RVQ-specific）"""
+    fig, axes = plt.subplots(3, 3, figsize=(18, 14))
 
     # Extract data
     steps = [x['step'] for x in loss_history]
@@ -249,12 +279,15 @@ def plot_loss_curves(loss_history, metrics_history, output_dir):
     inter_losses = [x['inter_loss'] for x in loss_history]
     rvq_losses = [x['rvq_commitment_loss'] for x in loss_history]
 
-    # Extract evaluation metrics (only these have entropy)
-    eval_metrics = [x for x in loss_history if 'entropy' in x]
+    # Extract evaluation metrics (only eval steps have these)
+    eval_metrics = [x for x in loss_history if 'layer0_entropy' in x]
     eval_steps = [x['step'] for x in eval_metrics]
-    eval_entropy = [x['entropy'] for x in eval_metrics]
-    eval_top_10_mass = [x['top_10_mass'] * 100 for x in eval_metrics]
-    eval_strict_acc = [x['strict_accuracy'] * 100 for x in eval_metrics]
+
+    # RVQ-specific metrics
+    layer0_entropy = [x['layer0_entropy'] for x in eval_metrics]
+    layer0_top10 = [x['layer0_top10_mass'] * 100 for x in eval_metrics]
+    joint_diversity = [x['joint_diversity'] * 100 for x in eval_metrics]
+    feature_mse = [x['feature_mse'] for x in eval_metrics]
 
     # Plot 1: Total loss
     axes[0, 0].plot(steps, train_losses, label='Total Loss', linewidth=2)
@@ -274,49 +307,82 @@ def plot_loss_curves(loss_history, metrics_history, output_dir):
     axes[0, 1].legend()
     axes[0, 1].grid(True, alpha=0.3)
 
-    # Plot 3: Entropy
-    axes[0, 2].plot(eval_steps, eval_entropy, 'o-', label='Entropy', linewidth=2, markersize=6)
-    axes[0, 2].axhline(y=6.07, color='r', linestyle='--', label='Baseline (6.07)', linewidth=2)
-    axes[0, 2].axhline(y=6.5, color='g', linestyle='--', label='Target (6.5)', linewidth=2)
+    # Plot 3: RVQ Commitment Loss
+    axes[0, 2].plot(steps, rvq_losses, label='RVQ Commitment', linewidth=2, color='purple')
     axes[0, 2].set_xlabel('Step')
-    axes[0, 2].set_ylabel('Entropy (bits)')
-    axes[0, 2].set_title('Token Distribution Entropy')
+    axes[0, 2].set_ylabel('Loss')
+    axes[0, 2].set_title('RVQ Commitment Loss')
     axes[0, 2].legend()
     axes[0, 2].grid(True, alpha=0.3)
 
-    # Plot 4: Top-10 Mass
-    axes[1, 0].plot(eval_steps, eval_top_10_mass, 'o-', label='Top-10 Mass', linewidth=2, markersize=6)
-    axes[1, 0].axhline(y=19.7, color='r', linestyle='--', label='Baseline (19.7%)', linewidth=2)
-    axes[1, 0].axhline(y=15.0, color='g', linestyle='--', label='Target (15%)', linewidth=2)
+    # Plot 4: Layer 0 Entropy
+    axes[1, 0].plot(eval_steps, layer0_entropy, 'o-', label='Layer0 Entropy', linewidth=2, markersize=6)
+    axes[1, 0].axhline(y=6.07, color='r', linestyle='--', label='Baseline (6.07)', linewidth=2)
+    axes[1, 0].axhline(y=6.5, color='g', linestyle='--', label='Target (6.5)', linewidth=2)
     axes[1, 0].set_xlabel('Step')
-    axes[1, 0].set_ylabel('Top-10 Mass (%)')
-    axes[1, 0].set_title('Top-10 Token Mass')
+    axes[1, 0].set_ylabel('Entropy (bits)')
+    axes[1, 0].set_title('Layer 0 Entropy (vs Baseline)')
     axes[1, 0].legend()
     axes[1, 0].grid(True, alpha=0.3)
 
-    # Plot 5: Strict Accuracy
-    axes[1, 1].plot(eval_steps, eval_strict_acc, 'o-', label='Strict Acc', linewidth=2, markersize=6)
-    axes[1, 1].axhline(y=0.91, color='r', linestyle='--', label='Baseline (0.91%)', linewidth=2)
-    axes[1, 1].axhline(y=0.82, color='g', linestyle='--', label='Target (0.82%)', linewidth=2)
+    # Plot 5: Layer 0 Top-10 Mass
+    axes[1, 1].plot(eval_steps, layer0_top10, 'o-', label='Layer0 Top-10', linewidth=2, markersize=6)
+    axes[1, 1].axhline(y=19.7, color='r', linestyle='--', label='Baseline (19.7%)', linewidth=2)
+    axes[1, 1].axhline(y=15.0, color='g', linestyle='--', label='Target (15%)', linewidth=2)
     axes[1, 1].set_xlabel('Step')
-    axes[1, 1].set_ylabel('Strict Accuracy (%)')
-    axes[1, 1].set_title('Strict Matching Accuracy')
+    axes[1, 1].set_ylabel('Top-10 Mass (%)')
+    axes[1, 1].set_title('Layer 0 Top-10 Mass (vs Baseline)')
     axes[1, 1].legend()
     axes[1, 1].grid(True, alpha=0.3)
 
-    # Plot 6: Used Codes
-    eval_used = [x.get('used_codes', 0) for x in eval_metrics]
-    axes[1, 2].plot(eval_steps, eval_used, 'o-', label='Used Codes', linewidth=2, markersize=6)
-    axes[1, 2].axhline(y=740, color='r', linestyle='--', label='Baseline (~740)', linewidth=2)
+    # Plot 6: Joint Diversity (RVQ-specific)
+    axes[1, 2].plot(eval_steps, joint_diversity, 'o-', label='Joint Diversity', linewidth=2, markersize=6, color='purple')
+    axes[1, 2].axhline(y=70.0, color='g', linestyle='--', label='Target (70%)', linewidth=2)
     axes[1, 2].set_xlabel('Step')
-    axes[1, 2].set_ylabel('Number of Codes')
-    axes[1, 2].set_title('Codebook Usage')
+    axes[1, 2].set_ylabel('Joint Diversity (%)')
+    axes[1, 2].set_title('Joint Code Diversity (RVQ-specific)')
     axes[1, 2].legend()
     axes[1, 2].grid(True, alpha=0.3)
+
+    # Plot 7: Feature MSE (primary objective)
+    axes[2, 0].plot(eval_steps, feature_mse, 'o-', label='Feature MSE', linewidth=2, markersize=6, color='orange')
+    axes[2, 0].axhline(y=0.1, color='g', linestyle='--', label='Target (0.1)', linewidth=2)
+    axes[2, 0].set_xlabel('Step')
+    axes[2, 0].set_ylabel('MSE')
+    axes[2, 0].set_title('Feature Space Alignment (student vs teacher)')
+    axes[2, 0].legend()
+    axes[2, 0].grid(True, alpha=0.3)
+
+    # Plot 8: Layer 0 Used Codes
+    eval_used = [x.get('layer0_used_codes', 0) for x in eval_metrics]
+    axes[2, 1].plot(eval_steps, eval_used, 'o-', label='Layer0 Used', linewidth=2, markersize=6)
+    axes[2, 1].axhline(y=740, color='r', linestyle='--', label='Baseline (~740/4096)', linewidth=2)
+    axes[2, 1].set_xlabel('Step')
+    axes[2, 1].set_ylabel('Number of Codes')
+    axes[2, 1].set_title('Layer 0 Codebook Usage')
+    axes[2, 1].legend()
+    axes[2, 1].grid(True, alpha=0.3)
+
+    # Plot 9: Per-layer entropy (if available)
+    if 'layer_0_entropy' in eval_metrics[0]:
+        for i in range(4):  # Assume 4 layers for exp5b
+            layer_ent = [x.get(f'layer_{i}_entropy', 0) for x in eval_metrics]
+            axes[2, 2].plot(eval_steps, layer_ent, 'o-', label=f'Layer {i}', linewidth=2, markersize=4)
+        axes[2, 2].set_xlabel('Step')
+        axes[2, 2].set_ylabel('Entropy (bits)')
+        axes[2, 2].set_title('Per-Layer Entropy')
+        axes[2, 2].legend()
+        axes[2, 2].grid(True, alpha=0.3)
+    else:
+        # Placeholder if per-layer not available
+        axes[2, 2].text(0.5, 0.5, 'Per-layer metrics\n(see RVQ analysis)',
+                       ha='center', va='center', transform=axes[2, 2].transAxes)
+        axes[2, 2].set_title('RVQ Layer Analysis')
 
     plt.tight_layout()
     plt.savefig(output_dir / 'training_curves.png', dpi=150, bbox_inches='tight')
     plt.close()
+    print(f"Training curves saved to {output_dir / 'training_curves.png'}")
 
 
 def main():
@@ -550,19 +616,25 @@ def main():
             torch.save(checkpoint, checkpoint_path)
             print(f"Checkpoint saved: {checkpoint_path.name}")
 
-            # Check success criteria
+            # Check success criteria (RVQ-specific)
+            # 成功判準：
+            # 1. Layer 0 多樣性優於 baseline
+            # 2. Joint diversity 高（RVQ 特有）
+            # 3. Feature space alignment 好
             success = (
-                metrics['entropy'] > 6.5 and
-                metrics['top_10_mass'] < 0.15 and
-                metrics['strict_accuracy'] >= 0.0082
+                metrics['layer0_entropy'] > 6.5 and          # Layer 0 entropy > baseline (6.07)
+                metrics['layer0_top10_mass'] < 0.15 and     # Layer 0 top-10 < baseline (19.7%)
+                metrics['joint_diversity'] > 0.7 and         # Joint diversity > 70%
+                metrics['feature_mse'] < 0.1                 # Feature alignment good
             )
             if success:
-                print(f"✅ SUCCESS! All criteria met at step {step}")
+                print(f"\n✅ SUCCESS! All criteria met at step {step}")
             else:
-                print(f"Current status:")
-                print(f"  Entropy: {metrics['entropy']:.2f} {'✅' if metrics['entropy'] > 6.5 else '❌'} (target > 6.5)")
-                print(f"  Top-10 Mass: {metrics['top_10_mass']*100:.1f}% {'✅' if metrics['top_10_mass'] < 0.15 else '❌'} (target < 15%)")
-                print(f"  Strict Acc: {metrics['strict_accuracy']*100:.2f}% {'✅' if metrics['strict_accuracy'] >= 0.0082 else '❌'} (target >= 0.82%)")
+                print(f"\nCurrent status:")
+                print(f"  Layer0 Entropy: {metrics['layer0_entropy']:.2f} {'✅' if metrics['layer0_entropy'] > 6.5 else '❌'} (target > 6.5, baseline: 6.07)")
+                print(f"  Layer0 Top-10: {metrics['layer0_top10_mass']*100:.1f}% {'✅' if metrics['layer0_top10_mass'] < 0.15 else '❌'} (target < 15%, baseline: 19.7%)")
+                print(f"  Joint Diversity: {metrics['joint_diversity']*100:.1f}% {'✅' if metrics['joint_diversity'] > 0.7 else '❌'} (target > 70%)")
+                print(f"  Feature MSE: {metrics['feature_mse']:.4f} {'✅' if metrics['feature_mse'] < 0.1 else '❌'} (target < 0.1)")
 
     pbar.close()
 
@@ -583,15 +655,22 @@ def main():
         'config': config,
         'final_metrics': final_metrics,
         'baseline': {
-            'entropy': 6.07,
-            'top_10_mass': 0.197,
-            'strict_accuracy': 0.0091,
-            'used_codes': 740,
+            'single_vq_entropy': 6.07,
+            'single_vq_top10_mass': 0.197,
+            'single_vq_used_codes': 740,
+            'note': 'Baseline uses single VQ with 4096 codebook, not directly comparable to RVQ'
+        },
+        'success_criteria': {
+            'layer0_entropy': {'target': '> 6.5', 'baseline': 6.07},
+            'layer0_top10_mass': {'target': '< 0.15', 'baseline': 0.197},
+            'joint_diversity': {'target': '> 0.7', 'note': 'RVQ-specific'},
+            'feature_mse': {'target': '< 0.1', 'note': 'Feature alignment'},
         },
         'success': (
-            final_metrics['entropy'] > 6.5 and
-            final_metrics['top_10_mass'] < 0.15 and
-            final_metrics['strict_accuracy'] >= 0.0082
+            final_metrics['layer0_entropy'] > 6.5 and
+            final_metrics['layer0_top10_mass'] < 0.15 and
+            final_metrics['joint_diversity'] > 0.7 and
+            final_metrics['feature_mse'] < 0.1
         ),
     }
 
