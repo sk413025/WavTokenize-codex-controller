@@ -211,6 +211,26 @@ Counterfactual 實驗顯示硬刪會惡化。原因是：
 | 成功判準 | Val entropy ↑、top-k mass ↓、strict acc 不惡化 |
 | 資源 | 1 GPU, 2-3 小時 |
 
+### 實驗 3：完整 TracIn‑CP（per‑val + multi‑checkpoint）
+
+| 項目 | 設定 |
+|------|------|
+| 目的 | 補強「val failure → 影響力樣本」的穩健性，排除 aggregate 混淆 |
+| 方法 | per‑val TracIn（非 aggregate），checkpoints=010/100/200/300，loss=train+anchor |
+| 樣本 | train candidates 2,000；val failures 50 |
+| 成功判準 | proponents/opponents 分佈與 aggregate 結果一致（noise type/SNR 方向一致） |
+| 資源 | 1 GPU, 6–12 小時（視記憶體/梯度存取） |
+
+### 實驗 4：音質導向 reweighting（S3 對齊）
+
+| 項目 | 設定 |
+|------|------|
+| 目的 | 驗證「音質最差 failure」是否由同一噪音材質主導 |
+| 方法 | 用 bottom‑PESQ/STOI 子集做 TracIn；對該材質做 soft reweighting |
+| 樣本 | failure set 50；train candidates 2,000 |
+| 成功判準 | bottom‑PESQ failure 的 strict acc/entropy 改善，且 PESQ/STOI 不惡化 |
+| 資源 | 1 GPU, 4–8 小時 |
+
 ---
 
 ## 7. 限制與未來工作
