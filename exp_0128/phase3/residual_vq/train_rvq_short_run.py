@@ -460,7 +460,9 @@ def main():
     # Create loss functions (same as baseline)
     loss_fn = MaskedCombinedLossV2(
         feature_weight=1.0,
-        triplet_weight=1.0,
+        # RVQ Phase 3: start without triplet (teacher-codebook alignment) to avoid
+        # accidentally re-imposing single-VQ collapse dynamics; enable as ablation.
+        triplet_weight=0.0,
         triplet_margin=0.2,
     )
 
@@ -521,6 +523,7 @@ def main():
                 student_features=output['student_encoder_out'],
                 teacher_features=output['teacher_encoder_out'],
                 teacher_codes=output['teacher_codes'],
+                codebook=model.codebook,
                 lengths=lengths,
             )
 
