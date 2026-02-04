@@ -45,7 +45,11 @@ class ResidualVectorQuantizer(nn.Module):
         n_layers: VQ 層數
         codebook_size: 每層 codebook 大小
         dim: 向量維度
-        commitment_cost: Commitment loss 權重
+        update_mode: "grad" (codebook loss + optimizer) or "ema" (EMA update + dead-code reset)
+        ema_decay: EMA decay (only for update_mode="ema")
+        ema_eps: EMA epsilon (only for update_mode="ema")
+        ema_dead_code_threshold: dead-code threshold (0 disables; only for update_mode="ema")
+        ema_usage_penalty: penalize frequently-used codes via EMA cluster_size (only for update_mode="ema")
     """
 
     def __init__(
@@ -53,13 +57,21 @@ class ResidualVectorQuantizer(nn.Module):
         n_layers: int = 4,
         codebook_size: int = 1024,
         dim: int = 128,
-        commitment_cost: float = 0.25
+        update_mode: str = "grad",
+        ema_decay: float = 0.99,
+        ema_eps: float = 1e-5,
+        ema_dead_code_threshold: int = 0,
+        ema_usage_penalty: float = 0.0,
     ):
         super().__init__()
         self.n_layers = n_layers
         self.codebook_size = codebook_size
         self.dim = dim
-        self.commitment_cost = commitment_cost
+        self.update_mode = update_mode
+        self.ema_decay = ema_decay
+        self.ema_eps = ema_eps
+        self.ema_dead_code_threshold = int(ema_dead_code_threshold)
+        self.ema_usage_penalty = float(ema_usage_penalty)
 
         # 每層獨立的 codebook
         # 使用 nn.Embedding 實現 codebook
@@ -71,6 +83,67 @@ class ResidualVectorQuantizer(nn.Module):
         # 初始化 codebooks (uniform distribution)
         for codebook in self.codebooks:
             codebook.weight.data.uniform_(-1.0 / codebook_size, 1.0 / codebook_size)
+
+        if self.update_mode not in {"grad", "ema"}:
+            raise ValueError(f"Invalid update_mode={self.update_mode!r}. Must be one of: 'grad', 'ema'")
+
+        # EMA buffers (mode B)
+        if self.update_mode == "ema":
+            # codebooks should not be updated by optimizer when using EMA
+            for codebook in self.codebooks:
+                codebook.weight.requires_grad_(False)
+
+            self.register_buffer(
+                "ema_cluster_size",
+                torch.zeros(n_layers, codebook_size),
+                persistent=True,
+            )
+            self.register_buffer(
+                "ema_embed_avg",
+                torch.zeros(n_layers, codebook_size, dim),
+                persistent=True,
+            )
+
+    @torch.no_grad()
+    def _ema_update_layer(
+        self,
+        layer_idx: int,
+        residual_flat: torch.Tensor,  # [N, dim], detached
+        indices: torch.Tensor,        # [N], long
+    ) -> None:
+        """EMA codebook update + (optional) dead-code reset for a single layer."""
+        # AMP can produce fp16 residuals; keep EMA stats in fp32 for stability and to avoid dtype mismatch.
+        residual_flat = residual_flat.float()
+        device = residual_flat.device
+        K = self.codebook_size
+
+        counts = torch.bincount(indices, minlength=K).float()  # [K]
+
+        embed_sum = torch.zeros(K, self.dim, device=device)
+        embed_sum.index_add_(0, indices, residual_flat)
+
+        self.ema_cluster_size[layer_idx].mul_(self.ema_decay).add_(counts, alpha=(1.0 - self.ema_decay))
+        self.ema_embed_avg[layer_idx].mul_(self.ema_decay).add_(embed_sum, alpha=(1.0 - self.ema_decay))
+
+        n = self.ema_cluster_size[layer_idx].sum()
+        # Laplace smoothing (as in VQ-VAE / common EMA codebooks)
+        cluster_size = (self.ema_cluster_size[layer_idx] + self.ema_eps) / (n + K * self.ema_eps) * n
+        embed = self.ema_embed_avg[layer_idx] / cluster_size.unsqueeze(1).clamp(min=1e-12)
+        self.codebooks[layer_idx].weight.data.copy_(embed)
+
+        # dead-code reset
+        if self.ema_dead_code_threshold > 0:
+            dead = self.ema_cluster_size[layer_idx] < float(self.ema_dead_code_threshold)
+            if dead.any() and residual_flat.numel() > 0:
+                dead_idx = dead.nonzero(as_tuple=False).squeeze(1)
+                num_dead = int(dead_idx.numel())
+                rand = torch.randint(0, residual_flat.shape[0], (num_dead,), device=device)
+                sampled = residual_flat[rand]
+
+                self.codebooks[layer_idx].weight.data[dead_idx] = sampled
+                # Keep EMA buffers consistent so the next normalization preserves sampled vectors
+                self.ema_cluster_size[layer_idx, dead_idx] = 1.0
+                self.ema_embed_avg[layer_idx, dead_idx] = sampled
 
     def forward(
         self,
@@ -90,7 +163,9 @@ class ResidualVectorQuantizer(nn.Module):
             Dict containing:
                 - quantized: 量化後的向量 [batch, dim, time]
                 - codes: 所有層的 codes [n_layers, batch, time]
-                - commitment_loss: Commitment loss
+                - loss_commit: Encoder commitment (Σ_i mse(r_i, q_i.detach()))
+                - loss_codebook: Codebook loss (Σ_i mse(r_i.detach(), q_i)) (only for update_mode="grad")
+                - commitment_loss: Backward-compatible alias (= loss_commit + loss_codebook)
         """
         batch_size, dim, time = z.shape
 
@@ -100,7 +175,9 @@ class ResidualVectorQuantizer(nn.Module):
         z_q = torch.zeros_like(z)
         residual = z
         all_codes = []
-        commitment_loss = 0.0
+        # Keep losses as tensors for consistent logging (.item()) across update modes.
+        loss_commit = z.new_zeros(())
+        loss_codebook = z.new_zeros(())
 
         for layer_idx, codebook in enumerate(self.codebooks):
             # 計算到 codebook 的距離
@@ -120,6 +197,14 @@ class ResidualVectorQuantizer(nn.Module):
             y2 = (codebook.weight ** 2).sum(dim=1).unsqueeze(0)  # [1, K]
             distances = x2 + y2 - 2.0 * (residual_flat @ codebook.weight.t())
 
+            # Optional: usage-aware penalty (EMA mode only).
+            # Idea: penalize frequently-used codes (large EMA cluster_size) so top-k mass doesn't drift up.
+            if self.update_mode == "ema" and self.ema_usage_penalty > 0.0:
+                # clamp(min=1) keeps penalty >= 0 and avoids -inf for never-used codes.
+                usage_penalty = torch.log(self.ema_cluster_size[layer_idx].clamp(min=1.0))
+                usage_penalty = usage_penalty * self.ema_usage_penalty
+                distances = distances + usage_penalty.to(distances.dtype).unsqueeze(0)
+
             # 找最近的 code
             indices = torch.argmin(distances, dim=1)  # [batch*time]
 
@@ -127,8 +212,18 @@ class ResidualVectorQuantizer(nn.Module):
             q = codebook(indices)  # [batch*time, dim]
             q = q.reshape(batch_size, time, dim)  # [batch, time, dim]
 
-            # Commitment loss (鼓勵 encoder 輸出靠近 codebook)
-            commitment_loss += F.mse_loss(residual.detach(), q)
+            # Phase 3-2 losses
+            # Encoder commitment (updates encoder; codebook is detached)
+            loss_commit = loss_commit + F.mse_loss(residual, q.detach())
+
+            if self.update_mode == "grad":
+                # Codebook loss (updates codebook; residual is detached)
+                loss_codebook = loss_codebook + F.mse_loss(residual.detach(), q)
+            else:
+                # EMA update (updates codebook buffers/weights, not via optimizer)
+                # Only update EMA during training; evaluation should not mutate the codebooks.
+                if self.training:
+                    self._ema_update_layer(layer_idx, residual_flat.detach(), indices)
 
             # Straight-through estimator
             q = residual + (q - residual).detach()
@@ -159,7 +254,9 @@ class ResidualVectorQuantizer(nn.Module):
             'quantized': z_q,
             'codes': codes_output,
             'all_layer_codes': all_codes,  # [n_layers, batch, time]
-            'commitment_loss': commitment_loss * self.commitment_cost,
+            'loss_commit': loss_commit,
+            'loss_codebook': loss_codebook,
+            'commitment_loss': (loss_commit + loss_codebook),
             'bandwidth': torch.tensor([bandwidth], device=z.device),
         }
 
@@ -201,6 +298,11 @@ class TeacherStudentRVQ(TeacherStudentIntermediate):
         device: str = 'cuda',
         n_rvq_layers: int = 4,
         rvq_codebook_size: int = 1024,
+        rvq_update: str = "grad",
+        ema_decay: float = 0.99,
+        ema_eps: float = 1e-5,
+        ema_dead_code_threshold: int = 0,
+        ema_usage_penalty: float = 0.0,
     ):
         """
         Args:
@@ -232,7 +334,11 @@ class TeacherStudentRVQ(TeacherStudentIntermediate):
             n_layers=n_rvq_layers,
             codebook_size=rvq_codebook_size,
             dim=quantizer_dim,
-            commitment_cost=0.25
+            update_mode=rvq_update,
+            ema_decay=ema_decay,
+            ema_eps=ema_eps,
+            ema_dead_code_threshold=ema_dead_code_threshold,
+            ema_usage_penalty=ema_usage_penalty,
         ).to(device)
 
         print(f"\n{'='*60}")
@@ -241,6 +347,12 @@ class TeacherStudentRVQ(TeacherStudentIntermediate):
         print(f"  Codebook size per layer: {rvq_codebook_size}")
         print(f"  Dimension: {quantizer_dim}")
         print(f"  Total expressiveness: {rvq_codebook_size}^{n_rvq_layers}")
+        print(f"  Update mode: {rvq_update}")
+        if rvq_update == "ema":
+            print(f"  EMA decay: {ema_decay}")
+            print(f"  EMA eps: {ema_eps}")
+            print(f"  Dead-code threshold: {ema_dead_code_threshold}")
+            print(f"  Usage penalty (log cluster_size): {ema_usage_penalty}")
         print(f"{'='*60}\n")
 
         # 保存配置
@@ -279,7 +391,9 @@ class TeacherStudentRVQ(TeacherStudentIntermediate):
             'teacher_encoder_out': teacher_encoder_out,
             'student_encoder_out': student_encoder_out,
             'student_quantized': student_vq['quantized'],
-            'rvq_commitment_loss': student_vq['commitment_loss'],
+            'rvq_loss_commit': student_vq['loss_commit'],
+            'rvq_loss_codebook': student_vq['loss_codebook'],
+            'rvq_commitment_loss': student_vq['commitment_loss'],  # backward-compatible
             'all_layer_codes': student_vq['all_layer_codes'],  # [n_layers, batch, time]
         }
 
