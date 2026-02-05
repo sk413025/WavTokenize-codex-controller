@@ -54,6 +54,8 @@ import matplotlib.pyplot as plt
 import json
 import argparse
 import sys
+import math
+import time
 from pathlib import Path
 from datetime import datetime
 from tqdm import tqdm
@@ -89,7 +91,13 @@ def masked_mse(student: torch.Tensor, teacher: torch.Tensor, lengths: torch.Tens
     return sq.sum() / denom.clamp(min=1.0)
 
 
-def evaluate_collapse_metrics(model, val_loader, device, max_batches=50):
+def evaluate_collapse_metrics(
+    model,
+    val_loader,
+    device,
+    max_batches: int = 50,
+    return_layer0_counts: bool = False,
+):
     """
     評估 RVQ collapse metrics (針對 RVQ 架構修正)
 
@@ -208,7 +216,7 @@ def evaluate_collapse_metrics(model, val_loader, device, max_batches=50):
 
     model.train()
 
-    return {
+    metrics = {
         # Layer 0 metrics (comparable to baseline single VQ)
         'layer0_entropy': entropy_layer0,
         'layer0_top10_mass': top_10_mass_layer0,
@@ -229,6 +237,13 @@ def evaluate_collapse_metrics(model, val_loader, device, max_batches=50):
         'top_10_mass': top_10_mass_layer0,
         'used_codes': used_codes_layer0,
     }
+
+    if return_layer0_counts:
+        return metrics, {
+            'layer0_code_counts': code_counts,  # CPU tensor [K]
+        }
+
+    return metrics
 
 
 def analyze_rvq_layer_usage(model, all_layer_codes):
@@ -448,6 +463,246 @@ def plot_loss_curves(loss_history, metrics_history, output_dir):
     print(f"Training curves saved to {output_dir / 'training_curves.png'}")
 
 
+def _entropy_from_count_list(counts: list[int]) -> float:
+    total = float(sum(counts))
+    if total <= 0.0:
+        return 0.0
+    h = 0.0
+    for c in counts:
+        if c <= 0:
+            continue
+        p = float(c) / total
+        h -= p * math.log(p)
+    return h
+
+
+def _select_hot_codes(code_counts: torch.Tensor, hot_k: int, exclude: set[int]) -> list[int]:
+    if hot_k <= 0:
+        return []
+    counts = code_counts.detach().clone()
+    if counts.is_cuda:
+        counts = counts.cpu()
+    if exclude:
+        idx = torch.tensor(sorted(exclude), dtype=torch.long)
+        idx = idx[(idx >= 0) & (idx < counts.numel())]
+        if idx.numel() > 0:
+            counts[idx] = -1
+    k = min(int(hot_k), int(counts.numel()))
+    if k <= 0:
+        return []
+    _, top_idx = torch.topk(counts, k=k)
+    return [int(i) for i in top_idx.tolist() if int(counts[int(i)].item()) >= 0]
+
+
+def _select_children(
+    code_counts: torch.Tensor,
+    parent: int,
+    k: int,
+    reserved: set[int],
+) -> list[int]:
+    counts = code_counts.detach()
+    if counts.is_cuda:
+        counts = counts.cpu()
+
+    K = int(counts.numel())
+    need = max(int(k) - 1, 0)
+    if need == 0:
+        return []
+
+    blocked = set(reserved)
+    blocked.add(int(parent))
+
+    children: list[int] = []
+
+    # Prefer truly-unused codes first.
+    for i in range(K):
+        if len(children) >= need:
+            break
+        if i in blocked:
+            continue
+        if int(counts[i].item()) == 0:
+            children.append(i)
+            blocked.add(i)
+
+    if len(children) >= need:
+        return children
+
+    # Fallback: pick lowest-usage codes.
+    candidates: list[tuple[int, int]] = []
+    for i in range(K):
+        if i in blocked:
+            continue
+        candidates.append((int(counts[i].item()), i))
+    candidates.sort(key=lambda x: x[0])
+    for _, i in candidates:
+        children.append(i)
+        if len(children) >= need:
+            break
+
+    return children
+
+
+@torch.no_grad()
+def _apply_codebook_split(
+    model,
+    layer_idx: int,
+    parent: int,
+    children: list[int],
+    init_method: str,
+    init_std: float,
+) -> None:
+    if not children:
+        return
+
+    rvq = model.rvq
+    codebook = rvq.codebooks[int(layer_idx)]
+    device = codebook.weight.device
+
+    parent = int(parent)
+    parent_vec = codebook.weight.data[parent].detach().clone()
+
+    child_idx = torch.tensor(children, device=device, dtype=torch.long)
+
+    if init_method == "noise":
+        noise = torch.randn((child_idx.numel(), parent_vec.numel()), device=device, dtype=parent_vec.dtype)
+        noise = noise * float(init_std)
+        new_vecs = parent_vec.unsqueeze(0) + noise
+    else:
+        raise ValueError(f"Unsupported init_method={init_method!r}")
+
+    codebook.weight.data[child_idx] = new_vecs
+
+    # Keep EMA buffers consistent so the next EMA update doesn't instantly overwrite split init.
+    if getattr(rvq, "update_mode", None) == "ema":
+        thr = int(getattr(rvq, "ema_dead_code_threshold", 0))
+        min_cluster = float(max(thr, 1))
+        rvq.ema_cluster_size[int(layer_idx), child_idx] = min_cluster
+        rvq.ema_embed_avg[int(layer_idx), child_idx] = codebook.weight.data[child_idx].float() * min_cluster
+
+
+def _compute_split_group_metrics(
+    layer0_code_counts: torch.Tensor,
+    split_groups: list[dict],
+) -> list[dict]:
+    counts = layer0_code_counts.detach()
+    if counts.is_cuda:
+        counts = counts.cpu()
+
+    out: list[dict] = []
+    for g in split_groups:
+        parent = int(g["parent"])
+        children = [int(x) for x in g["children"]]
+        k = int(g.get("k", len(children) + 1))
+
+        parent_count = int(counts[parent].item())
+        child_counts = [int(counts[c].item()) for c in children]
+        child_active = int(sum(1 for c in child_counts if c > 0))
+
+        h = _entropy_from_count_list(child_counts)
+        h_max = math.log(max(len(children), 1))
+        h_norm = float(h / h_max) if h_max > 0 else 0.0
+
+        children_total = int(sum(child_counts))
+        top_child_local = int(max(range(len(children)), key=lambda i: child_counts[i])) if children else -1
+        top_child = int(children[top_child_local]) if top_child_local >= 0 else -1
+        top_child_frac = (float(child_counts[top_child_local]) / float(children_total)) if (children_total > 0 and top_child_local >= 0) else 0.0
+
+        group_total = int(parent_count + children_total)
+        parent_frac_in_group = (float(parent_count) / float(group_total)) if group_total > 0 else 0.0
+
+        out.append({
+            "layer": int(g.get("layer", 0)),
+            "parent": parent,
+            "children": children,
+            "k": k,
+            "parent_count": parent_count,
+            "children_counts": child_counts,
+            "child_active_count": child_active,
+            "group_entropy_children": float(h),
+            "group_entropy_children_norm": float(h_norm),
+            "top_child": top_child,
+            "top_child_frac": float(top_child_frac),
+            "parent_frac_in_group": float(parent_frac_in_group),
+        })
+
+    return out
+
+
+@torch.no_grad()
+def _apply_split_embedding_repulsion(
+    model,
+    split_groups: list[dict],
+    weight: float,
+    sigma: float,
+) -> None:
+    """
+    Exp7c option: embedding repulsion among children inside each split group.
+
+    Works with EMA codebooks by updating both codebook weights and EMA buffers.
+    """
+    w = float(weight)
+    s = float(sigma)
+    if w <= 0.0 or s <= 0.0 or not split_groups:
+        return
+
+    rvq = getattr(model, "rvq", None)
+    if rvq is None or not hasattr(rvq, "codebooks"):
+        return
+
+    sigma2 = s * s
+    for g in split_groups:
+        layer_idx = int(g.get("layer", 0))
+        children = [int(x) for x in g.get("children", [])]
+        if len(children) < 2:
+            continue
+
+        codebook = rvq.codebooks[layer_idx]
+        emb_w = codebook.weight.data  # [K, D]
+        device = emb_w.device
+
+        idx = torch.tensor(children, device=device, dtype=torch.long)
+        if idx.numel() < 2:
+            continue
+
+        emb = emb_w[idx]  # [C, D]
+        C = int(emb.shape[0])
+
+        diff = emb.unsqueeze(1) - emb.unsqueeze(0)  # [C, C, D] (i - j)
+        dist2 = (diff * diff).sum(dim=-1, keepdim=True)  # [C, C, 1]
+
+        mask = ~torch.eye(C, device=device, dtype=torch.bool)
+        ker = torch.exp(-dist2 / (2.0 * sigma2)) * mask.unsqueeze(-1)  # [C, C, 1]
+
+        force = (diff * ker).sum(dim=1) / float(max(C - 1, 1))  # [C, D]
+        emb_new = emb + w * force
+        emb_w[idx] = emb_new
+
+        if getattr(rvq, "update_mode", None) == "ema":
+            cs = rvq.ema_cluster_size[layer_idx, idx].unsqueeze(1).clamp(min=1.0)
+            rvq.ema_embed_avg[layer_idx, idx] = emb_w[idx].float() * cs
+
+
+def _cuda_preinit(device: torch.device, retries: int = 3, sleep_s: float = 2.0) -> None:
+    """Best-effort CUDA init with retries (stabilizes flaky cudaGetDeviceCount in some envs)."""
+    if device.type != "cuda":
+        return
+    last_err = None
+    for i in range(int(retries)):
+        try:
+            _ = torch.tensor([0.0], device=device)
+            torch.cuda.synchronize(device)
+            idx = device.index if device.index is not None else 0
+            name = torch.cuda.get_device_name(idx)
+            cap = torch.cuda.get_device_capability(idx)
+            print(f"[CUDA] init ok: device={device} name={name} capability={cap}")
+            return
+        except Exception as e:
+            last_err = e
+            print(f"[CUDA] init attempt {i + 1}/{retries} failed: {type(e).__name__}: {e}")
+            time.sleep(float(sleep_s))
+    raise RuntimeError(f"CUDA init failed after {retries} attempts") from last_err
+
+
 def main():
     parser = argparse.ArgumentParser(description='exp_0128 Phase 3-2: RVQ Fix Training')
     parser.add_argument('--steps', type=int, default=1000, help='Training steps')
@@ -460,6 +715,10 @@ def main():
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument('--device', type=str, default='cuda:0', help='Device')
     parser.add_argument('--eval_interval', type=int, default=200, help='Evaluation interval')
+    parser.add_argument('--eval_max_batches', type=int, default=50, help='Max batches per evaluation')
+    parser.add_argument('--compute_snr', action='store_true', help='Enable sample-level SNR computation in dataloader (slower)')
+    parser.add_argument('--cuda_preinit_retries', type=int, default=30, help='CUDA pre-init retries (helps flaky envs)')
+    parser.add_argument('--cuda_preinit_sleep_s', type=float, default=2.0, help='Sleep seconds between CUDA pre-init retries')
 
     # Phase 3-2: Loss weights
     parser.add_argument('--lambda_quant', type=float, default=1.0, help='Weight for L_quant (z_q vs t_e)')
@@ -481,6 +740,18 @@ def main():
     parser.add_argument('--inter_warmup_steps', type=int, default=0, help='Warmup steps before enabling intermediate loss')
     parser.add_argument('--early_stop_on_collapse', action='store_true', help='Early stop at step 200 if collapse_flag=true')
 
+    # Phase 3-3: Hot-code split (Codebook Split / Hot-Code Branching)
+    parser.add_argument('--enable_hot_split', action='store_true', help='Enable hot-code split (Phase 3-3)')
+    parser.add_argument('--split_layer', type=int, default=0, help='Which RVQ layer to split (default: 0)')
+    parser.add_argument('--split_k', type=int, default=3, help='Split branching factor k (default: 3)')
+    parser.add_argument('--split_hot_k', type=int, default=1, help='Split top-hot-k codes per event (default: 1)')
+    parser.add_argument('--split_interval', type=int, default=0, help='Split interval in steps (0 = one-shot)')
+    parser.add_argument('--split_one_shot_step', type=int, default=0, help='One-shot split step when split_interval=0 (0 or 50 recommended)')
+    parser.add_argument('--split_init_method', type=str, default='noise', choices=['noise'], help='Split init method')
+    parser.add_argument('--split_init_std', type=float, default=1e-3, help='Std for noise init (noise method)')
+    parser.add_argument('--split_repulse_weight', type=float, default=0.0, help='Embedding repulsion weight for children (Exp7c)')
+    parser.add_argument('--split_repulse_sigma', type=float, default=1.0, help='Repulsion sigma (distance scale)')
+
     args = parser.parse_args()
 
     # Set random seed (與 baseline 一致)
@@ -489,7 +760,6 @@ def main():
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
@@ -525,8 +795,17 @@ def main():
     print(f"Loss weights: λ_quant={args.lambda_quant}, λ_pre={args.lambda_pre}, λ_inter={args.lambda_inter}, β_commit={args.beta_commit}, λ_codebook={args.lambda_codebook}")
     print(f"Inter warmup steps: {args.inter_warmup_steps}")
     print(f"Early stop on collapse: {args.early_stop_on_collapse}")
+    print(f"Eval: interval={args.eval_interval}, max_batches={args.eval_max_batches}")
     print(f"Output dir: {output_dir}")
     print("=" * 60)
+
+    # Fail fast on CUDA issues BEFORE expensive dataset/model loading.
+    device = torch.device(args.device)
+    _cuda_preinit(
+        device,
+        retries=int(args.cuda_preinit_retries),
+        sleep_s=float(args.cuda_preinit_sleep_s),
+    )
 
     # Create dataloaders (standard curriculum dataset)
     train_loader, val_loader, curriculum_sampler = create_curriculum_dataloaders(
@@ -535,11 +814,10 @@ def main():
         batch_size=args.batch_size,
         num_workers=4,
         filter_clean_to_clean=True,
-        compute_snr=False,  # Skip SNR for faster loading
+        compute_snr=bool(args.compute_snr),
     )
 
     # Create model with RVQ
-    device = torch.device(args.device)
     model = TeacherStudentRVQ(
         wavtok_config=WAVTOK_CONFIG,
         wavtok_ckpt=WAVTOK_CKPT,
@@ -566,6 +844,18 @@ def main():
         lr=args.lr,
         weight_decay=0.01,
     )
+
+    # Phase 3-3 bookkeeping (split groups + split history)
+    split_groups: list[dict] = []
+    split_history: list[dict] = []
+    reserved_codes: set[int] = set()
+    split_history_path = output_dir / 'split_history.json'
+
+    def _save_split_history() -> None:
+        with open(split_history_path, 'w') as f:
+            json.dump(split_history, f, indent=2)
+
+    _save_split_history()
 
     # Training loop
     model.train()
@@ -598,7 +888,20 @@ def main():
 
     # Initial evaluation
     print("\n--- Initial Evaluation (Step 0) ---")
-    metrics_init = evaluate_collapse_metrics(model, val_loader, device)
+    if args.enable_hot_split:
+        if args.split_layer != 0:
+            raise ValueError(f"Phase 3-3 hot-split currently supports split_layer=0 only (got {args.split_layer}).")
+        metrics_init, extras_init = evaluate_collapse_metrics(
+            model,
+            val_loader,
+            device,
+            max_batches=int(args.eval_max_batches),
+            return_layer0_counts=True,
+        )
+        layer0_counts_init = extras_init["layer0_code_counts"]
+    else:
+        metrics_init = evaluate_collapse_metrics(model, val_loader, device, max_batches=int(args.eval_max_batches))
+        layer0_counts_init = None
     print(f"Initial metrics:")
     for k, v in metrics_init.items():
         if isinstance(v, float):
@@ -609,6 +912,68 @@ def main():
     # Save initial metrics
     metrics_history = [{'step': 0, **metrics_init}]
     loss_history = []
+
+    # Phase 3-3: one-shot split at step 0 (optional)
+    if args.enable_hot_split and int(args.split_interval) == 0 and int(args.split_one_shot_step) == 0:
+        if layer0_counts_init is None:
+            raise RuntimeError("enable_hot_split requires layer0_counts_init at step0.")
+
+        hot_parents = _select_hot_codes(layer0_counts_init, hot_k=int(args.split_hot_k), exclude=reserved_codes)
+        if not hot_parents:
+            print("[HotSplit] step0: no eligible hot parents found; skip.")
+        else:
+            for rank, parent in enumerate(hot_parents, start=1):
+                children = _select_children(
+                    layer0_counts_init,
+                    parent=parent,
+                    k=int(args.split_k),
+                    reserved=reserved_codes,
+                )
+                _apply_codebook_split(
+                    model,
+                    layer_idx=int(args.split_layer),
+                    parent=parent,
+                    children=children,
+                    init_method=str(args.split_init_method),
+                    init_std=float(args.split_init_std),
+                )
+
+                split_groups.append({
+                    "layer": int(args.split_layer),
+                    "parent": int(parent),
+                    "children": [int(x) for x in children],
+                    "k": int(args.split_k),
+                    "created_step": 0,
+                    "init_method": str(args.split_init_method),
+                    "init_std": float(args.split_init_std),
+                })
+
+                reserved_codes.add(int(parent))
+                reserved_codes.update(int(x) for x in children)
+
+                split_history.append({
+                    "step": 0,
+                    "layer": int(args.split_layer),
+                    "parent": int(parent),
+                    "children": [int(x) for x in children],
+                    "k": int(args.split_k),
+                    "hot_rank": int(rank),
+                    "init_method": str(args.split_init_method),
+                    "init_std": float(args.split_init_std),
+                    "selection": {
+                        "source": "val@step0",
+                        "parent_count": int(layer0_counts_init[int(parent)].item()),
+                        "children_prev_counts": [int(layer0_counts_init[int(c)].item()) for c in children],
+                        "unused_pool": int((layer0_counts_init == 0).sum().item()),
+                    },
+                })
+
+                print(
+                    f"[HotSplit] step0 split layer{int(args.split_layer)} parent={int(parent)} "
+                    f"-> children={children} (init={args.split_init_method}, std={args.split_init_std})"
+                )
+
+            _save_split_history()
 
     train_iter = iter(train_loader)
     optimizer.zero_grad()
@@ -695,6 +1060,15 @@ def main():
             scaler.update()
             optimizer.zero_grad()
 
+        # Phase 3-3 / Exp7c: embedding repulsion among children (EMA-safe; updates EMA buffers)
+        if args.enable_hot_split and float(args.split_repulse_weight) > 0.0 and split_groups:
+            _apply_split_embedding_repulsion(
+                model,
+                split_groups,
+                weight=float(args.split_repulse_weight),
+                sigma=float(args.split_repulse_sigma),
+            )
+
         # Log
         loss_history.append({
             'step': step,
@@ -718,7 +1092,23 @@ def main():
         # Evaluation
         if step % args.eval_interval == 0 or step == args.steps:
             print(f"\n--- Evaluation at Step {step} ---")
-            metrics = evaluate_collapse_metrics(model, val_loader, device)
+            if args.enable_hot_split:
+                metrics, extras = evaluate_collapse_metrics(
+                    model,
+                    val_loader,
+                    device,
+                    max_batches=int(args.eval_max_batches),
+                    return_layer0_counts=True,
+                )
+                layer0_counts_eval = extras["layer0_code_counts"]
+                if split_groups:
+                    group_metrics = _compute_split_group_metrics(layer0_counts_eval, split_groups)
+                    metrics["split_groups"] = group_metrics
+                    metrics["split_child_active_min"] = int(min(g["child_active_count"] for g in group_metrics)) if group_metrics else 0
+                    metrics["split_group_entropy_min"] = float(min(g["group_entropy_children"] for g in group_metrics)) if group_metrics else 0.0
+            else:
+                metrics = evaluate_collapse_metrics(model, val_loader, device, max_batches=int(args.eval_max_batches))
+                layer0_counts_eval = None
             metrics['ema_usage_penalty'] = float(getattr(model.rvq, 'ema_usage_penalty', 0.0))
 
             # Average losses since last evaluation (for Phase 3-2 logging)
@@ -778,6 +1168,73 @@ def main():
                     print(f"  {k}: {v:.4f}")
                 else:
                     print(f"  {k}: {v}")
+
+            # Phase 3-3: periodic split (apply AFTER eval so this eval reflects pre-split state)
+            if (
+                args.enable_hot_split
+                and int(args.split_interval) > 0
+                and (step % int(args.split_interval) == 0)
+                and (step < args.steps)
+            ):
+                if layer0_counts_eval is None:
+                    raise RuntimeError("enable_hot_split requires layer0_counts_eval for periodic split.")
+
+                hot_parents = _select_hot_codes(layer0_counts_eval, hot_k=int(args.split_hot_k), exclude=reserved_codes)
+                if not hot_parents:
+                    print(f"[HotSplit] step{step}: no eligible hot parents found; skip.")
+                else:
+                    for rank, parent in enumerate(hot_parents, start=1):
+                        children = _select_children(
+                            layer0_counts_eval,
+                            parent=parent,
+                            k=int(args.split_k),
+                            reserved=reserved_codes,
+                        )
+                        _apply_codebook_split(
+                            model,
+                            layer_idx=int(args.split_layer),
+                            parent=parent,
+                            children=children,
+                            init_method=str(args.split_init_method),
+                            init_std=float(args.split_init_std),
+                        )
+
+                        split_groups.append({
+                            "layer": int(args.split_layer),
+                            "parent": int(parent),
+                            "children": [int(x) for x in children],
+                            "k": int(args.split_k),
+                            "created_step": int(step),
+                            "init_method": str(args.split_init_method),
+                            "init_std": float(args.split_init_std),
+                        })
+
+                        reserved_codes.add(int(parent))
+                        reserved_codes.update(int(x) for x in children)
+
+                        split_history.append({
+                            "step": int(step),
+                            "layer": int(args.split_layer),
+                            "parent": int(parent),
+                            "children": [int(x) for x in children],
+                            "k": int(args.split_k),
+                            "hot_rank": int(rank),
+                            "init_method": str(args.split_init_method),
+                            "init_std": float(args.split_init_std),
+                            "selection": {
+                                "source": f"val@step{step}",
+                                "parent_count": int(layer0_counts_eval[int(parent)].item()),
+                                "children_prev_counts": [int(layer0_counts_eval[int(c)].item()) for c in children],
+                                "unused_pool": int((layer0_counts_eval == 0).sum().item()),
+                            },
+                        })
+
+                        print(
+                            f"[HotSplit] step{step} split layer{int(args.split_layer)} parent={int(parent)} "
+                            f"-> children={children} (init={args.split_init_method}, std={args.split_init_std})"
+                        )
+
+                    _save_split_history()
 
             # Save checkpoint
             checkpoint_dir = output_dir / 'checkpoints'
@@ -860,6 +1317,34 @@ def main():
         final_metrics['feature_mse'] < 0.1
     )
 
+    # Phase 3-3 acceptance (hot-split specific; see exp_0128/phase3-3/ACCEPTANCE.md)
+    phase3_3_summary = None
+    if bool(args.enable_hot_split):
+        split_p1 = None
+        if metrics_at_step200 is not None and metrics_at_step200.get("split_groups"):
+            split_p1 = all(int(g.get("child_active_count", 0)) >= 2 for g in metrics_at_step200["split_groups"])
+
+        split_p2 = None
+        if int(final_step) >= 1000:
+            split_p2 = (
+                float(final_metrics.get("layer0_top10_mass", 1.0)) <= 0.95 and
+                int(final_metrics.get("layer0_used_codes", 0)) >= 20 and
+                float(final_metrics.get("feature_mse", 1e9)) <= 0.1
+            )
+
+        phase3_3_summary = {
+            "enabled": True,
+            "acceptance": {
+                "P0_pass": True,
+                "P1_pass": split_p1,
+                "P2_pass": split_p2,
+                "P3_pass": None,
+            },
+            "split_history_path": str(split_history_path),
+            "split_history": split_history,
+            "split_groups": split_groups,
+        }
+
     summary = {
         'config': config,
         'final_step': final_step,
@@ -902,6 +1387,7 @@ def main():
         },
         # For Phase 3-2, "success" means passing P2 (worth continuing RVQ).
         'success': bool(p2_pass),
+        'phase3_3': phase3_3_summary,
     }
 
     with open(output_dir / 'summary.json', 'w') as f:
