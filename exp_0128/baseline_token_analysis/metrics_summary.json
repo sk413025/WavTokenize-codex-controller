@@ -1,320 +1,85 @@
 {
-  "baseline": {
-    "val": {
-      "entropy": 6.07,
-      "top_10_mass": 0.197,
-      "top_50_mass": 0.45,
-      "top_100_mass": 0.65,
-      "used_codes": 740,
-      "codebook_size": 4096,
-      "usage_pct": 18.07,
-      "strict_acc": 0.0091,
-      "kl_divergence": 1.25
+  "ideal_uniform_target_reference": {
+    "entropy_bits": 12.0,
+    "top_100_mass_frac": 0.0244140625,
+    "top_100_mass_pct": 2.44140625,
+    "top_10_mass_frac": 0.00244140625,
+    "top_10_mass_pct": 0.244140625,
+    "top_50_mass_frac": 0.01220703125,
+    "top_50_mass_pct": 1.220703125,
+    "usage_pct": 100.0,
+    "used_codes": 4096
+  },
+  "metadata": {
+    "checkpoint": "/home/sbplab/ruizi/WavTokenize-feature-analysis/exp_0112_intermediate/runs/exp_k_v6_20260125_234609_20260125_234613/checkpoints/checkpoint_epoch300.pt",
+    "codebook_size": 4096,
+    "epoch": 300,
+    "kind": "REAL_FROM_MODEL_OUTPUTS",
+    "source_file": "exp_0128/baseline_token_analysis/real_token_statistics.json",
+    "units": {
+      "entropy_bits": "bits",
+      "top_k_mass_frac": "fraction",
+      "top_k_mass_pct": "percent",
+      "usage_pct": "percent"
     },
-    "train": {
-      "entropy": 6.2,
-      "top_10_mass": 0.185,
-      "top_50_mass": 0.42,
-      "top_100_mass": 0.62,
-      "used_codes": 820,
-      "codebook_size": 4096,
-      "usage_pct": 20.0,
-      "strict_acc": 0.015
-    }
+    "warning": "Do not compare *_mass_pct directly with training metrics that use fraction (0~1)."
   },
-  "teacher_target": {
-    "val": {
-      "entropy": 11.5,
-      "top_10_mass": 0.002,
-      "top_50_mass": 0.012,
-      "top_100_mass": 0.024,
-      "used_codes": 4096,
-      "codebook_size": 4096,
-      "usage_pct": 100.0
+  "notes": [
+    "Teacher distributions are naturally non-uniform; top-k mass can be ~10\u201330% without implying RVQ collapse.",
+    "This summary is the authoritative REAL baseline for teacher/student token distribution at the referenced checkpoint."
+  ],
+  "splits": {
+    "train_student": {
+      "entropy_bits": 8.26626902569328,
+      "label": "Student Train",
+      "top_100_mass_frac": 0.4525456721046244,
+      "top_100_mass_pct": 45.25456721046244,
+      "top_10_mass_frac": 0.3253568659835513,
+      "top_10_mass_pct": 32.53568659835513,
+      "top_50_mass_frac": 0.3903679890791424,
+      "top_50_mass_pct": 39.03679890791424,
+      "total_tokens": 474688,
+      "usage_pct": 44.4091796875,
+      "used_codes": 1819
     },
-    "train": {
-      "entropy": 11.6,
-      "top_10_mass": 0.002,
-      "top_50_mass": 0.012,
-      "top_100_mass": 0.024,
-      "used_codes": 4096,
-      "codebook_size": 4096,
-      "usage_pct": 100.0
+    "train_teacher": {
+      "entropy_bits": 8.265866053538879,
+      "label": "Teacher Train",
+      "top_100_mass_frac": 0.46372564716192544,
+      "top_100_mass_pct": 46.37256471619254,
+      "top_10_mass_frac": 0.25309887757853583,
+      "top_10_mass_pct": 25.309887757853584,
+      "top_50_mass_frac": 0.36093813199406777,
+      "top_50_mass_pct": 36.093813199406775,
+      "total_tokens": 474688,
+      "usage_pct": 40.673828125,
+      "used_codes": 1666
+    },
+    "val_student": {
+      "entropy_bits": 8.918546071143783,
+      "label": "Student Val",
+      "top_100_mass_frac": 0.49602902804957594,
+      "top_100_mass_pct": 49.602902804957594,
+      "top_10_mass_frac": 0.23102304848880192,
+      "top_10_mass_pct": 23.10230484888019,
+      "top_50_mass_frac": 0.423165362035225,
+      "top_50_mass_pct": 42.316536203522496,
+      "total_tokens": 367920,
+      "usage_pct": 43.7255859375,
+      "used_codes": 1791
+    },
+    "val_teacher": {
+      "entropy_bits": 9.015631052923398,
+      "label": "Teacher Val",
+      "top_100_mass_frac": 0.49245759947814755,
+      "top_100_mass_pct": 49.245759947814754,
+      "top_10_mass_frac": 0.12249130245705586,
+      "top_10_mass_pct": 12.249130245705587,
+      "top_50_mass_frac": 0.34519732550554477,
+      "top_50_mass_pct": 34.51973255055448,
+      "total_tokens": 367920,
+      "usage_pct": 38.6474609375,
+      "used_codes": 1583
     }
-  },
-  "phase32_best": {
-    "val": {
-      "entropy": 8.963,
-      "top_10_mass": 0.177,
-      "used_codes": 1089,
-      "codebook_size": 2048,
-      "usage_pct": 53.17
-    }
-  },
-  "top_tokens": {
-    "train_top20": [
-      {
-        "rank": 1,
-        "token_id": 0,
-        "frequency": 48.779060165435816,
-        "cumulative_freq": 48.779060165435816
-      },
-      {
-        "rank": 2,
-        "token_id": 6,
-        "frequency": 15.013516852722963,
-        "cumulative_freq": 63.79257701815878
-      },
-      {
-        "rank": 3,
-        "token_id": 8,
-        "frequency": 7.53576411024557,
-        "cumulative_freq": 71.32834112840435
-      },
-      {
-        "rank": 4,
-        "token_id": 12,
-        "frequency": 4.620951849472407,
-        "cumulative_freq": 75.94929297787675
-      },
-      {
-        "rank": 5,
-        "token_id": 14,
-        "frequency": 3.1621642255034685,
-        "cumulative_freq": 79.11145720338023
-      },
-      {
-        "rank": 6,
-        "token_id": 17,
-        "frequency": 2.3194034711534894,
-        "cumulative_freq": 81.43086067453372
-      },
-      {
-        "rank": 7,
-        "token_id": 23,
-        "frequency": 1.7847063152204314,
-        "cumulative_freq": 83.21556698975415
-      },
-      {
-        "rank": 8,
-        "token_id": 25,
-        "frequency": 1.422264763453453,
-        "cumulative_freq": 84.6378317532076
-      },
-      {
-        "rank": 9,
-        "token_id": 26,
-        "frequency": 1.1641827565489715,
-        "cumulative_freq": 85.80201450975657
-      },
-      {
-        "rank": 10,
-        "token_id": 29,
-        "frequency": 0.9732702050769374,
-        "cumulative_freq": 86.77528471483352
-      },
-      {
-        "rank": 11,
-        "token_id": 30,
-        "frequency": 0.8276864847083627,
-        "cumulative_freq": 87.60297119954188
-      },
-      {
-        "rank": 12,
-        "token_id": 32,
-        "frequency": 0.7138801564508563,
-        "cumulative_freq": 88.31685135599274
-      },
-      {
-        "rank": 13,
-        "token_id": 33,
-        "frequency": 0.6230597973573347,
-        "cumulative_freq": 88.93991115335007
-      },
-      {
-        "rank": 14,
-        "token_id": 43,
-        "frequency": 0.5493078023612564,
-        "cumulative_freq": 89.48921895571132
-      },
-      {
-        "rank": 15,
-        "token_id": 44,
-        "frequency": 0.488515432655602,
-        "cumulative_freq": 89.97773438836693
-      },
-      {
-        "rank": 16,
-        "token_id": 45,
-        "frequency": 0.4377533294557619,
-        "cumulative_freq": 90.41548771782269
-      },
-      {
-        "rank": 17,
-        "token_id": 51,
-        "frequency": 0.3948846590628131,
-        "cumulative_freq": 90.8103723768855
-      },
-      {
-        "rank": 18,
-        "token_id": 52,
-        "frequency": 0.3583192742094378,
-        "cumulative_freq": 91.16869165109493
-      },
-      {
-        "rank": 19,
-        "token_id": 56,
-        "frequency": 0.32685287307033833,
-        "cumulative_freq": 91.49554452416527
-      },
-      {
-        "rank": 20,
-        "token_id": 58,
-        "frequency": 0.2995590439138831,
-        "cumulative_freq": 91.79510356807916
-      }
-    ],
-    "val_top20": [
-      {
-        "rank": 1,
-        "token_id": 11,
-        "frequency": 53.17398018941737,
-        "cumulative_freq": 53.17398018941737
-      },
-      {
-        "rank": 2,
-        "token_id": 12,
-        "frequency": 15.270215893057165,
-        "cumulative_freq": 68.44419608247453
-      },
-      {
-        "rank": 3,
-        "token_id": 15,
-        "frequency": 7.360052478273311,
-        "cumulative_freq": 75.80424856074785
-      },
-      {
-        "rank": 4,
-        "token_id": 18,
-        "frequency": 4.3852179692010855,
-        "cumulative_freq": 80.18946652994893
-      },
-      {
-        "rank": 5,
-        "token_id": 21,
-        "frequency": 2.9346287074116066,
-        "cumulative_freq": 83.12409523736054
-      },
-      {
-        "rank": 6,
-        "token_id": 25,
-        "frequency": 2.113620043621101,
-        "cumulative_freq": 85.23771528098163
-      },
-      {
-        "rank": 7,
-        "token_id": 33,
-        "frequency": 1.6014843440551536,
-        "cumulative_freq": 86.83919962503678
-      },
-      {
-        "rank": 8,
-        "token_id": 36,
-        "frequency": 1.2593231668811815,
-        "cumulative_freq": 88.09852279191797
-      },
-      {
-        "rank": 9,
-        "token_id": 42,
-        "frequency": 1.0187383432643253,
-        "cumulative_freq": 89.1172611351823
-      },
-      {
-        "rank": 10,
-        "token_id": 43,
-        "frequency": 0.842750792182697,
-        "cumulative_freq": 89.960011927365
-      },
-      {
-        "rank": 11,
-        "token_id": 45,
-        "frequency": 0.7098920885052314,
-        "cumulative_freq": 90.66990401587023
-      },
-      {
-        "rank": 12,
-        "token_id": 59,
-        "frequency": 0.60697796679908,
-        "cumulative_freq": 91.27688198266931
-      },
-      {
-        "rank": 13,
-        "token_id": 61,
-        "frequency": 0.525534383408744,
-        "cumulative_freq": 91.80241636607805
-      },
-      {
-        "rank": 14,
-        "token_id": 63,
-        "frequency": 0.45990560789241525,
-        "cumulative_freq": 92.26232197397046
-      },
-      {
-        "rank": 15,
-        "token_id": 65,
-        "frequency": 0.40619530856739244,
-        "cumulative_freq": 92.66851728253785
-      },
-      {
-        "rank": 16,
-        "token_id": 72,
-        "frequency": 0.36164561255151745,
-        "cumulative_freq": 93.03016289508936
-      },
-      {
-        "rank": 17,
-        "token_id": 75,
-        "frequency": 0.3242583070679811,
-        "cumulative_freq": 93.35442120215734
-      },
-      {
-        "rank": 18,
-        "token_id": 79,
-        "frequency": 0.2925557647700338,
-        "cumulative_freq": 93.64697696692737
-      },
-      {
-        "rank": 19,
-        "token_id": 80,
-        "frequency": 0.26542552663054314,
-        "cumulative_freq": 93.9124024935579
-      },
-      {
-        "rank": 20,
-        "token_id": 84,
-        "frequency": 0.24201661216317802,
-        "cumulative_freq": 94.15441910572109
-      }
-    ],
-    "note": "These are simulated patterns based on observed collapse metrics. Real token IDs would require loading actual model outputs."
-  },
-  "analysis": {
-    "baseline_problems": [
-      "Low entropy (6.07) - far from ideal (12.0)",
-      "High top-10 concentration (19.7%) - should be < 0.5%",
-      "Low codebook usage (18%) - wasting 82% of codes",
-      "Severe token collapse on validation set"
-    ],
-    "phase32_improvements": [
-      "Entropy: 6.07 \u2192 8.96 (+47.8%)",
-      "Top-10 mass: 19.7% \u2192 17.7% (-10.2%)",
-      "Usage: 18% \u2192 53% (+195%)",
-      "P2 validation gate passed - worth continuing RVQ"
-    ],
-    "remaining_gaps": [
-      "Top-10 mass still 17.7% (target < 15% for P3)",
-      "Need full training (300 epochs) to verify sustainability",
-      "RVQ architecture shows promise but needs tuning"
-    ]
   }
 }

@@ -4,23 +4,51 @@
   "epoch": 300,
   "train_student": {
     "split": "train_student",
-    "total_tokens": 471648,
-    "used_codes": 1813,
-    "usage_pct": 44.2626953125,
-    "entropy": 8.28322734832368,
-    "top_10_mass": 32.26558789605808,
-    "top_50_mass": 38.76153402537486,
-    "top_100_mass": 44.967221317592795
+    "total_tokens": 474688,
+    "used_codes": 1819,
+    "usage_pct": 44.4091796875,
+    "entropy": 8.26626902569328,
+    "top_10_mass": 32.53568659835513,
+    "top_50_mass": 39.03679890791424,
+    "top_100_mass": 45.25456721046244,
+    "top_10_mass_pct": 32.53568659835513,
+    "top_50_mass_pct": 39.03679890791424,
+    "top_100_mass_pct": 45.25456721046244,
+    "top_10_mass_frac": 0.3253568659835513,
+    "top_50_mass_frac": 0.3903679890791424,
+    "top_100_mass_frac": 0.4525456721046244,
+    "codebook_size": 4096,
+    "units": {
+      "entropy": "bits",
+      "usage_pct": "percent",
+      "top_10_mass": "percent",
+      "top_50_mass": "percent",
+      "top_100_mass": "percent"
+    }
   },
   "train_teacher": {
     "split": "train_teacher",
-    "total_tokens": 471648,
-    "used_codes": 1661,
-    "usage_pct": 40.5517578125,
-    "entropy": 8.270400036711424,
-    "top_10_mass": 25.192516452947963,
-    "top_50_mass": 36.08114526087252,
-    "top_100_mass": 46.33519065065472
+    "total_tokens": 474688,
+    "used_codes": 1666,
+    "usage_pct": 40.673828125,
+    "entropy": 8.265866053538879,
+    "top_10_mass": 25.309887757853584,
+    "top_50_mass": 36.093813199406775,
+    "top_100_mass": 46.37256471619254,
+    "top_10_mass_pct": 25.309887757853584,
+    "top_50_mass_pct": 36.093813199406775,
+    "top_100_mass_pct": 46.37256471619254,
+    "top_10_mass_frac": 0.25309887757853583,
+    "top_50_mass_frac": 0.36093813199406777,
+    "top_100_mass_frac": 0.46372564716192544,
+    "codebook_size": 4096,
+    "units": {
+      "entropy": "bits",
+      "usage_pct": "percent",
+      "top_10_mass": "percent",
+      "top_50_mass": "percent",
+      "top_100_mass": "percent"
+    }
   },
   "validation_student": {
     "split": "val_student",
@@ -30,7 +58,21 @@
     "entropy": 8.918546071143783,
     "top_10_mass": 23.10230484888019,
     "top_50_mass": 42.316536203522496,
-    "top_100_mass": 49.602902804957594
+    "top_100_mass": 49.602902804957594,
+    "top_10_mass_pct": 23.10230484888019,
+    "top_50_mass_pct": 42.316536203522496,
+    "top_100_mass_pct": 49.602902804957594,
+    "top_10_mass_frac": 0.23102304848880192,
+    "top_50_mass_frac": 0.423165362035225,
+    "top_100_mass_frac": 0.49602902804957594,
+    "codebook_size": 4096,
+    "units": {
+      "entropy": "bits",
+      "usage_pct": "percent",
+      "top_10_mass": "percent",
+      "top_50_mass": "percent",
+      "top_100_mass": "percent"
+    }
   },
   "validation_teacher": {
     "split": "val_teacher",
@@ -40,78 +82,92 @@
     "entropy": 9.015631052923398,
     "top_10_mass": 12.249130245705587,
     "top_50_mass": 34.51973255055448,
-    "top_100_mass": 49.245759947814754
+    "top_100_mass": 49.245759947814754,
+    "top_10_mass_pct": 12.249130245705587,
+    "top_50_mass_pct": 34.51973255055448,
+    "top_100_mass_pct": 49.245759947814754,
+    "top_10_mass_frac": 0.12249130245705586,
+    "top_50_mass_frac": 0.34519732550554477,
+    "top_100_mass_frac": 0.49245759947814755,
+    "codebook_size": 4096,
+    "units": {
+      "entropy": "bits",
+      "usage_pct": "percent",
+      "top_10_mass": "percent",
+      "top_50_mass": "percent",
+      "top_100_mass": "percent"
+    }
   },
   "top10_train_student_tokens": [
     {
       "rank": 1,
       "token_id": 278,
-      "count": 102330,
-      "frequency": 21.69626501119479,
-      "cumulative_freq": 21.69626501119479
+      "count": 103288,
+      "frequency": 21.7591344209249,
+      "cumulative_freq": 21.7591344209249
     },
     {
       "rank": 2,
       "token_id": 1834,
-      "count": 38870,
-      "frequency": 8.241315557364814,
-      "cumulative_freq": 29.937580568559603
+      "count": 39623,
+      "frequency": 8.347166981259269,
+      "cumulative_freq": 30.106301402184172
     },
     {
       "rank": 3,
       "token_id": 77,
-      "count": 2587,
-      "frequency": 0.5485022728814709,
-      "cumulative_freq": 30.486082841441075
+      "count": 2639,
+      "frequency": 0.5559441148712417,
+      "cumulative_freq": 30.662245517055414
     },
     {
       "rank": 4,
       "token_id": 316,
-      "count": 1666,
-      "frequency": 0.35322952710495964,
-      "cumulative_freq": 30.839312368546036
+      "count": 1776,
+      "frequency": 0.374140488067952,
+      "cumulative_freq": 31.036386005123365
     },
     {
       "rank": 5,
       "token_id": 1288,
-      "count": 1287,
-      "frequency": 0.2728729900264604,
-      "cumulative_freq": 31.112185358572496
+      "count": 1381,
+      "frequency": 0.2909279358231091,
+      "cumulative_freq": 31.327313940946475
     },
     {
       "rank": 6,
       "token_id": 1246,
-      "count": 1181,
-      "frequency": 0.2503986023475134,
-      "cumulative_freq": 31.36258396092001
+      "count": 1248,
+      "frequency": 0.26290953215585816,
+      "cumulative_freq": 31.590223473102334
     },
     {
       "rank": 7,
       "token_id": 1346,
-      "count": 1148,
-      "frequency": 0.2434018590135016,
-      "cumulative_freq": 31.60598581993351
+      "count": 1171,
+      "frequency": 0.24668835108534445,
+      "cumulative_freq": 31.836911824187677
     },
     {
       "rank": 8,
       "token_id": 1157,
-      "count": 1109,
-      "frequency": 0.23513298052785128,
-      "cumulative_freq": 31.841118800461363
+      "count": 1166,
+      "frequency": 0.24563502763920725,
+      "cumulative_freq": 32.08254685182688
     },
     {
       "rank": 9,
       "token_id": 710,
-      "count": 1042,
-      "frequency": 0.22092747133455456,
-      "cumulative_freq": 32.062046271795914
+      "count": 1115,
+      "frequency": 0.23489112848860727,
+      "cumulative_freq": 32.31743798031549
     },
     {
       "rank": 10,
       "token_id": 766,
-      "count": 960,
-      "frequency": 0.20354162426216163,
-      "cumulative_freq": 32.26558789605808
+      "count": 1036,
+      "frequency": 0.21824861803963866,
+      "cumulative_freq": 32.53568659835513
     }
   ],
   "top10_val_student_tokens": [

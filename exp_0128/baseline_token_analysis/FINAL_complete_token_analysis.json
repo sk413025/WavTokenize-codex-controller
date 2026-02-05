@@ -2,159 +2,180 @@
   "metadata": {
     "codebook_size": 4096,
     "checkpoint": "/home/sbplab/ruizi/WavTokenize-feature-analysis/exp_0112_intermediate/runs/exp_k_v6_20260125_234609_20260125_234613/checkpoints/checkpoint_epoch300.pt",
-    "epoch": 300
+    "epoch": 300,
+    "units": {
+      "entropy": "bits",
+      "top_10_mass": "percent",
+      "top_50_mass": "percent",
+      "top_100_mass": "percent",
+      "usage_pct": "percent"
+    }
   },
   "student_train": {
     "statistics": {
       "split": "train_student",
-      "total_tokens": 471648,
-      "used_codes": 1813,
-      "usage_pct": 44.2626953125,
-      "entropy": 8.28322734832368,
-      "top_10_mass": 32.26558789605808,
-      "top_50_mass": 38.76153402537486,
-      "top_100_mass": 44.967221317592795
+      "total_tokens": 474688,
+      "used_codes": 1819,
+      "usage_pct": 44.4091796875,
+      "entropy": 8.26626902569328,
+      "top_10_mass": 32.53568659835513,
+      "top_50_mass": 39.03679890791424,
+      "top_100_mass": 45.25456721046244,
+      "top_10_mass_pct": 32.53568659835513,
+      "top_50_mass_pct": 39.03679890791424,
+      "top_100_mass_pct": 45.25456721046244,
+      "top_10_mass_frac": 0.3253568659835513,
+      "top_50_mass_frac": 0.3903679890791424,
+      "top_100_mass_frac": 0.4525456721046244,
+      "codebook_size": 4096,
+      "units": {
+        "entropy": "bits",
+        "usage_pct": "percent",
+        "top_10_mass": "percent",
+        "top_50_mass": "percent",
+        "top_100_mass": "percent"
+      }
     },
     "top20_tokens": [
       {
         "rank": 1,
         "token_id": 278,
-        "count": 102330,
-        "frequency": 21.69626501119479,
-        "cumulative_freq": 21.69626501119479
+        "count": 103288,
+        "frequency": 21.7591344209249,
+        "cumulative_freq": 21.7591344209249
       },
       {
         "rank": 2,
         "token_id": 1834,
-        "count": 38870,
-        "frequency": 8.241315557364814,
-        "cumulative_freq": 29.937580568559603
+        "count": 39623,
+        "frequency": 8.347166981259269,
+        "cumulative_freq": 30.10630140218417
       },
       {
         "rank": 3,
         "token_id": 77,
-        "count": 2587,
-        "frequency": 0.5485022728814709,
-        "cumulative_freq": 30.486082841441075
+        "count": 2639,
+        "frequency": 0.5559441148712417,
+        "cumulative_freq": 30.66224551705541
       },
       {
         "rank": 4,
         "token_id": 316,
-        "count": 1666,
-        "frequency": 0.3532295271049596,
-        "cumulative_freq": 30.83931236854604
+        "count": 1776,
+        "frequency": 0.374140488067952,
+        "cumulative_freq": 31.036386005123365
       },
       {
         "rank": 5,
         "token_id": 1288,
-        "count": 1287,
-        "frequency": 0.2728729900264604,
-        "cumulative_freq": 31.112185358572496
+        "count": 1381,
+        "frequency": 0.2909279358231091,
+        "cumulative_freq": 31.327313940946475
       },
       {
         "rank": 6,
         "token_id": 1246,
-        "count": 1181,
-        "frequency": 0.2503986023475134,
-        "cumulative_freq": 31.36258396092001
+        "count": 1248,
+        "frequency": 0.2629095321558581,
+        "cumulative_freq": 31.59022347310233
       },
       {
         "rank": 7,
         "token_id": 1346,
-        "count": 1148,
-        "frequency": 0.2434018590135016,
-        "cumulative_freq": 31.60598581993351
+        "count": 1171,
+        "frequency": 0.2466883510853444,
+        "cumulative_freq": 31.83691182418768
       },
       {
         "rank": 8,
         "token_id": 1157,
-        "count": 1109,
-        "frequency": 0.2351329805278512,
-        "cumulative_freq": 31.841118800461363
+        "count": 1166,
+        "frequency": 0.2456350276392072,
+        "cumulative_freq": 32.08254685182688
       },
       {
         "rank": 9,
         "token_id": 710,
-        "count": 1042,
-        "frequency": 0.2209274713345545,
-        "cumulative_freq": 32.062046271795914
+        "count": 1115,
+        "frequency": 0.2348911284886072,
+        "cumulative_freq": 32.31743798031549
       },
       {
         "rank": 10,
         "token_id": 766,
-        "count": 960,
-        "frequency": 0.2035416242621616,
-        "cumulative_freq": 32.26558789605808
+        "count": 1036,
+        "frequency": 0.2182486180396386,
+        "cumulative_freq": 32.53568659835513
       },
       {
         "rank": 11,
-        "token_id": 1244,
-        "count": 937,
-        "frequency": 0.1986651061808806,
-        "cumulative_freq": 32.46425300223896
+        "token_id": 223,
+        "count": 999,
+        "frequency": 0.2104540245382229,
+        "cumulative_freq": 32.74614062289335
       },
       {
         "rank": 12,
         "token_id": 954,
-        "count": 934,
-        "frequency": 0.1980290386050614,
-        "cumulative_freq": 32.662282040844026
+        "count": 990,
+        "frequency": 0.2085580423351759,
+        "cumulative_freq": 32.95469866522853
       },
       {
         "rank": 13,
-        "token_id": 223,
-        "count": 931,
-        "frequency": 0.1973929710292421,
-        "cumulative_freq": 32.85967501187327
+        "token_id": 257,
+        "count": 955,
+        "frequency": 0.2011847782122152,
+        "cumulative_freq": 33.15588344344074
       },
       {
         "rank": 14,
-        "token_id": 526,
-        "count": 927,
-        "frequency": 0.1965448809281498,
-        "cumulative_freq": 33.05621989280142
+        "token_id": 1244,
+        "count": 926,
+        "frequency": 0.1950755022246191,
+        "cumulative_freq": 33.35095894566536
       },
       {
         "rank": 15,
-        "token_id": 257,
-        "count": 922,
-        "frequency": 0.1954847683017843,
-        "cumulative_freq": 33.251704661103204
+        "token_id": 526,
+        "count": 920,
+        "frequency": 0.1938115140892544,
+        "cumulative_freq": 33.544770459754616
       },
       {
         "rank": 16,
-        "token_id": 949,
-        "count": 878,
-        "frequency": 0.1861557771897686,
-        "cumulative_freq": 33.43786043829297
+        "token_id": 659,
+        "count": 904,
+        "frequency": 0.1904408790616152,
+        "cumulative_freq": 33.73521133881623
       },
       {
         "rank": 17,
-        "token_id": 659,
-        "count": 871,
-        "frequency": 0.184671619512857,
-        "cumulative_freq": 33.62253205780583
+        "token_id": 696,
+        "count": 892,
+        "frequency": 0.1879129027908858,
+        "cumulative_freq": 33.92312424160711
       },
       {
         "rank": 18,
-        "token_id": 696,
-        "count": 857,
-        "frequency": 0.1817033041590338,
-        "cumulative_freq": 33.804235361964864
+        "token_id": 1262,
+        "count": 859,
+        "frequency": 0.1809609680463799,
+        "cumulative_freq": 34.10408520965349
       },
       {
         "rank": 19,
         "token_id": 572,
-        "count": 854,
-        "frequency": 0.1810672365832146,
-        "cumulative_freq": 33.98530259854808
+        "count": 855,
+        "frequency": 0.1801183092894701,
+        "cumulative_freq": 34.28420351894296
       },
       {
         "rank": 20,
-        "token_id": 1273,
-        "count": 817,
-        "frequency": 0.1732224031481104,
-        "cumulative_freq": 34.15852500169619
+        "token_id": 1319,
+        "count": 840,
+        "frequency": 0.1769583389510584,
+        "cumulative_freq": 34.46116185789402
       }
     ]
   },
@@ -167,7 +188,21 @@
       "entropy": 8.918546071143783,
       "top_10_mass": 23.10230484888019,
       "top_50_mass": 42.316536203522496,
-      "top_100_mass": 49.602902804957594
+      "top_100_mass": 49.602902804957594,
+      "top_10_mass_pct": 23.10230484888019,
+      "top_50_mass_pct": 42.316536203522496,
+      "top_100_mass_pct": 49.602902804957594,
+      "top_10_mass_frac": 0.23102304848880192,
+      "top_50_mass_frac": 0.423165362035225,
+      "top_100_mass_frac": 0.49602902804957594,
+      "codebook_size": 4096,
+      "units": {
+        "entropy": "bits",
+        "usage_pct": "percent",
+        "top_10_mass": "percent",
+        "top_50_mass": "percent",
+        "top_100_mass": "percent"
+      }
     },
     "top20_tokens": [
       {
@@ -315,154 +350,168 @@
   "teacher_train": {
     "statistics": {
       "split": "train_teacher",
-      "total_tokens": 471648,
-      "used_codes": 1661,
-      "usage_pct": 40.5517578125,
-      "entropy": 8.270400036711424,
-      "top_10_mass": 25.192516452947963,
-      "top_50_mass": 36.08114526087252,
-      "top_100_mass": 46.33519065065472
+      "total_tokens": 474688,
+      "used_codes": 1666,
+      "usage_pct": 40.673828125,
+      "entropy": 8.265866053538879,
+      "top_10_mass": 25.309887757853584,
+      "top_50_mass": 36.093813199406775,
+      "top_100_mass": 46.37256471619254,
+      "top_10_mass_pct": 25.309887757853584,
+      "top_50_mass_pct": 36.093813199406775,
+      "top_100_mass_pct": 46.37256471619254,
+      "top_10_mass_frac": 0.25309887757853583,
+      "top_50_mass_frac": 0.36093813199406777,
+      "top_100_mass_frac": 0.46372564716192544,
+      "codebook_size": 4096,
+      "units": {
+        "entropy": "bits",
+        "usage_pct": "percent",
+        "top_10_mass": "percent",
+        "top_50_mass": "percent",
+        "top_100_mass": "percent"
+      }
     },
     "top20_tokens": [
       {
         "rank": 1,
         "token_id": 453,
-        "count": 103463,
-        "frequency": 21.936486532329194,
-        "cumulative_freq": 21.936486532329194
+        "count": 104716,
+        "frequency": 22.059963597141703,
+        "cumulative_freq": 22.059963597141703
       },
       {
         "rank": 2,
         "token_id": 1733,
-        "count": 2119,
-        "frequency": 0.4492757310536671,
-        "cumulative_freq": 22.385762263382865
+        "count": 2153,
+        "frequency": 0.4535610759067008,
+        "cumulative_freq": 22.513524673048405
       },
       {
         "rank": 3,
         "token_id": 1755,
-        "count": 1782,
-        "frequency": 0.3778241400366375,
-        "cumulative_freq": 22.7635864034195
+        "count": 1849,
+        "frequency": 0.3895190103815559,
+        "cumulative_freq": 22.90304368342996
       },
       {
         "rank": 4,
         "token_id": 244,
-        "count": 1759,
-        "frequency": 0.3729476219553565,
-        "cumulative_freq": 23.136534025374857
+        "count": 1783,
+        "frequency": 0.3756151408925441,
+        "cumulative_freq": 23.278658824322505
       },
       {
         "rank": 5,
-        "token_id": 1744,
-        "count": 1688,
-        "frequency": 0.3578940226609675,
-        "cumulative_freq": 23.494428048035825
+        "token_id": 1710,
+        "count": 1639,
+        "frequency": 0.3452794256437912,
+        "cumulative_freq": 23.623938249966297
       },
       {
         "rank": 6,
-        "token_id": 1710,
-        "count": 1662,
-        "frequency": 0.3523814370038673,
-        "cumulative_freq": 23.84680948503969
+        "token_id": 1744,
+        "count": 1629,
+        "frequency": 0.3431727787515168,
+        "cumulative_freq": 23.967111028717813
       },
       {
         "rank": 7,
-        "token_id": 1794,
-        "count": 1634,
-        "frequency": 0.3464448062962209,
-        "cumulative_freq": 24.19325429133591
+        "token_id": 1804,
+        "count": 1617,
+        "frequency": 0.3406448024807874,
+        "cumulative_freq": 24.3077558311986
       },
       {
         "rank": 8,
-        "token_id": 1804,
-        "count": 1616,
-        "frequency": 0.3426284008413053,
-        "cumulative_freq": 24.535882692177218
+        "token_id": 1794,
+        "count": 1601,
+        "frequency": 0.3372741674531482,
+        "cumulative_freq": 24.64502999865175
       },
       {
         "rank": 9,
-        "token_id": 1678,
-        "count": 1553,
-        "frequency": 0.329270981749101,
-        "cumulative_freq": 24.86515367392632
+        "token_id": 1726,
+        "count": 1582,
+        "frequency": 0.3332715383578266,
+        "cumulative_freq": 24.97830153700958
       },
       {
         "rank": 10,
-        "token_id": 1726,
-        "count": 1544,
-        "frequency": 0.3273627790216432,
-        "cumulative_freq": 25.192516452947963
+        "token_id": 1678,
+        "count": 1574,
+        "frequency": 0.331586220844007,
+        "cumulative_freq": 25.309887757853584
       },
       {
         "rank": 11,
         "token_id": 1494,
-        "count": 1505,
-        "frequency": 0.3190939005359929,
-        "cumulative_freq": 25.51161035348396
+        "count": 1538,
+        "frequency": 0.3240022920318188,
+        "cumulative_freq": 25.6338900498854
       },
       {
         "rank": 12,
-        "token_id": 1521,
-        "count": 1480,
-        "frequency": 0.3137933374041658,
-        "cumulative_freq": 25.825403690888123
+        "token_id": 1761,
+        "count": 1532,
+        "frequency": 0.3227383038964541,
+        "cumulative_freq": 25.956628353781856
       },
       {
         "rank": 13,
-        "token_id": 1660,
-        "count": 1479,
-        "frequency": 0.3135813148788927,
-        "cumulative_freq": 26.13898500576701
+        "token_id": 1753,
+        "count": 1461,
+        "frequency": 0.3077811109613051,
+        "cumulative_freq": 26.26440946474316
       },
       {
         "rank": 14,
-        "token_id": 1753,
-        "count": 1468,
-        "frequency": 0.3112490671008888,
-        "cumulative_freq": 26.450234072867904
+        "token_id": 1502,
+        "count": 1452,
+        "frequency": 0.3058851287582581,
+        "cumulative_freq": 26.57029459350142
       },
       {
         "rank": 15,
-        "token_id": 1761,
-        "count": 1449,
-        "frequency": 0.3072206391207002,
-        "cumulative_freq": 26.757454711988604
+        "token_id": 219,
+        "count": 1414,
+        "frequency": 0.2978798705676149,
+        "cumulative_freq": 26.868174464069035
       },
       {
         "rank": 16,
-        "token_id": 219,
-        "count": 1437,
-        "frequency": 0.3046763688174231,
-        "cumulative_freq": 27.062131080806022
+        "token_id": 1521,
+        "count": 1405,
+        "frequency": 0.2959838883645679,
+        "cumulative_freq": 27.164158352433603
       },
       {
         "rank": 17,
-        "token_id": 1502,
-        "count": 1426,
-        "frequency": 0.3023441210394192,
-        "cumulative_freq": 27.364475201845444
+        "token_id": 165,
+        "count": 1404,
+        "frequency": 0.2957732236753404,
+        "cumulative_freq": 27.459931576108943
       },
       {
         "rank": 18,
         "token_id": 1661,
-        "count": 1408,
-        "frequency": 0.2985277155845037,
-        "cumulative_freq": 27.66300291742995
+        "count": 1394,
+        "frequency": 0.2936665767830659,
+        "cumulative_freq": 27.75359815289201
       },
       {
         "rank": 19,
-        "token_id": 1772,
-        "count": 1402,
-        "frequency": 0.2972555804328652,
-        "cumulative_freq": 27.960258497862814
+        "token_id": 1718,
+        "count": 1385,
+        "frequency": 0.2917705945800188,
+        "cumulative_freq": 28.04536874747203
       },
       {
         "rank": 20,
-        "token_id": 165,
-        "count": 1401,
-        "frequency": 0.297043557907592,
-        "cumulative_freq": 28.25730205577041
+        "token_id": 1660,
+        "count": 1380,
+        "frequency": 0.2907172711338816,
+        "cumulative_freq": 28.33608601860591
       }
     ]
   },
@@ -475,7 +524,21 @@
       "entropy": 9.015631052923398,
       "top_10_mass": 12.249130245705587,
       "top_50_mass": 34.51973255055448,
-      "top_100_mass": 49.245759947814754
+      "top_100_mass": 49.245759947814754,
+      "top_10_mass_pct": 12.249130245705587,
+      "top_50_mass_pct": 34.51973255055448,
+      "top_100_mass_pct": 49.245759947814754,
+      "top_10_mass_frac": 0.12249130245705586,
+      "top_50_mass_frac": 0.34519732550554477,
+      "top_100_mass_frac": 0.49245759947814755,
+      "codebook_size": 4096,
+      "units": {
+        "entropy": "bits",
+        "usage_pct": "percent",
+        "top_10_mass": "percent",
+        "top_50_mass": "percent",
+        "top_100_mass": "percent"
+      }
     },
     "top20_tokens": [
       {
@@ -625,6 +688,12 @@
     "top_10_mass": 0.244,
     "top_50_mass": 1.22,
     "top_100_mass": 2.44,
+    "top_10_mass_pct": 0.244,
+    "top_50_mass_pct": 1.22,
+    "top_100_mass_pct": 2.44,
+    "top_10_mass_frac": 0.00244,
+    "top_50_mass_frac": 0.012199999999999999,
+    "top_100_mass_frac": 0.024399999999999998,
     "used_codes": 4096,
     "usage_pct": 100.0
   }
