@@ -474,6 +474,8 @@ def main():
     parser.add_argument('--ema_eps', type=float, default=1e-5, help='EMA eps (rvq_update=ema)')
     parser.add_argument('--ema_dead_code_threshold', type=int, default=0, help='Dead-code threshold (rvq_update=ema; 0 disables)')
     parser.add_argument('--ema_usage_penalty', type=float, default=0.0, help='Usage penalty weight using log(EMA cluster_size) (rvq_update=ema)')
+    parser.add_argument('--ema_usage_penalty_start_step', type=int, default=0, help='Start step for usage penalty schedule (rvq_update=ema)')
+    parser.add_argument('--ema_usage_penalty_ramp_steps', type=int, default=0, help='Linear ramp steps from 0→max usage penalty (rvq_update=ema)')
 
     # Phase 3-2: training controls
     parser.add_argument('--inter_warmup_steps', type=int, default=0, help='Warmup steps before enabling intermediate loss')
@@ -518,6 +520,8 @@ def main():
         print(f"  EMA eps: {args.ema_eps}")
         print(f"  Dead-code threshold: {args.ema_dead_code_threshold}")
         print(f"  Usage penalty (log cluster_size): {args.ema_usage_penalty}")
+        if args.ema_usage_penalty > 0:
+            print(f"  Usage penalty schedule: start_step={args.ema_usage_penalty_start_step}, ramp_steps={args.ema_usage_penalty_ramp_steps}")
     print(f"Loss weights: λ_quant={args.lambda_quant}, λ_pre={args.lambda_pre}, λ_inter={args.lambda_inter}, β_commit={args.beta_commit}, λ_codebook={args.lambda_codebook}")
     print(f"Inter warmup steps: {args.inter_warmup_steps}")
     print(f"Early stop on collapse: {args.early_stop_on_collapse}")
@@ -567,6 +571,28 @@ def main():
     model.train()
     scaler = GradScaler()
 
+    def get_usage_penalty(step_idx: int) -> float:
+        if args.rvq_update != "ema":
+            return 0.0
+        max_w = float(args.ema_usage_penalty)
+        if max_w <= 0.0:
+            return 0.0
+
+        start = int(args.ema_usage_penalty_start_step)
+        ramp = int(args.ema_usage_penalty_ramp_steps)
+
+        if step_idx < start:
+            return 0.0
+        if ramp <= 0:
+            return max_w
+
+        t = (step_idx - start) / float(ramp)
+        if t <= 0.0:
+            return 0.0
+        if t >= 1.0:
+            return max_w
+        return max_w * t
+
     step = 0
     pbar = tqdm(total=args.steps, desc="Training")
 
@@ -611,6 +637,10 @@ def main():
         lengths = batch.get('lengths', None)
         if lengths is not None:
             lengths = lengths.to(device)
+
+        # Optionally schedule usage-penalty (EMA mode only).
+        if args.rvq_update == "ema" and args.ema_usage_penalty > 0.0:
+            model.rvq.ema_usage_penalty = float(get_usage_penalty(step))
 
         # Forward
         with autocast():
@@ -689,6 +719,7 @@ def main():
         if step % args.eval_interval == 0 or step == args.steps:
             print(f"\n--- Evaluation at Step {step} ---")
             metrics = evaluate_collapse_metrics(model, val_loader, device)
+            metrics['ema_usage_penalty'] = float(getattr(model.rvq, 'ema_usage_penalty', 0.0))
 
             # Average losses since last evaluation (for Phase 3-2 logging)
             if len(loss_history) > last_eval_loss_idx:
