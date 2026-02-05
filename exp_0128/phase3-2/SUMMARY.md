@@ -1,7 +1,7 @@
 # Phase 3-2 實驗總結
 
 **日期**: 2026-02-04
-**狀態**: ✅ **P2 驗收通過 - 建議繼續 RVQ 實驗**
+**狀態**: ✅ **P2 驗收通過 - 建議繼續 RVQ 實驗**（更新：P3 在特定設定/seed 下可達成，但穩定性仍需驗證）
 
 ---
 
@@ -65,8 +65,11 @@ Phase 3 失敗揭示了根本問題：**訓練目標允許 quantizer 被繞過**
 | 6c-long-th2 | K=1024, th=2 | top10=0.175 | top10=**0.234** | ✅ | ❌ |
 | 6c-long-K2048 | K=2048, th=2 | top10=0.129 | top10=**0.231** | ✅ | ❌ |
 | 6c-long-up0.1-K2048 | K=2048, up=0.1 | top10=0.135 | top10=**0.158** | ✅ | ❌ |
+| 6c-up0.2-sched-K2048 (seed43) | K=2048, up=0.2 (start=600, ramp=200) | top10=0.272 | top10=**0.110** | ✅ | ✅ |
 
-**最佳結果** (`6c-long-up0.1-K2048`):
+> 註：6c-up0.2-sched 的 P3 目前僅在 seed43 觀察到；seed44/45 同設定下 P3 未通過（final top10≈0.185/0.206）。  
+
+**最佳結果（P2 best, simple）** (`6c-long-up0.1-K2048`):
 
 | 指標 | step 1000 結果 | P3 目標 | 狀態 |
 |------|---------------|---------|------|
@@ -75,6 +78,16 @@ Phase 3 失敗揭示了根本問題：**訓練目標允許 quantizer 被繞過**
 | **joint_diversity** | **0.992** | >0.7 | ✅ 接近完美 (+42%) |
 | **used_codes** | **1089/2048** | >0.10K | ✅ 優秀 (53%) |
 | **feature_mse** | **0.034** | <0.1 | ✅ 優秀 (-66%) |
+
+**最佳結果（P3 best, but seed-sensitive）** (`6c-up0.2-sched-K2048 (seed43)`):
+
+| 指標 | step 1000 結果 | P3 目標 | 狀態 |
+|------|---------------|---------|------|
+| **entropy** | **9.17** | >6.5 | ✅ |
+| **top10_mass** | **0.110** | <0.15 | ✅ |
+| **joint_diversity** | **0.987** | >0.7 | ✅ |
+| **used_codes** | **1195/2048** | >0.10K | ✅ |
+| **feature_mse** | **0.036** | <0.1 | ✅ |
 
 ---
 
@@ -125,11 +138,14 @@ Phase 3 失敗揭示了根本問題：**訓練目標允許 quantizer 被繞過**
 
 **結論**：**Phase 3-2 證明 RVQ 在正確的 loss 設計下是有效的，值得繼續實驗。**
 
-### ❌ P3 理想目標未達成
+### ⚠️ P3（stretch）目前「可達成但尚未穩定」
 
-唯一未達標：`top10_mass = 0.158` vs 目標 `<0.15` (相差 5%)
+原本最佳（up=0.1）唯一未達標：`top10_mass = 0.158` vs 目標 `<0.15`（略超標）。
 
-**評估**：P3 是 stretch goal，P2 通過已足夠證明方向正確。
+更新：在 **usage penalty schedule**（up=0.2, start=600, ramp=200）且 **seed43** 的 run 中，`top10_mass=0.110` 已達成 P3。  
+但同設定 seed44/45 未達成 → 目前結論是：**P3 attainable，但 seed-sensitive，需要再做穩定性驗證**。
+
+**評估**：Phase 3-2 的決策仍以 P2 為主；P3 作為 stretch 需另外做「多 seed 重跑 + 更長訓練」才能下結論。
 
 ---
 
@@ -147,6 +163,7 @@ Phase 3 失敗揭示了根本問題：**訓練目標允許 quantizer 被繞過**
 
 #### 短期 (可選)
 1. **微調 usage penalty**：嘗試 0.08~0.15 範圍精調 top10
+   - 建議也做 **schedule ablation**（start_step/ramp_steps），因為 up=0.2 sched 在 seed43 可達 P3，但穩定性不足
 2. **增加 training steps**：測試 2000~5000 steps 是否穩定
 3. **調整 EMA decay**：測試 0.95~0.995 範圍
 
@@ -154,6 +171,7 @@ Phase 3 失敗揭示了根本問題：**訓練目標允許 quantizer 被繞過**
 1. **Full Training (300 epochs)**：
    - 使用最佳配置：K=2048, layers=4, EMA th=2, β=1.0, up=0.1
    - 目標：驗證長期穩定性
+   - 若以 P3 為導向，建議加入：up=0.2 schedule + 3 seeds 再評估
 
 2. **Audio Reconstruction**：
    - 訓練 RVQ-compatible decoder
@@ -182,9 +200,9 @@ Phase 3 失敗揭示了根本問題：**訓練目標允許 quantizer 被繞過**
 
 ## 實驗統計
 
-- **總實驗數**: 13 runs
-- **總訓練時間**: ~2.5 小時
-- **GPU 使用**: GTX 1080 Ti (GPU 1)
+- **總實驗數**: 22 runs（以 `exp_0128/phase3-2/run_*/summary.json` 為準）
+- **總訓練時間**: ~2.5 小時（粗估；未做嚴格統計）
+- **GPU 使用**: 未在 summary 中完整記錄（各 run 的 `device` 以 `config.json` 為準；實際對應到哪張卡取決於當時的 CUDA_VISIBLE_DEVICES）
 - **成功率**:
   - Exp 6a/6b: 0/5 (0%)
   - Exp 6c: 8/8 (100% - 排除 crash)
