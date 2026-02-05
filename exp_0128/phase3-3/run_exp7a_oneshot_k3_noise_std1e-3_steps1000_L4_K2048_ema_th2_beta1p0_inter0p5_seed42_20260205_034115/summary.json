@@ -1,0 +1,245 @@
+{
+  "config": {
+    "steps": 1000,
+    "batch_size": 8,
+    "grad_accum": 2,
+    "lr": 0.0001,
+    "n_rvq_layers": 4,
+    "rvq_codebook_size": 2048,
+    "output_dir": "exp_0128/phase3-3/run_exp7a_oneshot_k3_noise_std1e-3_steps1000_L4_K2048_ema_th2_beta1p0_inter0p5_seed42_20260205_034115",
+    "seed": 42,
+    "device": "cuda:0",
+    "eval_interval": 200,
+    "eval_max_batches": 50,
+    "compute_snr": false,
+    "cuda_preinit_retries": 30,
+    "cuda_preinit_sleep_s": 1.0,
+    "lambda_quant": 1.0,
+    "lambda_pre": 0.0,
+    "lambda_inter": 0.5,
+    "beta_commit": 1.0,
+    "lambda_codebook": 1.0,
+    "rvq_update": "ema",
+    "ema_decay": 0.99,
+    "ema_eps": 1e-05,
+    "ema_dead_code_threshold": 2,
+    "ema_usage_penalty": 0.0,
+    "ema_usage_penalty_start_step": 0,
+    "ema_usage_penalty_ramp_steps": 0,
+    "inter_warmup_steps": 0,
+    "early_stop_on_collapse": false,
+    "enable_hot_split": true,
+    "split_layer": 0,
+    "split_k": 3,
+    "split_hot_k": 1,
+    "split_interval": 0,
+    "split_one_shot_step": 0,
+    "split_init_method": "noise",
+    "split_init_std": 0.001,
+    "split_repulse_weight": 0.0,
+    "split_repulse_sigma": 1.0,
+    "timestamp": "2026-02-05 03:41:21"
+  },
+  "final_step": 1000,
+  "early_stop_reason": null,
+  "acceptance": {
+    "P0_pass": true,
+    "P1_pass": true,
+    "P2_pass": true,
+    "P3_pass": false,
+    "collapse_flag": false
+  },
+  "step200_metrics": {
+    "step": 200,
+    "layer0_entropy": 9.11940860748291,
+    "layer0_top10_mass": 0.1407162845134735,
+    "layer0_used_codes": 1091,
+    "layer0_total_codes": 2048,
+    "layer0_usage_pct": 53.271484375,
+    "joint_unique_codes": 107611,
+    "joint_total_codes": 108367,
+    "joint_diversity": 0.9930237064789096,
+    "feature_mse": 0.03867443819995969,
+    "entropy": 9.11940860748291,
+    "top_10_mass": 0.1407162845134735,
+    "used_codes": 1091,
+    "split_groups": [
+      {
+        "layer": 0,
+        "parent": 617,
+        "children": [
+          0,
+          1
+        ],
+        "k": 3,
+        "parent_count": 107,
+        "children_counts": [
+          93,
+          19
+        ],
+        "child_active_count": 2,
+        "group_entropy_children": 0.4553194653360305,
+        "group_entropy_children_norm": 0.6568871346605055,
+        "top_child": 0,
+        "top_child_frac": 0.8303571428571429,
+        "parent_frac_in_group": 0.4885844748858447
+      }
+    ],
+    "split_child_active_min": 2,
+    "split_group_entropy_min": 0.4553194653360305,
+    "ema_usage_penalty": 0.0,
+    "avg_total_loss": 0.3864875143766403,
+    "avg_loss_quant": 0.05184854794293642,
+    "avg_loss_pre": 0.051484233178198335,
+    "avg_loss_inter": 0.6634304830431939,
+    "avg_loss_commit": 0.0029237238204223104,
+    "avg_loss_codebook": 0.0,
+    "layer_0_used": 671,
+    "layer_0_entropy": 6.151522636413574,
+    "layer_0_usage_pct": 32.763671875,
+    "layer_1_used": 873,
+    "layer_1_entropy": 6.588361740112305,
+    "layer_1_usage_pct": 42.626953125,
+    "layer_2_used": 739,
+    "layer_2_entropy": 6.332386016845703,
+    "layer_2_usage_pct": 36.083984375,
+    "layer_3_used": 654,
+    "layer_3_entropy": 6.007388591766357,
+    "layer_3_usage_pct": 31.93359375,
+    "p1_pass": true,
+    "collapse_flag": false
+  },
+  "final_metrics": {
+    "layer0_entropy": 8.978602409362793,
+    "layer0_top10_mass": 0.1698303073644638,
+    "layer0_used_codes": 1082,
+    "layer0_total_codes": 2048,
+    "layer0_usage_pct": 52.83203125,
+    "joint_unique_codes": 107406,
+    "joint_total_codes": 108367,
+    "joint_diversity": 0.9911319866749102,
+    "feature_mse": 0.033858773242682216,
+    "entropy": 8.978602409362793,
+    "top_10_mass": 0.1698303073644638,
+    "used_codes": 1082,
+    "split_groups": [
+      {
+        "layer": 0,
+        "parent": 617,
+        "children": [
+          0,
+          1
+        ],
+        "k": 3,
+        "parent_count": 24,
+        "children_counts": [
+          25,
+          0
+        ],
+        "child_active_count": 1,
+        "group_entropy_children": 0.0,
+        "group_entropy_children_norm": 0.0,
+        "top_child": 0,
+        "top_child_frac": 1.0,
+        "parent_frac_in_group": 0.4897959183673469
+      }
+    ],
+    "split_child_active_min": 1,
+    "split_group_entropy_min": 0.0,
+    "ema_usage_penalty": 0.0,
+    "avg_total_loss": 0.34956740096211436,
+    "avg_loss_quant": 0.04124171366915107,
+    "avg_loss_pre": 0.041221510050818325,
+    "avg_loss_inter": 0.6148858433961868,
+    "avg_loss_commit": 0.00088276559006772,
+    "avg_loss_codebook": 0.0,
+    "layer_0_used": 662,
+    "layer_0_entropy": 6.090338230133057,
+    "layer_0_usage_pct": 32.32421875,
+    "layer_1_used": 904,
+    "layer_1_entropy": 6.64466667175293,
+    "layer_1_usage_pct": 44.140625,
+    "layer_2_used": 854,
+    "layer_2_entropy": 6.56058406829834,
+    "layer_2_usage_pct": 41.69921875,
+    "layer_3_used": 743,
+    "layer_3_entropy": 6.302371025085449,
+    "layer_3_usage_pct": 36.279296875
+  },
+  "baseline": {
+    "single_vq_entropy": 6.07,
+    "single_vq_top10_mass": 0.197,
+    "single_vq_used_codes": 740,
+    "note": "Baseline uses single VQ with 4096 codebook, not directly comparable to RVQ"
+  },
+  "success_criteria": {
+    "P1": {
+      "layer0_top10_mass": "<= 0.95",
+      "layer0_used_codes": ">= max(0.02*K, 20) (K=2048)",
+      "feature_mse": "<= 0.1",
+      "collapse_flag": "(top10_mass > 0.95) and (used_codes < 0.01*K)"
+    },
+    "P2": {
+      "layer0_entropy": ">= 5.0",
+      "layer0_top10_mass": "<= 0.5",
+      "layer0_used_codes": ">= 0.10*K (K=2048)",
+      "joint_diversity": ">= 0.30",
+      "feature_mse": "<= 0.1"
+    },
+    "P3": {
+      "layer0_entropy": "> 6.5",
+      "layer0_top10_mass": "< 0.15",
+      "joint_diversity": "> 0.7",
+      "feature_mse": "< 0.1"
+    }
+  },
+  "success": true,
+  "phase3_3": {
+    "enabled": true,
+    "acceptance": {
+      "P0_pass": true,
+      "P1_pass": true,
+      "P2_pass": true,
+      "P3_pass": null
+    },
+    "split_history_path": "exp_0128/phase3-3/run_exp7a_oneshot_k3_noise_std1e-3_steps1000_L4_K2048_ema_th2_beta1p0_inter0p5_seed42_20260205_034115/split_history.json",
+    "split_history": [
+      {
+        "step": 0,
+        "layer": 0,
+        "parent": 617,
+        "children": [
+          0,
+          1
+        ],
+        "k": 3,
+        "hot_rank": 1,
+        "init_method": "noise",
+        "init_std": 0.001,
+        "selection": {
+          "source": "val@step0",
+          "parent_count": 14333,
+          "children_prev_counts": [
+            0,
+            0
+          ],
+          "unused_pool": 1985
+        }
+      }
+    ],
+    "split_groups": [
+      {
+        "layer": 0,
+        "parent": 617,
+        "children": [
+          0,
+          1
+        ],
+        "k": 3,
+        "created_step": 0,
+        "init_method": "noise",
+        "init_std": 0.001
+      }
+    ]
+  }
+}

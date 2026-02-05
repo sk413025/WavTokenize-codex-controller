@@ -1,0 +1,247 @@
+{
+  "config": {
+    "steps": 200,
+    "batch_size": 8,
+    "grad_accum": 2,
+    "lr": 0.0001,
+    "n_rvq_layers": 4,
+    "rvq_codebook_size": 2048,
+    "output_dir": "exp_0128/phase3-3/run_exp7a_oneshot_k3_noise_std1e-3_steps200_L4_K2048_ema_th2_beta1p0_inter0p5_seed42_20260205_033126",
+    "seed": 42,
+    "device": "cuda:0",
+    "eval_interval": 200,
+    "eval_max_batches": 50,
+    "compute_snr": false,
+    "cuda_preinit_retries": 30,
+    "cuda_preinit_sleep_s": 1.0,
+    "lambda_quant": 1.0,
+    "lambda_pre": 0.0,
+    "lambda_inter": 0.5,
+    "beta_commit": 1.0,
+    "lambda_codebook": 1.0,
+    "rvq_update": "ema",
+    "ema_decay": 0.99,
+    "ema_eps": 1e-05,
+    "ema_dead_code_threshold": 2,
+    "ema_usage_penalty": 0.0,
+    "ema_usage_penalty_start_step": 0,
+    "ema_usage_penalty_ramp_steps": 0,
+    "inter_warmup_steps": 0,
+    "early_stop_on_collapse": false,
+    "enable_hot_split": true,
+    "split_layer": 0,
+    "split_k": 3,
+    "split_hot_k": 1,
+    "split_interval": 0,
+    "split_one_shot_step": 0,
+    "split_init_method": "noise",
+    "split_init_std": 0.001,
+    "split_repulse_weight": 0.0,
+    "split_repulse_sigma": 1.0,
+    "timestamp": "2026-02-05 03:31:32"
+  },
+  "final_step": 200,
+  "early_stop_reason": null,
+  "acceptance": {
+    "P0_pass": true,
+    "P1_pass": true,
+    "P2_pass": true,
+    "P3_pass": true,
+    "collapse_flag": false
+  },
+  "step200_metrics": {
+    "step": 200,
+    "layer0_entropy": 9.163403511047363,
+    "layer0_top10_mass": 0.12443824857473373,
+    "layer0_used_codes": 1092,
+    "layer0_total_codes": 2048,
+    "layer0_usage_pct": 53.3203125,
+    "joint_unique_codes": 107563,
+    "joint_total_codes": 108367,
+    "joint_diversity": 0.9925807672077293,
+    "feature_mse": 0.03877345584798604,
+    "entropy": 9.163403511047363,
+    "top_10_mass": 0.12443824857473373,
+    "used_codes": 1092,
+    "split_groups": [
+      {
+        "layer": 0,
+        "parent": 617,
+        "children": [
+          0,
+          1
+        ],
+        "k": 3,
+        "parent_count": 160,
+        "children_counts": [
+          104,
+          27
+        ],
+        "child_active_count": 2,
+        "group_entropy_children": 0.5087526751643604,
+        "group_entropy_children_norm": 0.7339749614986165,
+        "top_child": 0,
+        "top_child_frac": 0.7938931297709924,
+        "parent_frac_in_group": 0.5498281786941581
+      }
+    ],
+    "split_child_active_min": 2,
+    "split_group_entropy_min": 0.5087526751643604,
+    "ema_usage_penalty": 0.0,
+    "avg_total_loss": 0.3866060188412666,
+    "avg_loss_quant": 0.05190679199993611,
+    "avg_loss_pre": 0.05154173607006669,
+    "avg_loss_inter": 0.6635612094402313,
+    "avg_loss_commit": 0.0029186232676147485,
+    "avg_loss_codebook": 0.0,
+    "layer_0_used": 682,
+    "layer_0_entropy": 6.172357082366943,
+    "layer_0_usage_pct": 33.30078125,
+    "layer_1_used": 859,
+    "layer_1_entropy": 6.57486629486084,
+    "layer_1_usage_pct": 41.943359375,
+    "layer_2_used": 762,
+    "layer_2_entropy": 6.377964019775391,
+    "layer_2_usage_pct": 37.20703125,
+    "layer_3_used": 631,
+    "layer_3_entropy": 6.071011543273926,
+    "layer_3_usage_pct": 30.810546875,
+    "p1_pass": true,
+    "collapse_flag": false
+  },
+  "final_metrics": {
+    "layer0_entropy": 9.163403511047363,
+    "layer0_top10_mass": 0.12443824857473373,
+    "layer0_used_codes": 1092,
+    "layer0_total_codes": 2048,
+    "layer0_usage_pct": 53.3203125,
+    "joint_unique_codes": 107563,
+    "joint_total_codes": 108367,
+    "joint_diversity": 0.9925807672077293,
+    "feature_mse": 0.03877345584798604,
+    "entropy": 9.163403511047363,
+    "top_10_mass": 0.12443824857473373,
+    "used_codes": 1092,
+    "split_groups": [
+      {
+        "layer": 0,
+        "parent": 617,
+        "children": [
+          0,
+          1
+        ],
+        "k": 3,
+        "parent_count": 160,
+        "children_counts": [
+          104,
+          27
+        ],
+        "child_active_count": 2,
+        "group_entropy_children": 0.5087526751643604,
+        "group_entropy_children_norm": 0.7339749614986165,
+        "top_child": 0,
+        "top_child_frac": 0.7938931297709924,
+        "parent_frac_in_group": 0.5498281786941581
+      }
+    ],
+    "split_child_active_min": 2,
+    "split_group_entropy_min": 0.5087526751643604,
+    "ema_usage_penalty": 0.0,
+    "avg_total_loss": 0.3866060188412666,
+    "avg_loss_quant": 0.05190679199993611,
+    "avg_loss_pre": 0.05154173607006669,
+    "avg_loss_inter": 0.6635612094402313,
+    "avg_loss_commit": 0.0029186232676147485,
+    "avg_loss_codebook": 0.0,
+    "layer_0_used": 682,
+    "layer_0_entropy": 6.172357082366943,
+    "layer_0_usage_pct": 33.30078125,
+    "layer_1_used": 859,
+    "layer_1_entropy": 6.57486629486084,
+    "layer_1_usage_pct": 41.943359375,
+    "layer_2_used": 762,
+    "layer_2_entropy": 6.377964019775391,
+    "layer_2_usage_pct": 37.20703125,
+    "layer_3_used": 631,
+    "layer_3_entropy": 6.071011543273926,
+    "layer_3_usage_pct": 30.810546875,
+    "p1_pass": true,
+    "collapse_flag": false
+  },
+  "baseline": {
+    "single_vq_entropy": 6.07,
+    "single_vq_top10_mass": 0.197,
+    "single_vq_used_codes": 740,
+    "note": "Baseline uses single VQ with 4096 codebook, not directly comparable to RVQ"
+  },
+  "success_criteria": {
+    "P1": {
+      "layer0_top10_mass": "<= 0.95",
+      "layer0_used_codes": ">= max(0.02*K, 20) (K=2048)",
+      "feature_mse": "<= 0.1",
+      "collapse_flag": "(top10_mass > 0.95) and (used_codes < 0.01*K)"
+    },
+    "P2": {
+      "layer0_entropy": ">= 5.0",
+      "layer0_top10_mass": "<= 0.5",
+      "layer0_used_codes": ">= 0.10*K (K=2048)",
+      "joint_diversity": ">= 0.30",
+      "feature_mse": "<= 0.1"
+    },
+    "P3": {
+      "layer0_entropy": "> 6.5",
+      "layer0_top10_mass": "< 0.15",
+      "joint_diversity": "> 0.7",
+      "feature_mse": "< 0.1"
+    }
+  },
+  "success": true,
+  "phase3_3": {
+    "enabled": true,
+    "acceptance": {
+      "P0_pass": true,
+      "P1_pass": true,
+      "P2_pass": null,
+      "P3_pass": null
+    },
+    "split_history_path": "exp_0128/phase3-3/run_exp7a_oneshot_k3_noise_std1e-3_steps200_L4_K2048_ema_th2_beta1p0_inter0p5_seed42_20260205_033126/split_history.json",
+    "split_history": [
+      {
+        "step": 0,
+        "layer": 0,
+        "parent": 617,
+        "children": [
+          0,
+          1
+        ],
+        "k": 3,
+        "hot_rank": 1,
+        "init_method": "noise",
+        "init_std": 0.001,
+        "selection": {
+          "source": "val@step0",
+          "parent_count": 14333,
+          "children_prev_counts": [
+            0,
+            0
+          ],
+          "unused_pool": 1985
+        }
+      }
+    ],
+    "split_groups": [
+      {
+        "layer": 0,
+        "parent": 617,
+        "children": [
+          0,
+          1
+        ],
+        "k": 3,
+        "created_step": 0,
+        "init_method": "noise",
+        "init_std": 0.001
+      }
+    ]
+  }
+}

@@ -1,0 +1,405 @@
+[
+  {
+    "step": 0,
+    "layer0_entropy": 4.517580509185791,
+    "layer0_top10_mass": 0.7001023888587952,
+    "layer0_used_codes": 63,
+    "layer0_total_codes": 2048,
+    "layer0_usage_pct": 3.076171875,
+    "joint_unique_codes": 1660,
+    "joint_total_codes": 108367,
+    "joint_diversity": 0.015318316461653455,
+    "feature_mse": 0.07540661879815161,
+    "entropy": 4.517580509185791,
+    "top_10_mass": 0.7001023888587952,
+    "used_codes": 63
+  },
+  {
+    "step": 200,
+    "layer0_entropy": 9.057701110839844,
+    "layer0_top10_mass": 0.15499183535575867,
+    "layer0_used_codes": 1080,
+    "layer0_total_codes": 2048,
+    "layer0_usage_pct": 52.734375,
+    "joint_unique_codes": 107578,
+    "joint_total_codes": 108367,
+    "joint_diversity": 0.9927191857299732,
+    "feature_mse": 0.03759207985829562,
+    "entropy": 9.057701110839844,
+    "top_10_mass": 0.15499183535575867,
+    "used_codes": 1080,
+    "ema_usage_penalty": 0.0,
+    "avg_total_loss": 0.38697803795337676,
+    "avg_loss_quant": 0.05209893168881535,
+    "avg_loss_pre": 0.05176545552909374,
+    "avg_loss_inter": 0.6640219148993493,
+    "avg_loss_commit": 0.0028681493054318707,
+    "avg_loss_codebook": 0.0,
+    "layer_0_used": 671,
+    "layer_0_entropy": 6.122605800628662,
+    "layer_0_usage_pct": 32.763671875,
+    "layer_1_used": 885,
+    "layer_1_entropy": 6.6177215576171875,
+    "layer_1_usage_pct": 43.212890625,
+    "layer_2_used": 748,
+    "layer_2_entropy": 6.37515926361084,
+    "layer_2_usage_pct": 36.5234375,
+    "layer_3_used": 615,
+    "layer_3_entropy": 5.993608474731445,
+    "layer_3_usage_pct": 30.029296875,
+    "p1_pass": true,
+    "collapse_flag": false
+  },
+  {
+    "step": 400,
+    "layer0_entropy": 8.604400634765625,
+    "layer0_top10_mass": 0.25455164909362793,
+    "layer0_used_codes": 1023,
+    "layer0_total_codes": 2048,
+    "layer0_usage_pct": 49.951171875,
+    "joint_unique_codes": 107123,
+    "joint_total_codes": 108367,
+    "joint_diversity": 0.9885204905552428,
+    "feature_mse": 0.03729118511546403,
+    "entropy": 8.604400634765625,
+    "top_10_mass": 0.25455164909362793,
+    "used_codes": 1023,
+    "split_groups": [
+      {
+        "layer": 0,
+        "parent": 220,
+        "children": [
+          8,
+          12
+        ],
+        "k": 3,
+        "parent_count": 46,
+        "children_counts": [
+          85,
+          96
+        ],
+        "child_active_count": 2,
+        "group_entropy_children": 0.6912993341244491,
+        "group_entropy_children_norm": 0.9973341211111854,
+        "top_child": 12,
+        "top_child_frac": 0.5303867403314917,
+        "parent_frac_in_group": 0.2026431718061674
+      }
+    ],
+    "split_child_active_min": 2,
+    "split_group_entropy_min": 0.6912993341244491,
+    "ema_usage_penalty": 0.0,
+    "avg_total_loss": 0.3584364202618599,
+    "avg_loss_quant": 0.04601512305438518,
+    "avg_loss_pre": 0.0460051422379911,
+    "avg_loss_inter": 0.6233557264506817,
+    "avg_loss_commit": 0.0007434351333358791,
+    "avg_loss_codebook": 0.0,
+    "layer_0_used": 549,
+    "layer_0_entropy": 5.66326379776001,
+    "layer_0_usage_pct": 26.806640625,
+    "layer_1_used": 858,
+    "layer_1_entropy": 6.579449653625488,
+    "layer_1_usage_pct": 41.89453125,
+    "layer_2_used": 774,
+    "layer_2_entropy": 6.449003219604492,
+    "layer_2_usage_pct": 37.79296875,
+    "layer_3_used": 693,
+    "layer_3_entropy": 6.2064714431762695,
+    "layer_3_usage_pct": 33.837890625
+  },
+  {
+    "step": 600,
+    "layer0_entropy": 8.874210357666016,
+    "layer0_top10_mass": 0.1876678466796875,
+    "layer0_used_codes": 1061,
+    "layer0_total_codes": 2048,
+    "layer0_usage_pct": 51.806640625,
+    "joint_unique_codes": 107556,
+    "joint_total_codes": 108367,
+    "joint_diversity": 0.9925161718973489,
+    "feature_mse": 0.03619861238636077,
+    "entropy": 8.874210357666016,
+    "top_10_mass": 0.1876678466796875,
+    "used_codes": 1061,
+    "split_groups": [
+      {
+        "layer": 0,
+        "parent": 220,
+        "children": [
+          8,
+          12
+        ],
+        "k": 3,
+        "parent_count": 15,
+        "children_counts": [
+          54,
+          75
+        ],
+        "child_active_count": 2,
+        "group_entropy_children": 0.6798376211857489,
+        "group_entropy_children_norm": 0.9807983646944296,
+        "top_child": 12,
+        "top_child_frac": 0.5813953488372093,
+        "parent_frac_in_group": 0.10416666666666667
+      },
+      {
+        "layer": 0,
+        "parent": 523,
+        "children": [
+          7,
+          13
+        ],
+        "k": 3,
+        "parent_count": 64,
+        "children_counts": [
+          118,
+          380
+        ],
+        "child_active_count": 2,
+        "group_entropy_children": 0.5475360976657926,
+        "group_entropy_children_norm": 0.7899276128101341,
+        "top_child": 13,
+        "top_child_frac": 0.7630522088353414,
+        "parent_frac_in_group": 0.11387900355871886
+      }
+    ],
+    "split_child_active_min": 2,
+    "split_group_entropy_min": 0.5475360976657926,
+    "ema_usage_penalty": 0.0,
+    "avg_total_loss": 0.35500172346830366,
+    "avg_loss_quant": 0.0434812937118113,
+    "avg_loss_pre": 0.04346727008000016,
+    "avg_loss_inter": 0.6214153635501861,
+    "avg_loss_commit": 0.0008127496087399777,
+    "avg_loss_codebook": 0.0,
+    "layer_0_used": 578,
+    "layer_0_entropy": 5.844275951385498,
+    "layer_0_usage_pct": 28.22265625,
+    "layer_1_used": 862,
+    "layer_1_entropy": 6.585779190063477,
+    "layer_1_usage_pct": 42.08984375,
+    "layer_2_used": 825,
+    "layer_2_entropy": 6.517709732055664,
+    "layer_2_usage_pct": 40.283203125,
+    "layer_3_used": 689,
+    "layer_3_entropy": 6.129604339599609,
+    "layer_3_usage_pct": 33.642578125
+  },
+  {
+    "step": 800,
+    "layer0_entropy": 8.72164249420166,
+    "layer0_top10_mass": 0.23357665538787842,
+    "layer0_used_codes": 1036,
+    "layer0_total_codes": 2048,
+    "layer0_usage_pct": 50.5859375,
+    "joint_unique_codes": 107237,
+    "joint_total_codes": 108367,
+    "joint_diversity": 0.9895724713242962,
+    "feature_mse": 0.03586418507155031,
+    "entropy": 8.72164249420166,
+    "top_10_mass": 0.23357665538787842,
+    "used_codes": 1036,
+    "split_groups": [
+      {
+        "layer": 0,
+        "parent": 220,
+        "children": [
+          8,
+          12
+        ],
+        "k": 3,
+        "parent_count": 38,
+        "children_counts": [
+          0,
+          99
+        ],
+        "child_active_count": 1,
+        "group_entropy_children": 0.0,
+        "group_entropy_children_norm": 0.0,
+        "top_child": 12,
+        "top_child_frac": 1.0,
+        "parent_frac_in_group": 0.2773722627737226
+      },
+      {
+        "layer": 0,
+        "parent": 523,
+        "children": [
+          7,
+          13
+        ],
+        "k": 3,
+        "parent_count": 0,
+        "children_counts": [
+          0,
+          64
+        ],
+        "child_active_count": 1,
+        "group_entropy_children": 0.0,
+        "group_entropy_children_norm": 0.0,
+        "top_child": 13,
+        "top_child_frac": 1.0,
+        "parent_frac_in_group": 0.0
+      },
+      {
+        "layer": 0,
+        "parent": 875,
+        "children": [
+          4,
+          11
+        ],
+        "k": 3,
+        "parent_count": 0,
+        "children_counts": [
+          84,
+          83
+        ],
+        "child_active_count": 2,
+        "group_entropy_children": 0.693129252237378,
+        "group_entropy_children_norm": 0.9999741348979407,
+        "top_child": 4,
+        "top_child_frac": 0.5029940119760479,
+        "parent_frac_in_group": 0.0
+      }
+    ],
+    "split_child_active_min": 1,
+    "split_group_entropy_min": 0.0,
+    "ema_usage_penalty": 0.0,
+    "avg_total_loss": 0.3532481327652931,
+    "avg_loss_quant": 0.042063346207141875,
+    "avg_loss_pre": 0.04204860939644277,
+    "avg_loss_inter": 0.6206078001856804,
+    "avg_loss_commit": 0.0008808859107375611,
+    "avg_loss_codebook": 0.0,
+    "layer_0_used": 603,
+    "layer_0_entropy": 5.910576820373535,
+    "layer_0_usage_pct": 29.443359375,
+    "layer_1_used": 866,
+    "layer_1_entropy": 6.588264465332031,
+    "layer_1_usage_pct": 42.28515625,
+    "layer_2_used": 810,
+    "layer_2_entropy": 6.493326187133789,
+    "layer_2_usage_pct": 39.55078125,
+    "layer_3_used": 696,
+    "layer_3_entropy": 6.130221843719482,
+    "layer_3_usage_pct": 33.984375
+  },
+  {
+    "step": 1000,
+    "layer0_entropy": 8.977370262145996,
+    "layer0_top10_mass": 0.16017791628837585,
+    "layer0_used_codes": 1104,
+    "layer0_total_codes": 2048,
+    "layer0_usage_pct": 53.90625,
+    "joint_unique_codes": 107218,
+    "joint_total_codes": 108367,
+    "joint_diversity": 0.9893971411961205,
+    "feature_mse": 0.03380550662986934,
+    "entropy": 8.977370262145996,
+    "top_10_mass": 0.16017791628837585,
+    "used_codes": 1104,
+    "split_groups": [
+      {
+        "layer": 0,
+        "parent": 220,
+        "children": [
+          8,
+          12
+        ],
+        "k": 3,
+        "parent_count": 79,
+        "children_counts": [
+          155,
+          39
+        ],
+        "child_active_count": 2,
+        "group_entropy_children": 0.5018282759626094,
+        "group_entropy_children_norm": 0.7239851651091148,
+        "top_child": 8,
+        "top_child_frac": 0.7989690721649485,
+        "parent_frac_in_group": 0.2893772893772894
+      },
+      {
+        "layer": 0,
+        "parent": 523,
+        "children": [
+          7,
+          13
+        ],
+        "k": 3,
+        "parent_count": 11,
+        "children_counts": [
+          1157,
+          357
+        ],
+        "child_active_count": 2,
+        "group_entropy_children": 0.5461891919508848,
+        "group_entropy_children_norm": 0.7879844386146916,
+        "top_child": 7,
+        "top_child_frac": 0.7642007926023778,
+        "parent_frac_in_group": 0.007213114754098361
+      },
+      {
+        "layer": 0,
+        "parent": 875,
+        "children": [
+          4,
+          11
+        ],
+        "k": 3,
+        "parent_count": 25,
+        "children_counts": [
+          27,
+          123
+        ],
+        "child_active_count": 2,
+        "group_entropy_children": 0.4713934868100942,
+        "group_entropy_children_norm": 0.6800770457282799,
+        "top_child": 11,
+        "top_child_frac": 0.82,
+        "parent_frac_in_group": 0.14285714285714285
+      },
+      {
+        "layer": 0,
+        "parent": 498,
+        "children": [
+          1,
+          10
+        ],
+        "k": 3,
+        "parent_count": 0,
+        "children_counts": [
+          12,
+          42
+        ],
+        "child_active_count": 2,
+        "group_entropy_children": 0.5297061990576545,
+        "group_entropy_children_norm": 0.7642045065086203,
+        "top_child": 10,
+        "top_child_frac": 0.7777777777777778,
+        "parent_frac_in_group": 0.0
+      }
+    ],
+    "split_child_active_min": 2,
+    "split_group_entropy_min": 0.4713934868100942,
+    "ema_usage_penalty": 0.0,
+    "avg_total_loss": 0.34940727561712265,
+    "avg_loss_quant": 0.041100167529657484,
+    "avg_loss_pre": 0.041081311386078595,
+    "avg_loss_inter": 0.6147892682254315,
+    "avg_loss_commit": 0.0009124746259476524,
+    "avg_loss_codebook": 0.0,
+    "layer_0_used": 674,
+    "layer_0_entropy": 6.096976280212402,
+    "layer_0_usage_pct": 32.91015625,
+    "layer_1_used": 934,
+    "layer_1_entropy": 6.680729866027832,
+    "layer_1_usage_pct": 45.60546875,
+    "layer_2_used": 811,
+    "layer_2_entropy": 6.4986443519592285,
+    "layer_2_usage_pct": 39.599609375,
+    "layer_3_used": 720,
+    "layer_3_entropy": 6.175846099853516,
+    "layer_3_usage_pct": 35.15625
+  }
+]
