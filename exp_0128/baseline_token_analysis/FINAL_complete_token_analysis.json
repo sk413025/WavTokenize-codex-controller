@@ -2,31 +2,24 @@
   "metadata": {
     "codebook_size": 4096,
     "checkpoint": "/home/sbplab/ruizi/WavTokenize-feature-analysis/exp_0112_intermediate/runs/exp_k_v6_20260125_234609_20260125_234613/checkpoints/checkpoint_epoch300.pt",
-    "epoch": 300,
-    "units": {
-      "entropy": "bits",
-      "top_10_mass": "percent",
-      "top_50_mass": "percent",
-      "top_100_mass": "percent",
-      "usage_pct": "percent"
-    }
+    "epoch": 300
   },
   "student_train": {
     "statistics": {
       "split": "train_student",
-      "total_tokens": 474688,
-      "used_codes": 1819,
-      "usage_pct": 44.4091796875,
-      "entropy": 8.26626902569328,
-      "top_10_mass": 32.53568659835513,
-      "top_50_mass": 39.03679890791424,
-      "top_100_mass": 45.25456721046244,
-      "top_10_mass_pct": 32.53568659835513,
-      "top_50_mass_pct": 39.03679890791424,
-      "top_100_mass_pct": 45.25456721046244,
-      "top_10_mass_frac": 0.3253568659835513,
-      "top_50_mass_frac": 0.3903679890791424,
-      "top_100_mass_frac": 0.4525456721046244,
+      "total_tokens": 1997984,
+      "used_codes": 1833,
+      "usage_pct": 44.7509765625,
+      "entropy": 9.101430040075574,
+      "top_10_mass": 22.421751125134133,
+      "top_50_mass": 29.762000096096852,
+      "top_100_mass": 36.900745951919525,
+      "top_10_mass_pct": 22.421751125134133,
+      "top_50_mass_pct": 29.762000096096852,
+      "top_100_mass_pct": 36.900745951919525,
+      "top_10_mass_frac": 0.22421751125134132,
+      "top_50_mass_frac": 0.2976200009609685,
+      "top_100_mass_frac": 0.3690074595191952,
       "codebook_size": 4096,
       "units": {
         "entropy": "bits",
@@ -40,142 +33,142 @@
       {
         "rank": 1,
         "token_id": 278,
-        "count": 103288,
-        "frequency": 21.7591344209249,
-        "cumulative_freq": 21.7591344209249
+        "count": 208322,
+        "frequency": 10.426610022903086,
+        "cumulative_freq": 10.426610022903086
       },
       {
         "rank": 2,
         "token_id": 1834,
-        "count": 39623,
-        "frequency": 8.347166981259269,
-        "cumulative_freq": 30.10630140218417
+        "count": 188285,
+        "frequency": 9.423749139132246,
+        "cumulative_freq": 19.85035916203533
       },
       {
         "rank": 3,
         "token_id": 77,
-        "count": 2639,
-        "frequency": 0.5559441148712417,
-        "cumulative_freq": 30.66224551705541
+        "count": 10536,
+        "frequency": 0.5273315502026042,
+        "cumulative_freq": 20.377690712237936
       },
       {
         "rank": 4,
         "token_id": 316,
-        "count": 1776,
-        "frequency": 0.374140488067952,
-        "cumulative_freq": 31.036386005123365
+        "count": 6765,
+        "frequency": 0.3385913000304307,
+        "cumulative_freq": 20.71628201226837
       },
       {
         "rank": 5,
         "token_id": 1288,
-        "count": 1381,
-        "frequency": 0.2909279358231091,
-        "cumulative_freq": 31.327313940946475
+        "count": 6355,
+        "frequency": 0.3180706151801015,
+        "cumulative_freq": 21.034352627448467
       },
       {
         "rank": 6,
         "token_id": 1246,
-        "count": 1248,
-        "frequency": 0.2629095321558581,
-        "cumulative_freq": 31.59022347310233
+        "count": 6091,
+        "frequency": 0.3048572961545238,
+        "cumulative_freq": 21.33920992360299
       },
       {
         "rank": 7,
         "token_id": 1346,
-        "count": 1171,
-        "frequency": 0.2466883510853444,
-        "cumulative_freq": 31.83691182418768
+        "count": 5749,
+        "frequency": 0.287740041962298,
+        "cumulative_freq": 21.626949965565288
       },
       {
         "rank": 8,
         "token_id": 1157,
-        "count": 1166,
-        "frequency": 0.2456350276392072,
-        "cumulative_freq": 32.08254685182688
+        "count": 5490,
+        "frequency": 0.2747769751909925,
+        "cumulative_freq": 21.90172694075628
       },
       {
         "rank": 9,
         "token_id": 710,
-        "count": 1115,
-        "frequency": 0.2348911284886072,
-        "cumulative_freq": 32.31743798031549
+        "count": 5360,
+        "frequency": 0.2682704165799126,
+        "cumulative_freq": 22.169997357336197
       },
       {
         "rank": 10,
         "token_id": 766,
-        "count": 1036,
-        "frequency": 0.2182486180396386,
-        "cumulative_freq": 32.53568659835513
+        "count": 5030,
+        "frequency": 0.2517537677979403,
+        "cumulative_freq": 22.421751125134133
       },
       {
         "rank": 11,
-        "token_id": 223,
-        "count": 999,
-        "frequency": 0.2104540245382229,
-        "cumulative_freq": 32.74614062289335
+        "token_id": 954,
+        "count": 4700,
+        "frequency": 0.235237119015968,
+        "cumulative_freq": 22.6569882441501
       },
       {
         "rank": 12,
-        "token_id": 954,
-        "count": 990,
-        "frequency": 0.2085580423351759,
-        "cumulative_freq": 32.95469866522853
+        "token_id": 257,
+        "count": 4452,
+        "frequency": 0.2228246072040617,
+        "cumulative_freq": 22.87981285135416
       },
       {
         "rank": 13,
-        "token_id": 257,
-        "count": 955,
-        "frequency": 0.2011847782122152,
-        "cumulative_freq": 33.15588344344074
+        "token_id": 1262,
+        "count": 4400,
+        "frequency": 0.2202219837596297,
+        "cumulative_freq": 23.10003483511379
       },
       {
         "rank": 14,
-        "token_id": 1244,
-        "count": 926,
-        "frequency": 0.1950755022246191,
-        "cumulative_freq": 33.35095894566536
+        "token_id": 659,
+        "count": 4378,
+        "frequency": 0.2191208738408315,
+        "cumulative_freq": 23.31915570895462
       },
       {
         "rank": 15,
-        "token_id": 526,
-        "count": 920,
-        "frequency": 0.1938115140892544,
-        "cumulative_freq": 33.544770459754616
+        "token_id": 223,
+        "count": 4342,
+        "frequency": 0.2173190576100709,
+        "cumulative_freq": 23.53647476656469
       },
       {
         "rank": 16,
-        "token_id": 659,
-        "count": 904,
-        "frequency": 0.1904408790616152,
-        "cumulative_freq": 33.73521133881623
+        "token_id": 1244,
+        "count": 4339,
+        "frequency": 0.2171689062575076,
+        "cumulative_freq": 23.7536436728222
       },
       {
         "rank": 17,
-        "token_id": 696,
-        "count": 892,
-        "frequency": 0.1879129027908858,
-        "cumulative_freq": 33.92312424160711
+        "token_id": 1273,
+        "count": 4200,
+        "frequency": 0.2102118935887374,
+        "cumulative_freq": 23.96385556641094
       },
       {
         "rank": 18,
-        "token_id": 1262,
-        "count": 859,
-        "frequency": 0.1809609680463799,
-        "cumulative_freq": 34.10408520965349
+        "token_id": 696,
+        "count": 4115,
+        "frequency": 0.2059576052661082,
+        "cumulative_freq": 24.169813171677045
       },
       {
         "rank": 19,
-        "token_id": 572,
-        "count": 855,
-        "frequency": 0.1801183092894701,
-        "cumulative_freq": 34.28420351894296
+        "token_id": 949,
+        "count": 4100,
+        "frequency": 0.2052068485032913,
+        "cumulative_freq": 24.375020020180337
       },
       {
         "rank": 20,
         "token_id": 1319,
-        "count": 840,
-        "frequency": 0.1769583389510584,
-        "cumulative_freq": 34.46116185789402
+        "count": 3927,
+        "frequency": 0.1965481205054695,
+        "cumulative_freq": 24.571568140685805
       }
     ]
   },
@@ -350,19 +343,19 @@
   "teacher_train": {
     "statistics": {
       "split": "train_teacher",
-      "total_tokens": 474688,
-      "used_codes": 1666,
-      "usage_pct": 40.673828125,
-      "entropy": 8.265866053538879,
-      "top_10_mass": 25.309887757853584,
-      "top_50_mass": 36.093813199406775,
-      "top_100_mass": 46.37256471619254,
-      "top_10_mass_pct": 25.309887757853584,
-      "top_50_mass_pct": 36.093813199406775,
-      "top_100_mass_pct": 46.37256471619254,
-      "top_10_mass_frac": 0.25309887757853583,
-      "top_50_mass_frac": 0.36093813199406777,
-      "top_100_mass_frac": 0.46372564716192544,
+      "total_tokens": 1997984,
+      "used_codes": 1738,
+      "usage_pct": 42.431640625,
+      "entropy": 9.091683152742203,
+      "top_10_mass": 14.264528644874032,
+      "top_50_mass": 26.78990422345724,
+      "top_100_mass": 38.66112040937262,
+      "top_10_mass_pct": 14.264528644874032,
+      "top_50_mass_pct": 26.78990422345724,
+      "top_100_mass_pct": 38.66112040937262,
+      "top_10_mass_frac": 0.1426452864487403,
+      "top_50_mass_frac": 0.2678990422345724,
+      "top_100_mass_frac": 0.38661120409372624,
       "codebook_size": 4096,
       "units": {
         "entropy": "bits",
@@ -376,142 +369,142 @@
       {
         "rank": 1,
         "token_id": 453,
-        "count": 104716,
-        "frequency": 22.059963597141703,
-        "cumulative_freq": 22.059963597141703
+        "count": 210308,
+        "frequency": 10.526010218300048,
+        "cumulative_freq": 10.526010218300048
       },
       {
         "rank": 2,
         "token_id": 1733,
-        "count": 2153,
-        "frequency": 0.4535610759067008,
-        "cumulative_freq": 22.513524673048405
+        "count": 10643,
+        "frequency": 0.5326869484440315,
+        "cumulative_freq": 11.05869716674408
       },
       {
         "rank": 3,
         "token_id": 1755,
-        "count": 1849,
-        "frequency": 0.3895190103815559,
-        "cumulative_freq": 22.90304368342996
+        "count": 8612,
+        "frequency": 0.4310344827586206,
+        "cumulative_freq": 11.4897316495027
       },
       {
         "rank": 4,
         "token_id": 244,
-        "count": 1783,
-        "frequency": 0.3756151408925441,
-        "cumulative_freq": 23.278658824322505
+        "count": 8262,
+        "frequency": 0.4135168249595592,
+        "cumulative_freq": 11.90324847446226
       },
       {
         "rank": 5,
         "token_id": 1710,
-        "count": 1639,
-        "frequency": 0.3452794256437912,
-        "cumulative_freq": 23.623938249966297
+        "count": 8176,
+        "frequency": 0.4092124861860755,
+        "cumulative_freq": 12.312460960648334
       },
       {
         "rank": 6,
-        "token_id": 1744,
-        "count": 1629,
-        "frequency": 0.3431727787515168,
-        "cumulative_freq": 23.967111028717813
+        "token_id": 1794,
+        "count": 8098,
+        "frequency": 0.4053085510194276,
+        "cumulative_freq": 12.71776951166776
       },
       {
         "rank": 7,
-        "token_id": 1804,
-        "count": 1617,
-        "frequency": 0.3406448024807874,
-        "cumulative_freq": 24.3077558311986
+        "token_id": 1744,
+        "count": 7907,
+        "frequency": 0.3957489149062254,
+        "cumulative_freq": 13.113518426573986
       },
       {
         "rank": 8,
-        "token_id": 1794,
-        "count": 1601,
-        "frequency": 0.3372741674531482,
-        "cumulative_freq": 24.64502999865175
+        "token_id": 1804,
+        "count": 7732,
+        "frequency": 0.3869900860066947,
+        "cumulative_freq": 13.50050851258068
       },
       {
         "rank": 9,
         "token_id": 1726,
-        "count": 1582,
-        "frequency": 0.3332715383578266,
-        "cumulative_freq": 24.97830153700958
+        "count": 7670,
+        "frequency": 0.3838869580537181,
+        "cumulative_freq": 13.8843954706344
       },
       {
         "rank": 10,
-        "token_id": 1678,
-        "count": 1574,
-        "frequency": 0.331586220844007,
-        "cumulative_freq": 25.309887757853584
+        "token_id": 1494,
+        "count": 7595,
+        "frequency": 0.3801331742396335,
+        "cumulative_freq": 14.264528644874032
       },
       {
         "rank": 11,
-        "token_id": 1494,
-        "count": 1538,
-        "frequency": 0.3240022920318188,
-        "cumulative_freq": 25.6338900498854
+        "token_id": 1678,
+        "count": 7490,
+        "frequency": 0.3748778768999151,
+        "cumulative_freq": 14.639406521773948
       },
       {
         "rank": 12,
         "token_id": 1761,
-        "count": 1532,
-        "frequency": 0.3227383038964541,
-        "cumulative_freq": 25.956628353781856
+        "count": 7241,
+        "frequency": 0.3624153146371542,
+        "cumulative_freq": 15.001821836411102
       },
       {
         "rank": 13,
         "token_id": 1753,
-        "count": 1461,
-        "frequency": 0.3077811109613051,
-        "cumulative_freq": 26.26440946474316
+        "count": 7229,
+        "frequency": 0.3618147092269007,
+        "cumulative_freq": 15.363636545638002
       },
       {
         "rank": 14,
         "token_id": 1502,
-        "count": 1452,
-        "frequency": 0.3058851287582581,
-        "cumulative_freq": 26.57029459350142
+        "count": 7124,
+        "frequency": 0.3565594118871822,
+        "cumulative_freq": 15.720195957525185
       },
       {
         "rank": 15,
-        "token_id": 219,
-        "count": 1414,
-        "frequency": 0.2978798705676149,
-        "cumulative_freq": 26.868174464069035
+        "token_id": 1660,
+        "count": 7056,
+        "frequency": 0.3531559812290789,
+        "cumulative_freq": 16.073351938754264
       },
       {
         "rank": 16,
         "token_id": 1521,
-        "count": 1405,
-        "frequency": 0.2959838883645679,
-        "cumulative_freq": 27.164158352433603
+        "count": 6997,
+        "frequency": 0.3502030046286657,
+        "cumulative_freq": 16.42355494338293
       },
       {
         "rank": 17,
-        "token_id": 165,
-        "count": 1404,
-        "frequency": 0.2957732236753404,
-        "cumulative_freq": 27.459931576108943
+        "token_id": 1718,
+        "count": 6856,
+        "frequency": 0.3431458910581866,
+        "cumulative_freq": 16.766700834441114
       },
       {
         "rank": 18,
-        "token_id": 1661,
-        "count": 1394,
-        "frequency": 0.2936665767830659,
-        "cumulative_freq": 27.75359815289201
+        "token_id": 1772,
+        "count": 6848,
+        "frequency": 0.3427454874513509,
+        "cumulative_freq": 17.109446321892463
       },
       {
         "rank": 19,
-        "token_id": 1718,
-        "count": 1385,
-        "frequency": 0.2917705945800188,
-        "cumulative_freq": 28.04536874747203
+        "token_id": 1800,
+        "count": 6779,
+        "frequency": 0.3392920063423931,
+        "cumulative_freq": 17.448738328234857
       },
       {
         "rank": 20,
-        "token_id": 1660,
-        "count": 1380,
-        "frequency": 0.2907172711338816,
-        "cumulative_freq": 28.33608601860591
+        "token_id": 1748,
+        "count": 6747,
+        "frequency": 0.3376903919150503,
+        "cumulative_freq": 17.786428720149907
       }
     ]
   },
@@ -688,12 +681,6 @@
     "top_10_mass": 0.244,
     "top_50_mass": 1.22,
     "top_100_mass": 2.44,
-    "top_10_mass_pct": 0.244,
-    "top_50_mass_pct": 1.22,
-    "top_100_mass_pct": 2.44,
-    "top_10_mass_frac": 0.00244,
-    "top_50_mass_frac": 0.012199999999999999,
-    "top_100_mass_frac": 0.024399999999999998,
     "used_codes": 4096,
     "usage_pct": 100.0
   }
