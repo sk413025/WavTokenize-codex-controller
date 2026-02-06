@@ -1,6 +1,6 @@
 # Phase 3-2 實驗總結
 
-**日期**: 2026-02-04
+**日期**: 2026-02-05
 **狀態**: ✅ **P2 驗收通過 - 建議繼續 RVQ 實驗**（更新：P3 在特定設定/seed 下可達成，但穩定性仍需驗證）
 
 ---
@@ -147,6 +147,9 @@ Phase 3 失敗揭示了根本問題：**訓練目標允許 quantizer 被繞過**
 
 **評估**：Phase 3-2 的決策仍以 P2 為主；P3 作為 stretch 需另外做「多 seed 重跑 + 更長訓練」才能下結論。
 
+> 註：P3 定義在 step 1000；steps=200 的 short-run 即使顯示 `P3_pass=true`，也應視為 **N/A**（只代表「早期指標達門檻」，不能當作 P3 達成）。  
+> P3-pass (seed43) run：`exp_0128/phase3-2/run_exp6c_custom_steps1000_L4_K2048_ema_th2_beta1p0_inter0p5_warm0_up0p2_ups600_upr200_seed43_20260204_100722`
+
 ---
 
 ## 建議
@@ -155,7 +158,7 @@ Phase 3 失敗揭示了根本問題：**訓練目標允許 quantizer 被繞過**
 
 **理由**：
 1. **P2 標準全部通過**，證明架構有效
-2. **Entropy 9.03** 遠超 baseline 6.07 (+49%)
+2. **Entropy 9.03** 遠超 baseline 6.07 (+49%)（baseline=single VQ, K=4096；僅供參考，非與 RVQ 直接可比）
 3. **Joint diversity 0.992** 接近完美
 4. **Feature MSE 0.034** 表示主目標未受損
 
@@ -215,7 +218,7 @@ Phase 3 失敗揭示了根本問題：**訓練目標允許 quantizer 被繞過**
 
 **核心成就**：
 1. 證明 RVQ + EMA + Dead-Code Reset 能有效防止 collapse
-2. Entropy 從 6.07 (baseline) 提升至 9.03 (+49%)
+2. Entropy 從 6.07 (baseline; single VQ, K=4096) 提升至 9.03 (+49%)
 3. Used codes 從 740/4096 (18%) 提升至 1089/2048 (53%)
 4. Feature MSE 維持在 0.034，主目標未受損
 
@@ -227,5 +230,5 @@ Phase 3 失敗揭示了根本問題：**訓練目標允許 quantizer 被繞過**
 ---
 
 **創建日期**: 2026-02-04
-**最後更新**: 2026-02-04
+**最後更新**: 2026-02-05
 **驗收狀態**: ✅ P2 PASS - 建議繼續 RVQ
