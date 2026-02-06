@@ -56,6 +56,7 @@ import argparse
 import sys
 import math
 import time
+import atexit
 from pathlib import Path
 from datetime import datetime
 from tqdm import tqdm
@@ -91,6 +92,45 @@ def masked_mse(student: torch.Tensor, teacher: torch.Tensor, lengths: torch.Tens
     return sq.sum() / denom.clamp(min=1.0)
 
 
+class _TeeIO:
+    def __init__(self, *streams):
+        self._streams = streams
+
+    def write(self, data):
+        for s in self._streams:
+            try:
+                s.write(data)
+            except Exception:
+                pass
+
+    def flush(self):
+        for s in self._streams:
+            try:
+                s.flush()
+            except Exception:
+                pass
+
+    def isatty(self):
+        return False
+
+
+def _maybe_enable_file_logging(output_dir: Path) -> Path | None:
+    """
+    Avoid shell redirection (tee/>) and still persist logs for reproducibility.
+    """
+    log_path = output_dir / "train.log"
+    try:
+        log_f = open(log_path, "a", buffering=1, encoding="utf-8", errors="ignore")
+    except Exception:
+        return None
+
+    atexit.register(lambda: log_f.close())
+
+    sys.stdout = _TeeIO(sys.stdout, log_f)
+    sys.stderr = _TeeIO(sys.stderr, log_f)
+    return log_path
+
+
 def evaluate_collapse_metrics(
     model,
     val_loader,
@@ -115,6 +155,11 @@ def evaluate_collapse_metrics(
     all_layer0_codes = []  # 1D tensors of codes (masked, no padding)
     all_layer_codes_list = []  # [n_layers, n_tokens] tensors (masked, no padding)
     feature_distances = []  # Feature space alignment
+    all_teacher_codes = []  # 1D tensors of teacher codes (masked, no padding)
+
+    teacher_codebook_size = int(
+        model.teacher.feature_extractor.encodec.quantizer.vq.layers[0].codebook.shape[0]
+    )
 
     with torch.no_grad():
         for i, batch in enumerate(val_loader):
@@ -140,9 +185,16 @@ def evaluate_collapse_metrics(
 
             output = model(clean_audio, noisy_audio)
 
+            # Teacher codes: typically [B, T] or [B, n_q, T]
+            teacher_codes = output['teacher_codes'].cpu()
+
             # Extract RVQ layer codes: [n_layers, batch, time]
             all_layer_codes = output['all_layer_codes'].cpu()
             n_layers, batch_size, time = all_layer_codes.shape
+
+            # Handle possible [n_q, B, T] layout
+            if teacher_codes.dim() == 3 and teacher_codes.shape[0] != batch_size and teacher_codes.shape[1] == batch_size:
+                teacher_codes = teacher_codes.permute(1, 0, 2).contiguous()
 
             # Mask out padding using audio lengths.
             # Dataset is 24kHz and quantizer frame_rate=75 => hop ~ 24000/75 = 320 samples/frame.
@@ -157,10 +209,21 @@ def evaluate_collapse_metrics(
                         continue
                     all_layer0_codes.append(all_layer_codes[0, b, :L])
                     all_layer_codes_list.append(all_layer_codes[:, b, :L])
+
+                    # Teacher codes for the same valid frames
+                    tc = teacher_codes[b]
+                    Lt = min(L, int(tc.shape[-1]))
+                    if tc.dim() == 1:
+                        all_teacher_codes.append(tc[:Lt].reshape(-1))
+                    elif tc.dim() == 2:
+                        all_teacher_codes.append(tc[:, :Lt].reshape(-1))
+                    else:
+                        all_teacher_codes.append(tc.reshape(-1))
             else:
                 # No lengths available: include all tokens
                 all_layer0_codes.append(all_layer_codes[0].reshape(-1))
                 all_layer_codes_list.append(all_layer_codes.reshape(n_layers, -1))
+                all_teacher_codes.append(teacher_codes.reshape(-1))
 
             # Feature space distance
             student_quantized = output['student_quantized']  # [batch, 512, time]
@@ -191,16 +254,50 @@ def evaluate_collapse_metrics(
     code_counts = torch.bincount(all_layer0_codes, minlength=codebook_size)
     code_probs = code_counts.float() / code_counts.sum()
     nonzero_probs = code_probs[code_probs > 0]
+    n_nonzero = int((code_counts > 0).sum().item())
+    sorted_probs = torch.sort(code_probs, descending=True).values
 
     # Entropy (Layer 0)
     entropy_layer0 = -(nonzero_probs * torch.log2(nonzero_probs)).sum().item()
 
-    # Top-10 mass (Layer 0)
-    top_10_probs, _ = torch.topk(code_probs, k=min(10, len(nonzero_probs)))
-    top_10_mass_layer0 = top_10_probs.sum().item()
+    def _topk_mass(sorted_p: torch.Tensor, k: int, n_used: int) -> float:
+        if n_used <= 0:
+            return 0.0
+        k_eff = min(int(k), int(n_used))
+        if k_eff <= 0:
+            return 0.0
+        return sorted_p[:k_eff].sum().item()
+
+    # Top-k mass (Layer 0)
+    top_1_mass_layer0 = _topk_mass(sorted_probs, 1, n_nonzero)
+    top_10_mass_layer0 = _topk_mass(sorted_probs, 10, n_nonzero)
+    top_50_mass_layer0 = _topk_mass(sorted_probs, 50, n_nonzero)
+    top_100_mass_layer0 = _topk_mass(sorted_probs, 100, n_nonzero)
 
     # Used codes (Layer 0)
-    used_codes_layer0 = (code_counts > 0).sum().item()
+    used_codes_layer0 = n_nonzero
+
+    # ===== Teacher token distribution (single VQ; reference only) =====
+    if all_teacher_codes:
+        teacher_codes_flat = torch.cat(all_teacher_codes, dim=0).flatten().to(torch.int64)
+        teacher_counts = torch.bincount(teacher_codes_flat, minlength=teacher_codebook_size)
+        teacher_probs = teacher_counts.float() / teacher_counts.sum()
+        teacher_nonzero = teacher_probs[teacher_probs > 0]
+        teacher_n_used = int((teacher_counts > 0).sum().item())
+        teacher_sorted = torch.sort(teacher_probs, descending=True).values
+        teacher_entropy = -(teacher_nonzero * torch.log2(teacher_nonzero)).sum().item()
+        teacher_top1 = _topk_mass(teacher_sorted, 1, teacher_n_used)
+        teacher_top10 = _topk_mass(teacher_sorted, 10, teacher_n_used)
+        teacher_top50 = _topk_mass(teacher_sorted, 50, teacher_n_used)
+        teacher_top100 = _topk_mass(teacher_sorted, 100, teacher_n_used)
+    else:
+        teacher_counts = None
+        teacher_entropy = 0.0
+        teacher_n_used = 0
+        teacher_top1 = 0.0
+        teacher_top10 = 0.0
+        teacher_top50 = 0.0
+        teacher_top100 = 0.0
 
     # ===== Joint Code Diversity =====
     # Combine all layers into joint codes: [n_layers, total_tokens]
@@ -219,10 +316,31 @@ def evaluate_collapse_metrics(
     metrics = {
         # Layer 0 metrics (comparable to baseline single VQ)
         'layer0_entropy': entropy_layer0,
+        'layer0_top1_mass': top_1_mass_layer0,
         'layer0_top10_mass': top_10_mass_layer0,
+        'layer0_top50_mass': top_50_mass_layer0,
+        'layer0_top100_mass': top_100_mass_layer0,
+        'layer0_top1_mass_pct': 100.0 * top_1_mass_layer0,
+        'layer0_top10_mass_pct': 100.0 * top_10_mass_layer0,
+        'layer0_top50_mass_pct': 100.0 * top_50_mass_layer0,
+        'layer0_top100_mass_pct': 100.0 * top_100_mass_layer0,
         'layer0_used_codes': used_codes_layer0,
         'layer0_total_codes': codebook_size,
         'layer0_usage_pct': 100.0 * used_codes_layer0 / codebook_size,
+
+        # Teacher token distribution (reference; not directly comparable)
+        'teacher_entropy': teacher_entropy,
+        'teacher_top1_mass': teacher_top1,
+        'teacher_top10_mass': teacher_top10,
+        'teacher_top50_mass': teacher_top50,
+        'teacher_top100_mass': teacher_top100,
+        'teacher_top1_mass_pct': 100.0 * teacher_top1,
+        'teacher_top10_mass_pct': 100.0 * teacher_top10,
+        'teacher_top50_mass_pct': 100.0 * teacher_top50,
+        'teacher_top100_mass_pct': 100.0 * teacher_top100,
+        'teacher_used_codes': int(teacher_n_used),
+        'teacher_total_codes': int(teacher_codebook_size),
+        'teacher_usage_pct': 100.0 * float(teacher_n_used) / float(teacher_codebook_size),
 
         # Joint diversity (RVQ-specific)
         'joint_unique_codes': unique_joint,
@@ -767,6 +885,8 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    log_path = _maybe_enable_file_logging(output_dir)
+
     # Save config
     config = vars(args)
     config['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -797,6 +917,8 @@ def main():
     print(f"Early stop on collapse: {args.early_stop_on_collapse}")
     print(f"Eval: interval={args.eval_interval}, max_batches={args.eval_max_batches}")
     print(f"Output dir: {output_dir}")
+    if log_path is not None:
+        print(f"Log file: {log_path}")
     print("=" * 60)
 
     # Fail fast on CUDA issues BEFORE expensive dataset/model loading.
@@ -902,6 +1024,19 @@ def main():
     else:
         metrics_init = evaluate_collapse_metrics(model, val_loader, device, max_batches=int(args.eval_max_batches))
         layer0_counts_init = None
+
+    # Also record train-split metrics at step0 (prefixed), for epoch0 vs epoch1 comparisons.
+    try:
+        train_metrics_init = evaluate_collapse_metrics(
+            model,
+            train_loader,
+            device,
+            max_batches=int(args.eval_max_batches),
+        )
+        for k, v in train_metrics_init.items():
+            metrics_init[f"train_{k}"] = v
+    except Exception as e:
+        print(f"Warning: train-split initial evaluation failed at step 0: {e}")
     print(f"Initial metrics:")
     for k, v in metrics_init.items():
         if isinstance(v, float):
@@ -1110,6 +1245,19 @@ def main():
                 metrics = evaluate_collapse_metrics(model, val_loader, device, max_batches=int(args.eval_max_batches))
                 layer0_counts_eval = None
             metrics['ema_usage_penalty'] = float(getattr(model.rvq, 'ema_usage_penalty', 0.0))
+
+            # Also record train-split metrics for reproducibility (prefixed to avoid collisions).
+            try:
+                train_metrics = evaluate_collapse_metrics(
+                    model,
+                    train_loader,
+                    device,
+                    max_batches=int(args.eval_max_batches),
+                )
+                for k, v in train_metrics.items():
+                    metrics[f"train_{k}"] = v
+            except Exception as e:
+                print(f"Warning: train-split evaluation failed at step {step}: {e}")
 
             # Average losses since last evaluation (for Phase 3-2 logging)
             if len(loss_history) > last_eval_loss_idx:
