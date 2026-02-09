@@ -2,6 +2,45 @@
 
 ---
 
+## 實驗 2026-02-09: exp_0206 V2 — Fixed Intermediate Weight
+
+### 實驗編號
+`EXP-20260209-exp0206-v2-fixed-iw`
+
+### 背景與動機
+exp_0206 V1 長期訓練至 ~191 epoch 發現 intermediate loss 佔 total loss 94%（因 intermediate_weight=0.5），
+嚴重壓制 quant loss 梯度。Curriculum 使 intermediate loss 隨 noise 升高而上升 → total loss 虛假上升
+（quant loss 實際仍在下降）。Warmdown 機制（0.5→0.25 over 50 epochs）是事後補救，不如直接修正權重。
+另外 V1 在 epoch 177, 188 出現 NaN（L4 intermediate cosine similarity 遇到 zero-norm vectors）。
+
+### 變更摘要
+
+| 項目 | V1 | V2 |
+|------|----|----|
+| intermediate_weight | 0.5 → warmdown to 0.25 | **0.03 固定** |
+| warmdown 參數 | intermediate_weight_min=0.25, warmdown_epochs=50 | **移除** |
+| NaN 保護 | 無 | **跳過 NaN batch + 計數警告** |
+
+### 預期結果
+- quant loss 梯度佔比從 ~5% 提升至 ~80-90%
+- Total loss 曲線將反映真實 quant 收斂，不再被 intermediate 主導
+- NaN 不再導致 epoch 級別指標被汙染
+
+### 檔案
+- `exp_0206/train_long_v2.py` — V2 訓練腳本
+- `exp_0206/run_v2.sh` — V2 啟動腳本
+
+### 執行方式
+```bash
+bash exp_0206/run_v2.sh 0      # GPU 0
+bash exp_0206/run_v2.sh 1      # GPU 1
+```
+
+### 日期
+2026-02-09
+
+---
+
 ## 實驗 2026-02-06: Baseline (exp_k_v6) 自身的 Epoch 演化分析
 
 ### 實驗編號
