@@ -127,9 +127,9 @@ class IntermediateSupervisionLossV6(nn.Module):
                 student_flat = student_feat
                 teacher_flat = teacher_feat
 
-            # Cosine Loss
-            student_norm = F.normalize(student_flat, dim=-1)
-            teacher_norm = F.normalize(teacher_flat * self.target_scale, dim=-1)
+            # Cosine Loss (with eps for numerical stability, prevent NaN from zero-norm)
+            student_norm = F.normalize(student_flat, dim=-1, eps=1e-8)
+            teacher_norm = F.normalize(teacher_flat * self.target_scale, dim=-1, eps=1e-8)
             cos_sim = (student_norm * teacher_norm).sum(dim=-1).mean()
             loss = 1 - cos_sim
 
