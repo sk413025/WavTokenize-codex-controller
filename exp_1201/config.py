@@ -11,7 +11,8 @@ from typing import List, Optional
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
-DATA_ROOT = Path("/home/sbplab/ruizi/WavTokenize-self-supervised/done/exp/data_with_distances")  # 使用 with_distances 數據
+# 更新為過濾後的數據（包含 plastic 材質，過濾 clean→clean）
+DATA_ROOT = Path(__file__).parent.parent / "data"
 RESULTS_ROOT = Path(__file__).parent / "checkpoints"
 LOGS_ROOT = Path(__file__).parent / "logs"
 
@@ -19,9 +20,9 @@ LOGS_ROOT = Path(__file__).parent / "logs"
 WAVTOK_CONFIG = "/home/sbplab/ruizi/WavTokenizer-main/configs/wavtokenizer_smalldata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
 WAVTOK_CKPT = "/home/sbplab/ruizi/WavTokenizer-main/wavtokenizer_large_speech_320_24k.ckpt"
 
-# 數據路徑 - 使用 with_distances cache（包含音檔路徑）
-TRAIN_CACHE = DATA_ROOT / "train_cache_with_distances.pt"
-VAL_CACHE = DATA_ROOT / "val_cache_with_distances.pt"
+# 數據路徑 - 使用過濾後的 data3 (包含 plastic 材質，過濾 clean→clean)
+TRAIN_CACHE = DATA_ROOT / "train_cache_filtered.pt"
+VAL_CACHE = DATA_ROOT / "val_cache_filtered.pt"
 
 # HDF5 數據
 HDF5_CACHE = DATA_ROOT / "cache_with_distances.h5"

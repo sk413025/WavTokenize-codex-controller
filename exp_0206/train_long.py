@@ -636,14 +636,14 @@ def save_audio_samples(model, dataloader, device, output_dir, epoch,
 
 
 def plot_training_curves(history, output_dir, epoch):
-    """繪製訓練曲線（4×3 佈局，結合 v6 baseline 風格 + Phase 3-2 collapse metrics）
+    """繪製訓練曲線（3×3 佈局，結合 v6 baseline 風格 + Phase 3-2 collapse metrics）
 
     Args:
         history: 訓練歷史字典
         output_dir: 輸出目錄
         epoch: 當前 epoch（用於圖表標題）
     """
-    fig, axes = plt.subplots(4, 3, figsize=(18, 20))
+    fig, axes = plt.subplots(3, 3, figsize=(18, 15))
     fig.suptitle(f'exp_0206: Long-Term RVQ Training (Epoch {epoch})', fontsize=14)
 
     epochs = range(1, len(history['train_total_loss']) + 1)
@@ -658,7 +658,7 @@ def plot_training_curves(history, output_dir, epoch):
     ax.legend()
     ax.grid(True)
 
-    # 2. Commit + Codebook Loss
+    # 2. Commitment Loss
     ax = axes[0, 1]
     ax.plot(epochs, history['train_loss_commit'], 'b-', label='Train Commit', alpha=0.7)
     ax.plot(epochs, history['val_loss_commit'], 'r-', label='Val Commit', alpha=0.7)
@@ -676,31 +676,9 @@ def plot_training_curves(history, output_dir, epoch):
     ax.legend()
     ax.grid(True)
 
-    # ===== Row 2: Collapse Metrics =====
-    # 4. Layer0 Entropy
+    # ===== Row 2: Collapse Metrics + Intermediate =====
+    # 4. Used Codes + Joint Diversity (dual axis)
     ax = axes[1, 0]
-    if history.get('layer0_entropy'):
-        ax.plot(epochs, history['layer0_entropy'], 'g-', linewidth=2)
-        ax.axhline(y=5.0, color='orange', linestyle='--', label='P2 threshold')
-        ax.axhline(y=6.5, color='red', linestyle='--', label='P3 threshold')
-        ax.set_title('Layer0 Entropy')
-        ax.legend()
-    ax.set_xlabel('Epoch')
-    ax.grid(True)
-
-    # 5. Layer0 Top-10 Mass
-    ax = axes[1, 1]
-    if history.get('layer0_top10_mass'):
-        ax.plot(epochs, history['layer0_top10_mass'], 'purple', linewidth=2)
-        ax.axhline(y=0.5, color='orange', linestyle='--', label='P2 threshold')
-        ax.axhline(y=0.15, color='red', linestyle='--', label='P3 threshold')
-        ax.set_title('Layer0 Top-10 Mass')
-        ax.legend()
-    ax.set_xlabel('Epoch')
-    ax.grid(True)
-
-    # 6. Used Codes + Joint Diversity (dual axis)
-    ax = axes[1, 2]
     if history.get('layer0_used_codes'):
         ax.plot(epochs, history['layer0_used_codes'], 'darkorange', linewidth=2,
                 label='Used Codes')
@@ -718,9 +696,8 @@ def plot_training_curves(history, output_dir, epoch):
     ax2.legend(loc='lower right')
     ax.grid(True)
 
-    # ===== Row 3: Intermediate Supervision =====
-    # 7. Feature MSE
-    ax = axes[2, 0]
+    # 5. Feature MSE
+    ax = axes[1, 1]
     if history.get('feature_mse'):
         ax.plot(epochs, history['feature_mse'], 'brown', linewidth=2)
         ax.axhline(y=0.1, color='red', linestyle='--', label='P2/P3 threshold')
@@ -729,8 +706,8 @@ def plot_training_curves(history, output_dir, epoch):
     ax.set_xlabel('Epoch')
     ax.grid(True)
 
-    # 8. Intermediate Loss + Weight (與 v6 baseline 一致)
-    ax = axes[2, 1]
+    # 6. Intermediate Loss + Weight
+    ax = axes[1, 2]
     ax.plot(epochs, history['train_loss_inter'], 'b-', label='Train Inter', alpha=0.7)
     ax.plot(epochs, history['val_loss_inter'], 'r-', label='Val Inter', alpha=0.7)
     ax2 = ax.twinx()
@@ -743,8 +720,9 @@ def plot_training_curves(history, output_dir, epoch):
     ax.legend(loc='upper left')
     ax.grid(True)
 
-    # 9. Per-Layer Intermediate Loss (與 v6 baseline 一致)
-    ax = axes[2, 2]
+    # ===== Row 3: Training Dynamics =====
+    # 7. Per-Layer Intermediate Loss
+    ax = axes[2, 0]
     if history.get('train_intermediate_L3_loss'):
         ax.plot(epochs, history['train_intermediate_L3_loss'],
                 'b-', label='L3 (w=0.3)', alpha=0.7)
@@ -759,9 +737,8 @@ def plot_training_curves(history, output_dir, epoch):
     ax.legend()
     ax.grid(True)
 
-    # ===== Row 4: Training Dynamics =====
-    # 10. Curriculum Phase (與 v6 baseline 一致)
-    ax = axes[3, 0]
+    # 8. Curriculum Phase
+    ax = axes[2, 1]
     if history.get('curriculum_phase'):
         ax.plot(epochs, history['curriculum_phase'], 'orange', linewidth=2)
     ax.set_title('Curriculum Phase')
@@ -770,16 +747,13 @@ def plot_training_curves(history, output_dir, epoch):
     ax.set_ylim(0, 1.1)
     ax.grid(True)
 
-    # 11. Learning Rate
-    ax = axes[3, 1]
+    # 9. Learning Rate
+    ax = axes[2, 2]
     if history.get('lr'):
         ax.plot(epochs, history['lr'], 'green', linewidth=2)
         ax.set_title('Learning Rate')
     ax.set_xlabel('Epoch')
     ax.grid(True)
-
-    # 12. (空)
-    axes[3, 2].axis('off')
 
     plt.tight_layout()
     plt.savefig(output_dir / f'training_curves_epoch{epoch:03d}.png', dpi=150)

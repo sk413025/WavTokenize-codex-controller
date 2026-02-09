@@ -12,7 +12,7 @@
 #   bash exp_0206/run_v2.sh 1      # 使用 GPU 1
 #   bash exp_0206/run_v2.sh 2      # 使用 GPU 2
 # =============================================================================
-set -euo pipefail
+set -eo pipefail
 
 # GPU selection
 GPU_ID="${1:-0}"
@@ -23,10 +23,15 @@ echo "Using GPU: $GPU_ID"
 CONDA_ENV="test"
 echo "Activating conda env: $CONDA_ENV"
 
-# Get the conda base path
-CONDA_BASE=$(conda info --base 2>/dev/null || echo "/home/sbplab/anaconda3")
+# Get the conda base path — temporarily disable nounset for conda scripts
+set +u
+CONDA_BASE=$(conda info --base 2>/dev/null || echo "/home/sbplab/miniconda3")
 source "$CONDA_BASE/etc/profile.d/conda.sh"
 conda activate "$CONDA_ENV"
+set -u
+
+# Verify correct Python
+echo "Python: $(which python) — $(python --version 2>&1)"
 
 # Experiment name
 EXP_NAME="${2:-longterm_v2}"

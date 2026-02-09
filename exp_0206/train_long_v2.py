@@ -648,14 +648,14 @@ def save_audio_samples(model, dataloader, device, output_dir, epoch,
 
 
 def plot_training_curves(history, output_dir, epoch):
-    """繪製訓練曲線（3×3 佈局，結合 v6 baseline 風格 + Phase 3-2 collapse metrics）
+    """繪製訓練曲線（4×3 佈局，含 collapse metrics + intermediate + entropy/top10）
 
     Args:
         history: 訓練歷史字典
         output_dir: 輸出目錄
         epoch: 當前 epoch（用於圖表標題）
     """
-    fig, axes = plt.subplots(3, 3, figsize=(18, 15))
+    fig, axes = plt.subplots(4, 3, figsize=(18, 20))
     fig.suptitle(f'exp_0206 V2: Long-Term RVQ Training — Fixed IW (Epoch {epoch})', fontsize=14)
 
     epochs = range(1, len(history['train_total_loss']) + 1)
@@ -766,6 +766,32 @@ def plot_training_curves(history, output_dir, epoch):
         ax.set_title('Learning Rate')
     ax.set_xlabel('Epoch')
     ax.grid(True)
+
+    # ===== Row 4: Codebook Health =====
+    # 10. Layer0 Entropy
+    ax = axes[3, 0]
+    if history.get('layer0_entropy'):
+        ax.plot(epochs, history['layer0_entropy'], 'darkblue', linewidth=2)
+        ax.axhline(y=5.0, color='orange', linestyle=':', alpha=0.7, label='P2 ≥ 5.0')
+        ax.axhline(y=6.5, color='red', linestyle='--', alpha=0.7, label='P3 > 6.5')
+        ax.set_title('Layer0 Entropy')
+        ax.legend()
+    ax.set_xlabel('Epoch')
+    ax.grid(True)
+
+    # 11. Layer0 Top-10 Mass
+    ax = axes[3, 1]
+    if history.get('layer0_top10_mass'):
+        ax.plot(epochs, history['layer0_top10_mass'], 'darkred', linewidth=2)
+        ax.axhline(y=0.5, color='orange', linestyle=':', alpha=0.7, label='P2 ≤ 0.5')
+        ax.axhline(y=0.15, color='red', linestyle='--', alpha=0.7, label='P3 < 0.15')
+        ax.set_title('Layer0 Top-10 Mass')
+        ax.legend()
+    ax.set_xlabel('Epoch')
+    ax.grid(True)
+
+    # 12. 空白（或未來擴展）
+    axes[3, 2].axis('off')
 
     plt.tight_layout()
     plt.savefig(output_dir / f'training_curves_epoch{epoch:03d}.png', dpi=150)
