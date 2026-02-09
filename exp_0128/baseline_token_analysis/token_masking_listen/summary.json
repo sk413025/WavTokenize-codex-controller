@@ -1,0 +1,51 @@
+{
+  "experiment": "token_masking_listen",
+  "date": "20260208",
+  "target_token": 453,
+  "target_token_val_pct": 18.43,
+  "replace_token": 1145,
+  "description": "遮蔽 Teacher Top-1 Token 453，觀察對音檔品質的影響",
+  "outputs_per_sample": [
+    "sampleN_raw_input.wav - 原始音檔 (未經 codec)",
+    "sampleN_original.wav - WavTokenizer 正常重建",
+    "sampleN_replace_T1145.wav - T453→T1145 (第2名)",
+    "sampleN_replace_random.wav - T453→隨機其他 token"
+  ],
+  "results": [
+    {
+      "sample_id": 1,
+      "audio_path": "/home/sbplab/ruizi/WavTokenize/data/clean/box2/nor_girl9_clean_288.wav",
+      "total_frames": 164,
+      "target_token_count": 0,
+      "target_token_pct": 0.0
+    },
+    {
+      "sample_id": 2,
+      "audio_path": "/home/sbplab/ruizi/WavTokenize/data/clean/box2/nor_girl9_clean_288.wav",
+      "total_frames": 164,
+      "target_token_count": 0,
+      "target_token_pct": 0.0
+    },
+    {
+      "sample_id": 3,
+      "audio_path": "/home/sbplab/ruizi/WavTokenize/data/clean/box2/nor_girl9_clean_014.wav",
+      "total_frames": 193,
+      "target_token_count": 0,
+      "target_token_pct": 0.0
+    },
+    {
+      "sample_id": 4,
+      "audio_path": "/home/sbplab/ruizi/WavTokenize/data/clean/box2/nor_boy8_clean_064.wav",
+      "total_frames": 252,
+      "target_token_count": 0,
+      "target_token_pct": 0.0
+    },
+    {
+      "sample_id": 5,
+      "audio_path": "/home/sbplab/ruizi/WavTokenize/data/clean/box2/nor_boy7_clean_156.wav",
+      "total_frames": 388,
+      "target_token_count": 0,
+      "target_token_pct": 0.0
+    }
+  ]
+}
