@@ -906,7 +906,7 @@ def main():
         train_cache_path=TRAIN_CACHE,
         val_cache_path=VAL_CACHE,
         batch_size=args.batch_size,
-        num_workers=4,
+        num_workers=2,  # 降低從 4→2 避免 OOM (新數據 10,368→1,728 樣本)
         compute_snr=False,  # 加速載入
         initial_phase=args.curriculum_start,
         phase_increment=phase_increment,
