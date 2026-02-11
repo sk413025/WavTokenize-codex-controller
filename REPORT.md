@@ -2,6 +2,121 @@
 
 ---
 
+## 實驗 2026-02-11: exp_0206 Plan Ori — Single VQ K=4096 + EMA Update (Short-run)
+
+### 實驗編號
+`EXP-20260211-exp0206-plan-ori-short`
+
+### 背景與動機
+先前實驗使用 frozen codebook（baseline exp_k_v6）導致 student token 從 epoch 1 起即 collapse（top-10 mass 41.5% vs teacher 11.8%），
+且 300 epoch 後仍無法完全恢復。exp_0206 V2 嘗試用 intermediate supervision 改善，但根本問題——codebook 無法適應 LoRA 後的 feature space——未解決。
+
+**方案 A（Plan Ori）** 提出：使用預訓練 codebook 初始化（warm start）+ EMA 更新，讓 codebook 能跟隨 encoder 變化而自適應。
+此為科學控制實驗，目標回答三個核心問題：
+1. 預訓練 codebook + EMA 能否避免 token collapse？
+2. Warm start vs Cold start 哪個更好？
+3. 單層 VQ vs 多層 RVQ 是否必要？
+
+### 變更摘要
+
+| 項目 | Baseline (exp_k_v6) | RVQ (exp_0206) | Plan Ori (本實驗) |
+|------|---------------------|----------------|-------------------|
+| Codebook 結構 | 1×4096, dim=512 | 4×2048, dim=128 | **1×4096, dim=512** |
+| Codebook 初始化 | pretrained (frozen) | random | **pretrained (EMA)** |
+| 更新方式 | ❌ frozen | EMA (decay=0.99) | **EMA (decay=0.99)** |
+| Dead-code 處理 | 無 | reset (threshold=2) | **reset (threshold=2)** |
+| LoRA | rank=256, alpha=512 | rank=256, alpha=512 | rank=256, alpha=512 |
+
+### 預期結果
+- Entropy ≥5.0, Top-10 ≤50%, Used ≥410 (P2 targets)
+- Token collapse 完全避免（warm start 優勢）
+- 與 RVQ 在 diversity 指標上可比或更優
+
+### 實際執行結果
+
+#### Step 200 (P1 Gate) — ✅ PASS
+| Metric | Value | Target | Status |
+|--------|-------|--------|--------|
+| Top-10 mass | 0.0237 | ≤0.95 | ✅ |
+| Used codes | 1579 | ≥82 | ✅ |
+| Feature MSE | 0.0477 | ≤0.1 | ✅ |
+
+#### Step 1000 (P2 Gate) — ✅ PASS
+| Metric | Value | Target | Status |
+|--------|-------|--------|--------|
+| Entropy | 10.305 | ≥5.0 | ✅ |
+| Top-10 mass | 0.0295 | ≤0.5 | ✅ |
+| Used codes | 1532 | ≥410 | ✅ |
+| Feature MSE | 0.0418 | ≤0.1 | ✅ |
+
+#### P3 Bonus — ⚠️ NOT MET (used_codes 1532 < 2867)
+> Teacher 本身 used_codes 僅 1811，P3 目標 2867 (70%) 相對過於嚴格。
+
+#### Metrics 演化
+
+| Step | Entropy | Top-10 | Used | MSE | Loss |
+|------|---------|--------|------|-----|------|
+| 200 | 10.377 | 0.024 | 1579 | 0.048 | 0.082 |
+| 400 | 10.292 | 0.026 | 1534 | 0.046 | 0.074 |
+| 600 | 10.206 | 0.031 | 1495 | 0.044 | 0.072 |
+| 800 | 10.312 | 0.028 | 1490 | 0.044 | 0.070 |
+| 1000 | 10.305 | 0.030 | 1532 | 0.042 | 0.069 |
+
+#### 與 Baselines 對比
+
+| Method | Entropy | Top-10 | Used | Usage% |
+|--------|---------|--------|------|--------|
+| Baseline (frozen) | 6.07 | 19.7% | 740 | 18% |
+| RVQ (4×2048) | 9.03 | 15.8% | 1089 | 53% |
+| **Plan Ori (ours)** | **10.305** | **2.95%** | **1532** | **37.4%** |
+
+### 解讀實驗結果
+
+1. **Token collapse 完全避免**: Entropy 始終 >10.0，步驟 200 起即穩定。與 baseline 的初始 collapse (entropy=7.94, top-10=41.5%) 形成鮮明對比。
+2. **Warm start 大幅優於 cold start**: Plan Ori (warm) entropy=10.305 >> RVQ (cold) entropy=9.03。預訓練 codebook 提供了優質初始空間分佈。
+3. **單層 VQ 在 diversity 上足夠**: 單層 K=4096 的 entropy (10.305) 高於 4 層 RVQ (9.03)。但 MSE 略高 (0.042 vs 0.034)，RVQ 在重建精度上仍有微弱優勢。
+4. **Student 達到 Teacher 98% 的 entropy**: Student entropy=10.305 / Teacher=10.525 = 97.9%，傳承效果極佳。
+
+### 實驗反思
+- **P3 目標需重新校準**: P3 要求 used_codes≥2867 (70%)，但 teacher 自身僅使用 1811 codes (44.2%)。合理的 P3 目標應基於 teacher 的實際使用率設定。
+- **MSE 差距值得關注**: Plan Ori MSE (0.042) > RVQ (0.034)，long-run 實驗需觀察此差距是否縮小。
+- **EMA decay 可能需要調優**: 當前 0.99 表現優異，但 long-run 是否需要 0.999 以增加穩定性有待驗證。
+- **下一步**: P2 已通過，建議進行 300 epoch long-run 確認長期穩定性。
+
+### 檔案
+- 模型: `exp_0206/plan_ori/models_single_vq_ema.py`
+- 訓練: `exp_0206/plan_ori/train_single_vq_ema.py`
+- 測試: `exp_0206/plan_ori/test_single_vq_ema.py`
+- 分析: `exp_0206/plan_ori/analyze_results.py`
+- 結果: `exp_0206/plan_ori/RESULTS.md`
+- Outputs: `exp_0206/runs/plan_ori_short_20260211/`
+
+### 如何重現
+
+```bash
+# 1. 環境
+conda activate test
+cd /home/sbplab/ruizi/WavTokenize-feature-analysis
+
+# 2. 單元測試
+python -m pytest exp_0206/plan_ori/test_single_vq_ema.py -v
+
+# 3. Short-run (1000 steps)
+python exp_0206/plan_ori/train_single_vq_ema.py \
+    --mode step --steps 1000 \
+    --batch_size 8 --grad_accum 2 --lr 1e-4 \
+    --eval_interval 200 --checkpoint_interval 200 \
+    --seed 42 --output_dir exp_0206/runs/plan_ori_short_$(date +%Y%m%d)
+
+# 4. 分析
+python exp_0206/plan_ori/analyze_results.py exp_0206/runs/plan_ori_short_<date>
+```
+
+### 日期
+2026-02-11
+
+---
+
 ## 實驗 2026-02-09: exp_0206 V2 — Fixed Intermediate Weight
 
 ### 實驗編號

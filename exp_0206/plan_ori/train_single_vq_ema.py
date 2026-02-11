@@ -1,0 +1,1128 @@
+"""
+exp_0206 Plan Original: Single VQ 4096 + EMA 訓練腳本
+
+基於 train_long_v2.py 修改，核心變更：
+- 使用 TeacherStudentSingleVQ 替代 TeacherStudentRVQ
+- Single VQ (K=4096, pretrained init) 替代 RVQ (4×2048, random init)
+- EMA update + dead-code reset
+- 支援 step-based 和 epoch-based 兩種訓練模式
+
+科學目標：
+1. 預訓練 codebook + EMA 能否避免 token collapse？
+2. Warm start vs Cold start 哪個更好？
+3. 單層 vs 多層 VQ 的必要性？
+
+執行：
+    # Short-run (1000 steps)
+    python exp_0206/plan_ori/train_single_vq_ema.py --steps 1000
+
+    # Long-run (300 epochs)
+    python exp_0206/plan_ori/train_single_vq_ema.py --epochs 300 --mode epoch
+"""
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torchaudio
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import json
+import argparse
+import sys
+import gc
+import math
+import time
+import atexit
+import random
+import numpy as np
+from pathlib import Path
+from datetime import datetime
+from typing import Dict, List, Optional
+from tqdm import tqdm
+from torch.cuda.amp import autocast, GradScaler
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, '/home/sbplab/ruizi/WavTokenizer-main')
+sys.path.insert(0, '/home/sbplab/ruizi/WavTokenize-self-supervised')
+
+from exp_1201.config import WAVTOK_CONFIG, WAVTOK_CKPT, TRAIN_CACHE, VAL_CACHE
+from exp_0206.plan_ori.models_single_vq_ema import TeacherStudentSingleVQ
+from exp_0112_intermediate.train_v6 import (
+    IntermediateSupervisionLossV6,
+    verify_model_state,
+)
+from exp_1226.data_curriculum import (
+    create_curriculum_dataloaders,
+    CurriculumSampler,
+)
+
+
+# ============================================================
+# Utility
+# ============================================================
+
+class _TeeIO:
+    """同時輸出到 stdout 和 log file"""
+
+    def __init__(self, *streams):
+        """初始化多重輸出流
+
+        Args:
+            *streams: 要同時寫入的多個輸出流
+        """
+        self._streams = streams
+
+    def write(self, data):
+        """寫入資料到所有流
+
+        Args:
+            data: 要寫入的字串資料
+        """
+        for s in self._streams:
+            try:
+                s.write(data)
+            except Exception:
+                pass
+
+    def flush(self):
+        """刷新所有流"""
+        for s in self._streams:
+            try:
+                s.flush()
+            except Exception:
+                pass
+
+    def isatty(self):
+        """回傳是否為終端設備
+
+        Returns:
+            永遠回傳 False
+        """
+        return False
+
+
+def setup_logging(output_dir: Path) -> Path:
+    """設定日誌輸出到檔案
+
+    Args:
+        output_dir: 輸出目錄路徑
+
+    Returns:
+        log 檔案路徑
+    """
+    log_path = output_dir / "train.log"
+    try:
+        log_f = open(log_path, "a", buffering=1, encoding="utf-8", errors="ignore")
+    except Exception:
+        return None
+    atexit.register(lambda: log_f.close())
+    sys.stdout = _TeeIO(sys.stdout, log_f)
+    sys.stderr = _TeeIO(sys.stderr, log_f)
+    return log_path
+
+
+def set_seed(seed: int = 42):
+    """設定隨機種子以確保可重現性
+
+    Args:
+        seed: 隨機種子值
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+def cuda_preinit(device: torch.device, retries: int = 10, sleep_s: float = 2.0):
+    """預先初始化 CUDA 裝置
+
+    Args:
+        device: CUDA 裝置
+        retries: 最大重試次數
+        sleep_s: 每次重試間隔秒數
+    """
+    if device.type != 'cuda':
+        return
+    for attempt in range(retries):
+        try:
+            torch.zeros(1, device=device)
+            print(f"CUDA pre-init OK (attempt {attempt + 1})")
+            return
+        except RuntimeError as e:
+            print(f"CUDA pre-init attempt {attempt + 1}/{retries} failed: {e}")
+            if attempt < retries - 1:
+                time.sleep(sleep_s)
+    raise RuntimeError(f"CUDA pre-init failed after {retries} attempts")
+
+
+def masked_mse(student: torch.Tensor, teacher: torch.Tensor,
+               lengths: torch.Tensor = None) -> torch.Tensor:
+    """計算帶 mask 的 MSE（僅在有效 frame 上計算）
+
+    Args:
+        student: 學生模型輸出 [B, C, T]
+        teacher: 教師模型輸出 [B, C, T]
+        lengths: 每個樣本的音訊長度（24kHz sample 數）
+
+    Returns:
+        masked MSE loss
+    """
+    if lengths is None:
+        return F.mse_loss(student, teacher)
+
+    hop = 320  # 24kHz / 75fps
+    T = student.shape[-1]
+    frame_lens = (lengths + hop - 1) // hop
+    frame_lens = torch.clamp(frame_lens, min=0, max=T)
+
+    frame_idx = torch.arange(T, device=student.device).unsqueeze(0)
+    mask = frame_idx < frame_lens.unsqueeze(1)
+    mask = mask.unsqueeze(1).to(student.dtype)
+
+    sq = (student - teacher) ** 2 * mask
+    denom = mask.sum() * student.shape[1]
+    return sq.sum() / denom.clamp(min=1.0)
+
+
+def get_lora_vq_state_dict(model):
+    """提取 LoRA + VQ 參數（用於 checkpoint 節省空間）
+
+    Args:
+        model: TeacherStudentSingleVQ 模型
+
+    Returns:
+        包含 LoRA 參數和 VQ 狀態的字典
+    """
+    lora_state = {}
+    for name, param in model.named_parameters():
+        if 'lora_' in name and param.requires_grad:
+            lora_state[name] = param.data.clone()
+
+    return {
+        'lora_state': lora_state,
+        'vq_state_dict': model.vq.state_dict(),
+    }
+
+
+# ============================================================
+# Training & Evaluation
+# ============================================================
+
+def train_step_based(model, train_loader, optimizer, inter_loss_fn, device,
+                     config, scaler=None, curriculum_sampler=None):
+    """Step-based 訓練（用於 short-run 實驗）
+
+    按 step 數訓練，每 eval_interval steps 評估一次。
+
+    Args:
+        model: TeacherStudentSingleVQ 模型
+        train_loader: 訓練資料載入器
+        optimizer: 優化器
+        inter_loss_fn: 中間層監督損失函數
+        device: 計算裝置
+        config: 訓練配置字典
+        scaler: AMP GradScaler
+        curriculum_sampler: 課程學習取樣器
+
+    Returns:
+        訓練歷史字典
+    """
+    model.train()
+
+    total_steps = config['steps']
+    eval_interval = config['eval_interval']
+    checkpoint_interval = config.get('checkpoint_interval', eval_interval)
+    intermediate_weight = config['intermediate_weight']
+    output_dir = Path(config['output_dir'])
+
+    # 初始化 metrics 歷史
+    metrics_history = []
+
+    # NaN 保護
+    nan_count = 0
+    max_nan = 50
+
+    step = 0
+    data_iter = iter(train_loader)
+
+    # 訓練指標累積
+    running_metrics = {
+        'total_loss': 0, 'loss_quant': 0, 'loss_inter': 0,
+        'loss_commit': 0, 'loss_codebook': 0,
+    }
+    running_count = 0
+
+    pbar = tqdm(total=total_steps, desc="Training")
+
+    while step < total_steps:
+        # 取得 batch（循環 dataloader）
+        try:
+            batch = next(data_iter)
+        except StopIteration:
+            data_iter = iter(train_loader)
+            batch = next(data_iter)
+
+        noisy_audio = batch['noisy_audio'].to(device)
+        clean_audio = batch['clean_audio'].to(device)
+        lengths = batch.get('lengths')
+        if lengths is not None:
+            lengths = lengths.to(device)
+
+        if clean_audio.dim() == 2:
+            clean_audio = clean_audio.unsqueeze(1)
+        if noisy_audio.dim() == 2:
+            noisy_audio = noisy_audio.unsqueeze(1)
+
+        if step % config['grad_accum'] == 0:
+            optimizer.zero_grad()
+
+        with autocast(enabled=config['use_amp']):
+            output = model(clean_audio, noisy_audio)
+
+            # Post-quant alignment（主損失）
+            loss_quant = masked_mse(
+                student=output['student_quantized'],
+                teacher=output['teacher_encoder_out'],
+                lengths=lengths,
+            )
+
+            # Intermediate supervision (cosine loss)
+            loss_inter_raw, inter_info = inter_loss_fn(
+                student_features=output['student_intermediates'],
+                teacher_features=output['teacher_intermediates'],
+            )
+            loss_inter = loss_inter_raw
+
+            # VQ commitment loss
+            loss_commit = output['vq_loss_commit']
+            loss_codebook = output['vq_loss_codebook']
+
+            # 總損失
+            total_loss = (
+                config['lambda_quant'] * loss_quant +
+                intermediate_weight * loss_inter +
+                config['beta_commit'] * loss_commit +
+                config['lambda_codebook'] * loss_codebook
+            )
+
+            total_loss = total_loss / config['grad_accum']
+
+        # NaN 保護
+        if torch.isnan(total_loss) or torch.isinf(total_loss):
+            nan_count += 1
+            print(f"  ⚠️ NaN/Inf at step {step}, skipping (count: {nan_count})")
+            optimizer.zero_grad()
+            if nan_count >= max_nan:
+                print(f"  🚨 Too many NaN ({nan_count}), aborting!")
+                break
+            continue
+
+        # Backward
+        if scaler is not None:
+            scaler.scale(total_loss).backward()
+            if (step + 1) % config['grad_accum'] == 0:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(
+                    [p for p in model.parameters() if p.requires_grad],
+                    max_norm=config['grad_clip'],
+                )
+                scaler.step(optimizer)
+                scaler.update()
+        else:
+            total_loss.backward()
+            if (step + 1) % config['grad_accum'] == 0:
+                torch.nn.utils.clip_grad_norm_(
+                    [p for p in model.parameters() if p.requires_grad],
+                    max_norm=config['grad_clip'],
+                )
+                optimizer.step()
+
+        # 累積指標
+        running_metrics['total_loss'] += total_loss.item() * config['grad_accum']
+        running_metrics['loss_quant'] += loss_quant.item()
+        running_metrics['loss_inter'] += loss_inter.item() if isinstance(loss_inter, torch.Tensor) else loss_inter
+        running_metrics['loss_commit'] += loss_commit.item()
+        running_metrics['loss_codebook'] += loss_codebook.item()
+        running_count += 1
+
+        step += 1
+        pbar.update(1)
+        pbar.set_postfix({
+            'loss': f"{total_loss.item() * config['grad_accum']:.4f}",
+            'quant': f"{loss_quant.item():.4f}",
+            'commit': f"{loss_commit.item():.4f}",
+        })
+
+        # 評估
+        if step % eval_interval == 0 or step == total_steps:
+            # 計算平均訓練指標
+            avg_train = {k: v / max(1, running_count) for k, v in running_metrics.items()}
+
+            # 評估
+            print(f"\n--- Step {step}/{total_steps}: Evaluating ---")
+            val_metrics = evaluate_single_vq(
+                model, train_loader, inter_loss_fn, device, config,
+                max_batches=config.get('eval_max_batches', 30),
+            )
+
+            # 記錄
+            record = {
+                'step': step,
+                'train_total_loss': avg_train['total_loss'],
+                'train_loss_quant': avg_train['loss_quant'],
+                'train_loss_inter': avg_train['loss_inter'],
+                'train_loss_commit': avg_train['loss_commit'],
+                **val_metrics,
+            }
+            metrics_history.append(record)
+
+            # 印出摘要
+            print(f"  Train: loss={avg_train['total_loss']:.4f} "
+                  f"quant={avg_train['loss_quant']:.4f} "
+                  f"commit={avg_train['loss_commit']:.4f}")
+            print(f"  Eval:  entropy={val_metrics['entropy']:.3f} "
+                  f"top10={val_metrics['top10_mass']:.4f} "
+                  f"used={val_metrics['used_codes']}/{config.get('codebook_size', 4096)} "
+                  f"mse={val_metrics['feature_mse']:.4f}")
+            print(f"  Gates: P1={'✅' if val_metrics['p1_pass'] else '❌'} "
+                  f"P2={'✅' if val_metrics['p2_pass'] else '❌'} "
+                  f"P3={'🎯' if val_metrics['p3_pass'] else '⚠️'}")
+
+            # 重置累積指標
+            running_metrics = {k: 0 for k in running_metrics}
+            running_count = 0
+
+            # 儲存 metrics
+            with open(output_dir / 'metrics_history.json', 'w') as f:
+                json.dump(metrics_history, f, indent=2)
+
+            # Checkpoint
+            if step % checkpoint_interval == 0:
+                ckpt_dir = output_dir / 'checkpoints'
+                ckpt_dir.mkdir(exist_ok=True)
+                ckpt_path = ckpt_dir / f'checkpoint_step{step:06d}.pt'
+                torch.save({
+                    'step': step,
+                    **get_lora_vq_state_dict(model),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'metrics': val_metrics,
+                    'config': config,
+                }, ckpt_path)
+                print(f"  📦 Checkpoint: {ckpt_path.name}")
+
+            model.train()
+
+    pbar.close()
+
+    # 繪製曲線
+    if metrics_history:
+        plot_step_metrics(metrics_history, output_dir)
+
+    return metrics_history
+
+
+@torch.no_grad()
+def evaluate_single_vq(model, dataloader, inter_loss_fn, device, config,
+                       max_batches: int = 30) -> Dict:
+    """評估 Single VQ 模型（collapse metrics + val loss）
+
+    Args:
+        model: TeacherStudentSingleVQ 模型
+        dataloader: 資料載入器
+        inter_loss_fn: 中間層損失函數
+        device: 計算裝置
+        config: 配置字典
+        max_batches: 最大評估批次數
+
+    Returns:
+        包含所有評估指標的字典
+    """
+    model.eval()
+
+    all_codes = []
+    all_teacher_codes = []
+    feature_distances = []
+    loss_metrics = {
+        'val_total_loss': 0, 'val_loss_quant': 0,
+        'val_loss_inter': 0, 'val_loss_commit': 0,
+    }
+
+    codebook_size = model.vq_codebook_size
+    teacher_codebook_size = int(
+        model.teacher.feature_extractor.encodec.quantizer.vq.layers[0].codebook.shape[0]
+    )
+
+    n_batches = 0
+
+    for i, batch in enumerate(dataloader):
+        if max_batches and i >= max_batches:
+            break
+
+        noisy_audio = batch['noisy_audio'].to(device)
+        clean_audio = batch['clean_audio'].to(device)
+        lengths = batch.get('lengths')
+        if lengths is not None:
+            lengths = lengths.to(device)
+
+        if clean_audio.dim() == 2:
+            clean_audio = clean_audio.unsqueeze(1)
+        if noisy_audio.dim() == 2:
+            noisy_audio = noisy_audio.unsqueeze(1)
+
+        output = model(clean_audio, noisy_audio)
+
+        # Val losses
+        loss_quant = masked_mse(output['student_quantized'], output['teacher_encoder_out'], lengths)
+        loss_inter, _ = inter_loss_fn(
+            student_features=output['student_intermediates'],
+            teacher_features=output['teacher_intermediates'],
+        )
+        loss_commit = output['vq_loss_commit']
+
+        loss_metrics['val_loss_quant'] += loss_quant.item()
+        loss_metrics['val_loss_inter'] += loss_inter.item() if isinstance(loss_inter, torch.Tensor) else loss_inter
+        loss_metrics['val_loss_commit'] += loss_commit.item()
+        loss_metrics['val_total_loss'] += (
+            config['lambda_quant'] * loss_quant +
+            config['intermediate_weight'] * (loss_inter if isinstance(loss_inter, torch.Tensor) else torch.tensor(loss_inter)) +
+            config['beta_commit'] * loss_commit
+        ).item()
+
+        # Codes
+        student_codes = output['student_codes']  # [1, B, 1, T]
+        teacher_codes = output['teacher_codes']  # [1, B, T] from WavTokenizer
+
+        hop = 320
+        B = student_codes.shape[1]
+        T = student_codes.shape[-1]
+
+        if lengths is not None:
+            frame_lens = ((lengths.cpu() + hop - 1) // hop).clamp(min=0, max=T)
+            for b in range(B):
+                L = int(frame_lens[b].item())
+                if L <= 0:
+                    continue
+                all_codes.append(student_codes[0, b, 0, :L].cpu())
+                # teacher_codes: [1, B, T] → [B, T]
+                if teacher_codes.dim() == 3:
+                    tc = teacher_codes[0, b, :L]  # [1, B, T] → single sample
+                elif teacher_codes.dim() == 4:
+                    tc = teacher_codes[0, b, 0, :L]
+                else:
+                    tc = teacher_codes[b, :L]
+                all_teacher_codes.append(tc.cpu().flatten())
+        else:
+            all_codes.append(student_codes[0, :, 0, :].cpu().flatten())
+            if teacher_codes.dim() == 3:
+                all_teacher_codes.append(teacher_codes[0].cpu().flatten())
+            else:
+                all_teacher_codes.append(teacher_codes.cpu().flatten())
+
+        # Feature MSE
+        student_q = output['student_quantized']
+        teacher_e = output['teacher_encoder_out']
+        if lengths is not None:
+            mse_sum = 0.0
+            n_valid = 0
+            for b in range(student_q.shape[0]):
+                L = int(frame_lens[b].item())
+                if L <= 0:
+                    continue
+                mse_sum += F.mse_loss(student_q[b, :, :L], teacher_e[b, :, :L]).item()
+                n_valid += 1
+            feature_distances.append(mse_sum / max(1, n_valid))
+        else:
+            feature_distances.append(F.mse_loss(student_q, teacher_e).item())
+
+        n_batches += 1
+
+    # 平均 losses
+    for key in loss_metrics:
+        loss_metrics[key] /= max(1, n_batches)
+
+    # Collapse metrics
+    all_codes_flat = torch.cat(all_codes).flatten().to(torch.int64)
+    code_counts = torch.bincount(all_codes_flat, minlength=codebook_size)
+    code_probs = code_counts.float() / code_counts.sum()
+    nonzero_probs = code_probs[code_probs > 0]
+    n_used = int((code_counts > 0).sum().item())
+    sorted_probs = torch.sort(code_probs, descending=True).values
+
+    entropy = -(nonzero_probs * torch.log2(nonzero_probs)).sum().item()
+    top10_mass = sorted_probs[:min(10, n_used)].sum().item()
+
+    # Teacher metrics
+    if all_teacher_codes:
+        teacher_flat = torch.cat(all_teacher_codes).flatten().to(torch.int64)
+        t_counts = torch.bincount(teacher_flat, minlength=teacher_codebook_size)
+        t_probs = t_counts.float() / t_counts.sum()
+        t_nz = t_probs[t_probs > 0]
+        t_entropy = -(t_nz * torch.log2(t_nz)).sum().item()
+        t_n_used = int((t_counts > 0).sum().item())
+    else:
+        t_entropy = 0.0
+        t_n_used = 0
+
+    # Feature MSE
+    feature_mse = sum(feature_distances) / len(feature_distances) if feature_distances else 0.0
+
+    # Usage percentage
+    usage_pct = 100.0 * n_used / codebook_size
+
+    # Acceptance gates
+    p1_pass = (top10_mass <= 0.95 and n_used >= 82 and feature_mse <= 0.1)
+    p2_pass = (entropy >= 5.0 and top10_mass <= 0.5 and n_used >= 410 and feature_mse <= 0.1)
+    p3_pass = (entropy > 6.5 and top10_mass < 0.15 and n_used >= 2867)
+
+    model.train()
+
+    return {
+        'entropy': entropy,
+        'top10_mass': top10_mass,
+        'used_codes': n_used,
+        'usage_pct': usage_pct,
+        'feature_mse': feature_mse,
+        'teacher_entropy': t_entropy,
+        'teacher_used_codes': t_n_used,
+        'p1_pass': bool(p1_pass),
+        'p2_pass': bool(p2_pass),
+        'p3_pass': bool(p3_pass),
+        **loss_metrics,
+    }
+
+
+def plot_step_metrics(metrics_history: list, output_dir: Path):
+    """繪製 step-based 訓練曲線
+
+    Args:
+        metrics_history: 每次評估的 metrics 列表
+        output_dir: 輸出目錄
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    fig.suptitle('exp_0206 Plan Ori: Single VQ 4096 + EMA (Short-run)', fontsize=14)
+
+    steps = [m['step'] for m in metrics_history]
+
+    # Entropy
+    ax = axes[0, 0]
+    ax.plot(steps, [m['entropy'] for m in metrics_history], 'b-o', linewidth=2)
+    ax.axhline(y=5.0, color='orange', linestyle='--', alpha=0.7, label='P2: ≥5.0')
+    ax.axhline(y=6.5, color='green', linestyle='--', alpha=0.7, label='P3: >6.5')
+    ax.set_title('Entropy (bits)')
+    ax.set_xlabel('Step')
+    ax.legend()
+    ax.grid(True)
+
+    # Top-10 mass
+    ax = axes[0, 1]
+    ax.plot(steps, [m['top10_mass'] for m in metrics_history], 'r-o', linewidth=2)
+    ax.axhline(y=0.5, color='orange', linestyle='--', alpha=0.7, label='P2: ≤0.5')
+    ax.axhline(y=0.15, color='green', linestyle='--', alpha=0.7, label='P3: <0.15')
+    ax.set_title('Top-10 Mass')
+    ax.set_xlabel('Step')
+    ax.legend()
+    ax.grid(True)
+
+    # Used codes
+    ax = axes[1, 0]
+    ax.plot(steps, [m['used_codes'] for m in metrics_history], 'g-o', linewidth=2)
+    ax.axhline(y=410, color='orange', linestyle='--', alpha=0.7, label='P2: ≥410')
+    ax.axhline(y=2867, color='green', linestyle='--', alpha=0.7, label='P3: ≥2867')
+    ax.set_title('Used Codes / 4096')
+    ax.set_xlabel('Step')
+    ax.legend()
+    ax.grid(True)
+
+    # Feature MSE
+    ax = axes[1, 1]
+    ax.plot(steps, [m['feature_mse'] for m in metrics_history], 'brown', marker='o', linewidth=2)
+    ax.axhline(y=0.1, color='red', linestyle='--', alpha=0.7, label='Threshold: ≤0.1')
+    ax.set_title('Feature MSE (z_q vs t_e)')
+    ax.set_xlabel('Step')
+    ax.legend()
+    ax.grid(True)
+
+    plt.tight_layout()
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    plot_path = output_dir / f'metrics_curves_{timestamp}_plot_step_metrics.png'
+    plt.savefig(plot_path, dpi=150)
+    plt.close()
+    print(f"  ✅ Metrics plot saved: {plot_path}")
+
+
+# ============================================================
+# Epoch-based training (for long-run)
+# ============================================================
+
+def train_epoch(model, dataloader, optimizer, inter_loss_fn, device, epoch,
+                config, scaler=None, curriculum_sampler=None):
+    """訓練一個 epoch
+
+    Args:
+        model: TeacherStudentSingleVQ 模型
+        dataloader: 訓練資料載入器
+        optimizer: 優化器
+        inter_loss_fn: 中間層監督損失函數
+        device: 計算裝置
+        epoch: 當前 epoch 數
+        config: 訓練配置字典
+        scaler: AMP GradScaler
+        curriculum_sampler: 課程學習取樣器
+
+    Returns:
+        包含各項損失和指標的字典
+    """
+    model.train()
+    verify_model_state(model, f"Epoch {epoch} 開始")
+
+    intermediate_weight = config['intermediate_weight']
+    nan_count = 0
+    max_nan_per_epoch = 10
+
+    metrics = {
+        'total_loss': 0, 'loss_quant': 0,
+        'loss_inter': 0, 'loss_commit': 0, 'loss_codebook': 0,
+        'intermediate_weight': intermediate_weight,
+        'intermediate_L3_loss': 0, 'intermediate_L4_loss': 0,
+        'intermediate_L6_loss': 0,
+        'nan_batches': 0,
+    }
+    n_batches = 0
+
+    pbar = tqdm(dataloader, desc=f"Epoch {epoch}")
+
+    for batch_idx, batch in enumerate(pbar):
+        noisy_audio = batch['noisy_audio'].to(device)
+        clean_audio = batch['clean_audio'].to(device)
+        lengths = batch.get('lengths')
+        if lengths is not None:
+            lengths = lengths.to(device)
+
+        if clean_audio.dim() == 2:
+            clean_audio = clean_audio.unsqueeze(1)
+        if noisy_audio.dim() == 2:
+            noisy_audio = noisy_audio.unsqueeze(1)
+
+        if batch_idx % config['grad_accum'] == 0:
+            optimizer.zero_grad()
+
+        with autocast(enabled=config['use_amp']):
+            output = model(clean_audio, noisy_audio)
+
+            loss_quant = masked_mse(
+                student=output['student_quantized'],
+                teacher=output['teacher_encoder_out'],
+                lengths=lengths,
+            )
+
+            loss_inter_raw, inter_info = inter_loss_fn(
+                student_features=output['student_intermediates'],
+                teacher_features=output['teacher_intermediates'],
+            )
+            loss_inter = loss_inter_raw
+
+            loss_commit = output['vq_loss_commit']
+            loss_codebook = output['vq_loss_codebook']
+
+            total_loss = (
+                config['lambda_quant'] * loss_quant +
+                intermediate_weight * loss_inter +
+                config['beta_commit'] * loss_commit +
+                config['lambda_codebook'] * loss_codebook
+            )
+            total_loss = total_loss / config['grad_accum']
+
+        # NaN 保護
+        if torch.isnan(total_loss) or torch.isinf(total_loss):
+            nan_count += 1
+            metrics['nan_batches'] = nan_count
+            print(f"  ⚠️ NaN/Inf at batch {batch_idx}, skipping (count: {nan_count})")
+            optimizer.zero_grad()
+            if nan_count >= max_nan_per_epoch:
+                print(f"  🚨 Too many NaN batches ({nan_count})")
+            continue
+
+        # Backward
+        if scaler is not None:
+            scaler.scale(total_loss).backward()
+            if (batch_idx + 1) % config['grad_accum'] == 0:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(
+                    [p for p in model.parameters() if p.requires_grad],
+                    max_norm=config['grad_clip'],
+                )
+                scaler.step(optimizer)
+                scaler.update()
+        else:
+            total_loss.backward()
+            if (batch_idx + 1) % config['grad_accum'] == 0:
+                torch.nn.utils.clip_grad_norm_(
+                    [p for p in model.parameters() if p.requires_grad],
+                    max_norm=config['grad_clip'],
+                )
+                optimizer.step()
+
+        # 記錄指標
+        metrics['total_loss'] += total_loss.item() * config['grad_accum']
+        metrics['loss_quant'] += loss_quant.item()
+        metrics['loss_inter'] += loss_inter.item() if isinstance(loss_inter, torch.Tensor) else loss_inter
+        metrics['loss_commit'] += loss_commit.item()
+        metrics['loss_codebook'] += loss_codebook.item()
+
+        for lkey in ['intermediate_L3_loss', 'intermediate_L4_loss', 'intermediate_L6_loss']:
+            if lkey in inter_info:
+                metrics[lkey] += inter_info[lkey]
+
+        n_batches += 1
+
+        pbar.set_postfix({
+            'loss': f"{total_loss.item() * config['grad_accum']:.4f}",
+            'quant': f"{loss_quant.item():.4f}",
+            'commit': f"{loss_commit.item():.4f}",
+        })
+
+    for key in metrics:
+        if key not in ('intermediate_weight', 'nan_batches'):
+            metrics[key] /= max(1, n_batches)
+
+    return metrics
+
+
+# ============================================================
+# Main
+# ============================================================
+
+def main():
+    """主函式：解析參數、載入資料與模型、執行訓練"""
+    parser = argparse.ArgumentParser(
+        description='exp_0206 Plan Ori: Single VQ 4096 + EMA Training'
+    )
+
+    # Training mode
+    parser.add_argument('--mode', type=str, default='step',
+                        choices=['step', 'epoch'],
+                        help='訓練模式: step (short-run) 或 epoch (long-run)')
+    parser.add_argument('--steps', type=int, default=1000,
+                        help='Step-based 模式的總步數')
+    parser.add_argument('--epochs', type=int, default=300,
+                        help='Epoch-based 模式的總 epochs')
+
+    # Output
+    parser.add_argument('--output_dir', type=str, default=None,
+                        help='輸出目錄')
+
+    # Training basics
+    parser.add_argument('--seed', type=int, default=42, help='隨機種子')
+    parser.add_argument('--batch_size', type=int, default=8, help='Batch size')
+    parser.add_argument('--grad_accum', type=int, default=2, help='梯度累積步數')
+    parser.add_argument('--learning_rate', type=float, default=1e-4, help='學習率')
+    parser.add_argument('--min_lr', type=float, default=1e-6, help='最小學習率')
+    parser.add_argument('--warmup_epochs', type=int, default=10, help='Warmup epochs')
+    parser.add_argument('--weight_decay', type=float, default=0.01, help='Weight decay')
+    parser.add_argument('--grad_clip', type=float, default=1.0, help='梯度裁剪')
+    parser.add_argument('--use_amp', action='store_true', default=True, help='混合精度')
+    parser.add_argument('--device', type=str, default='cuda:0', help='裝置')
+
+    # LoRA
+    parser.add_argument('--lora_rank', type=int, default=256, help='LoRA rank')
+    parser.add_argument('--lora_alpha', type=int, default=512, help='LoRA alpha')
+
+    # Single VQ + EMA
+    parser.add_argument('--vq_ema_decay', type=float, default=0.99, help='EMA decay')
+    parser.add_argument('--vq_ema_threshold', type=int, default=2,
+                        help='Dead-code reset threshold')
+    parser.add_argument('--vq_ema_usage_penalty', type=float, default=0.0,
+                        help='Usage penalty (log cluster_size)')
+
+    # Loss weights
+    parser.add_argument('--lambda_quant', type=float, default=1.0,
+                        help='Post-quant alignment weight')
+    parser.add_argument('--lambda_codebook', type=float, default=0.0,
+                        help='Codebook gradient loss (EMA mode=0)')
+    parser.add_argument('--beta_commit', type=float, default=1.0,
+                        help='Encoder commitment weight')
+    parser.add_argument('--intermediate_weight', type=float, default=0.03,
+                        help='中間層監督權重')
+
+    # Intermediate layer weights
+    parser.add_argument('--intermediate_L3_weight', type=float, default=0.3)
+    parser.add_argument('--intermediate_L4_weight', type=float, default=0.5)
+    parser.add_argument('--intermediate_L6_weight', type=float, default=0.5)
+
+    # Curriculum
+    parser.add_argument('--curriculum_start', type=float, default=0.3)
+    parser.add_argument('--curriculum_end', type=float, default=0.85)
+    parser.add_argument('--curriculum_epochs', type=int, default=200)
+
+    # Evaluation & Saving
+    parser.add_argument('--eval_interval', type=int, default=200,
+                        help='Step-based: 每 N steps 評估')
+    parser.add_argument('--checkpoint_interval', type=int, default=200,
+                        help='Step-based: 每 N steps 存 checkpoint')
+    parser.add_argument('--eval_max_batches', type=int, default=30,
+                        help='評估最大批次數')
+    parser.add_argument('--save_checkpoint_every', type=int, default=10,
+                        help='Epoch-based: 每 N epochs 存 checkpoint')
+
+    args = parser.parse_args()
+
+    # ===== Setup =====
+    set_seed(args.seed)
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    if args.output_dir:
+        exp_dir = Path(args.output_dir)
+    else:
+        exp_dir = Path(f'exp_0206/runs/plan_ori_{args.mode}_{timestamp}')
+    exp_dir.mkdir(parents=True, exist_ok=True)
+
+    log_path = setup_logging(exp_dir)
+
+    # Config dict
+    config = vars(args)
+    config['timestamp'] = timestamp
+    config['output_dir'] = str(exp_dir)
+    config['intermediate_indices'] = [3, 4, 6]
+    config['codebook_size'] = 4096
+
+    with open(exp_dir / 'config.json', 'w') as f:
+        json.dump(config, f, indent=2)
+
+    print("=" * 70)
+    print("exp_0206 Plan Ori: Single VQ 4096 + EMA")
+    print("=" * 70)
+    print(f"模式: {args.mode}")
+    if args.mode == 'step':
+        print(f"Steps: {args.steps}, Eval every {args.eval_interval} steps")
+    else:
+        print(f"Epochs: {args.epochs}")
+    print(f"Batch size: {args.batch_size} (effective: {args.batch_size * args.grad_accum})")
+    print(f"LR: {args.learning_rate}")
+    print(f"VQ: Single K=4096 (pretrained init, EMA decay={args.vq_ema_decay}, "
+          f"threshold={args.vq_ema_threshold})")
+    print(f"Loss: λ_quant={args.lambda_quant}, β_commit={args.beta_commit}, "
+          f"inter={args.intermediate_weight}")
+    print(f"Output: {exp_dir}")
+    if log_path:
+        print(f"Log: {log_path}")
+    print("=" * 70)
+
+    # ===== CUDA =====
+    device = torch.device(args.device)
+    cuda_preinit(device)
+
+    # ===== Data =====
+    print("\n載入資料...")
+    phase_increment = (args.curriculum_end - args.curriculum_start) / max(1, args.curriculum_epochs / 10)
+
+    train_loader, val_loader, curriculum_sampler = create_curriculum_dataloaders(
+        train_cache_path=TRAIN_CACHE,
+        val_cache_path=VAL_CACHE,
+        batch_size=args.batch_size,
+        num_workers=2,
+        compute_snr=False,
+        initial_phase=args.curriculum_start,
+        phase_increment=phase_increment,
+    )
+    print(f"Train: {len(train_loader.dataset)} samples, Val: {len(val_loader.dataset)} samples")
+
+    # ===== Model =====
+    print("\n建立模型...")
+    model = TeacherStudentSingleVQ(
+        wavtok_config=WAVTOK_CONFIG,
+        wavtok_ckpt=WAVTOK_CKPT,
+        lora_rank=args.lora_rank,
+        lora_alpha=args.lora_alpha,
+        intermediate_indices=[3, 4, 6],
+        device=device,
+        vq_ema_decay=args.vq_ema_decay,
+        vq_ema_threshold=args.vq_ema_threshold,
+        vq_ema_usage_penalty=args.vq_ema_usage_penalty,
+    )
+
+    inter_loss_fn = IntermediateSupervisionLossV6(
+        layer_weights={
+            3: args.intermediate_L3_weight,
+            4: args.intermediate_L4_weight,
+            6: args.intermediate_L6_weight,
+        },
+    )
+
+    # ===== Optimizer =====
+    trainable_params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = torch.optim.AdamW(
+        trainable_params,
+        lr=args.learning_rate,
+        weight_decay=args.weight_decay,
+    )
+
+    scaler = GradScaler() if args.use_amp else None
+
+    # ===== Training =====
+    if args.mode == 'step':
+        # Step-based training (short-run)
+        print(f"\n開始 step-based 訓練 ({args.steps} steps)...")
+        metrics_history = train_step_based(
+            model, train_loader, optimizer, inter_loss_fn, device,
+            config=config, scaler=scaler, curriculum_sampler=curriculum_sampler,
+        )
+
+        # Final summary
+        if metrics_history:
+            final = metrics_history[-1]
+            summary = {
+                'config': config,
+                'final_metrics': final,
+                'acceptance': {
+                    'P1_pass': final.get('p1_pass', False),
+                    'P2_pass': final.get('p2_pass', False),
+                    'P3_pass': final.get('p3_pass', False),
+                },
+                'baseline_reference': {
+                    'exp_k_v6_entropy': 6.07,
+                    'exp_k_v6_top10_mass': 0.197,
+                    'exp_k_v6_used_codes': 740,
+                    'note': 'Baseline: frozen VQ K=4096',
+                },
+                'rvq_reference': {
+                    '6c_entropy': 9.03,
+                    '6c_top10_mass': 0.158,
+                    '6c_used_codes': 1089,
+                    '6c_feature_mse': 0.034,
+                    'note': 'RVQ: 4×2048, random init, EMA',
+                },
+            }
+            with open(exp_dir / 'summary.json', 'w') as f:
+                json.dump(summary, f, indent=2)
+
+            print("\n" + "=" * 70)
+            print("Short-run 完成!")
+            print("=" * 70)
+            print(f"  Entropy:    {final['entropy']:.3f}")
+            print(f"  Top-10:     {final['top10_mass']:.4f}")
+            print(f"  Used codes: {final['used_codes']}/4096 ({final['usage_pct']:.1f}%)")
+            print(f"  Feature MSE: {final['feature_mse']:.4f}")
+            print(f"  P1: {'✅' if final.get('p1_pass') else '❌'}")
+            print(f"  P2: {'✅' if final.get('p2_pass') else '❌'}")
+            print(f"  P3: {'🎯' if final.get('p3_pass') else '⚠️'}")
+            print("=" * 70)
+
+    else:
+        # Epoch-based training (long-run)
+        def lr_lambda(epoch):
+            """計算 learning rate 的縮放係數
+
+            Args:
+                epoch: 當前 epoch
+
+            Returns:
+                學習率縮放因子
+            """
+            if epoch < args.warmup_epochs:
+                return epoch / args.warmup_epochs
+            progress = (epoch - args.warmup_epochs) / (args.epochs - args.warmup_epochs)
+            return max(args.min_lr / args.learning_rate,
+                       0.5 * (1 + math.cos(math.pi * progress)))
+
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+
+        history = {
+            'train_total_loss': [], 'train_loss_quant': [],
+            'train_loss_inter': [], 'train_loss_commit': [],
+            'entropy': [], 'top10_mass': [],
+            'used_codes': [], 'feature_mse': [],
+            'lr': [], 'p2_pass': [], 'p3_pass': [],
+        }
+
+        best_val_loss = float('inf')
+
+        print(f"\n開始 epoch-based 訓練 ({args.epochs} epochs)...")
+        for epoch in range(1, args.epochs + 1):
+            epoch_start = time.time()
+
+            if epoch > 1 and (epoch - 1) % 10 == 0 and curriculum_sampler is not None:
+                curriculum_sampler.advance_phase()
+
+            train_metrics = train_epoch(
+                model, train_loader, optimizer, inter_loss_fn, device, epoch,
+                config=config, scaler=scaler, curriculum_sampler=curriculum_sampler,
+            )
+            scheduler.step()
+            current_lr = optimizer.param_groups[0]['lr']
+
+            val_metrics = evaluate_single_vq(
+                model, val_loader, inter_loss_fn, device, config,
+                max_batches=args.eval_max_batches,
+            )
+
+            epoch_time = time.time() - epoch_start
+
+            history['train_total_loss'].append(train_metrics['total_loss'])
+            history['train_loss_quant'].append(train_metrics['loss_quant'])
+            history['train_loss_inter'].append(train_metrics['loss_inter'])
+            history['train_loss_commit'].append(train_metrics['loss_commit'])
+            history['entropy'].append(val_metrics['entropy'])
+            history['top10_mass'].append(val_metrics['top10_mass'])
+            history['used_codes'].append(val_metrics['used_codes'])
+            history['feature_mse'].append(val_metrics['feature_mse'])
+            history['lr'].append(current_lr)
+            history['p2_pass'].append(val_metrics['p2_pass'])
+            history['p3_pass'].append(val_metrics['p3_pass'])
+
+            print(f"\nEpoch {epoch}/{args.epochs} ({epoch_time:.1f}s)")
+            print(f"  Train: loss={train_metrics['total_loss']:.4f} "
+                  f"quant={train_metrics['loss_quant']:.4f} "
+                  f"commit={train_metrics['loss_commit']:.4f}")
+            print(f"  Eval:  entropy={val_metrics['entropy']:.3f} "
+                  f"top10={val_metrics['top10_mass']:.4f} "
+                  f"used={val_metrics['used_codes']}/4096 "
+                  f"mse={val_metrics['feature_mse']:.4f}")
+            print(f"  P2={'✅' if val_metrics['p2_pass'] else '❌'} "
+                  f"P3={'🎯' if val_metrics['p3_pass'] else '⚠️'} "
+                  f"LR={current_lr:.2e}")
+
+            if val_metrics['val_total_loss'] < best_val_loss:
+                best_val_loss = val_metrics['val_total_loss']
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'vq_state_dict': model.vq.state_dict(),
+                    'metrics': val_metrics,
+                    'config': config,
+                }, exp_dir / 'best_model.pt')
+
+            if epoch % args.save_checkpoint_every == 0:
+                ckpt_dir = exp_dir / 'checkpoints'
+                ckpt_dir.mkdir(exist_ok=True)
+                torch.save({
+                    'epoch': epoch,
+                    **get_lora_vq_state_dict(model),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'scheduler_state_dict': scheduler.state_dict(),
+                    'metrics': val_metrics,
+                    'config': config,
+                }, ckpt_dir / f'checkpoint_epoch{epoch:03d}.pt')
+
+            with open(exp_dir / 'metrics_history.json', 'w') as f:
+                json.dump(history, f, indent=2)
+
+            gc.collect()
+            torch.cuda.empty_cache()
+
+        # Final
+        torch.save({
+            'epoch': args.epochs,
+            'model_state_dict': model.state_dict(),
+            'vq_state_dict': model.vq.state_dict(),
+            'config': config,
+        }, exp_dir / 'final_model.pt')
+
+    print(f"\n✅ 訓練完成！結果儲存於 {exp_dir}")
+
+
+if __name__ == '__main__':
+    main()
