@@ -595,6 +595,196 @@ def evaluate_single_vq(model, dataloader, inter_loss_fn, device, config,
     }
 
 
+def save_audio_samples(model, dataloader, device, output_dir, epoch,
+                       num_samples=2, split='val'):
+    """儲存音檔樣本（noisy / clean / recon）
+
+    Args:
+        model: TeacherStudentSingleVQ 模型
+        dataloader: 資料載入器
+        device: 計算裝置
+        output_dir: 輸出目錄
+        epoch: 當前 epoch
+        num_samples: 要儲存的樣本數
+        split: 'val' 或 'train'
+    """
+    model.eval()
+    audio_dir = output_dir / 'audio_samples' / split / f'epoch_{epoch:03d}'
+    audio_dir.mkdir(parents=True, exist_ok=True)
+
+    sample_rate = 24000
+    data_iter = iter(dataloader)
+
+    for i in range(min(num_samples, len(dataloader))):
+        try:
+            batch = next(data_iter)
+        except StopIteration:
+            break
+
+        noisy_audio = batch['noisy_audio'][:1].to(device)
+        clean_audio = batch['clean_audio'][:1].to(device)
+
+        if noisy_audio.dim() == 2:
+            noisy_audio = noisy_audio.unsqueeze(1)
+        if clean_audio.dim() == 2:
+            clean_audio = clean_audio.unsqueeze(1)
+
+        torchaudio.save(str(audio_dir / f'sample_{i+1}_noisy.wav'),
+                        noisy_audio.squeeze(0).cpu(), sample_rate)
+        torchaudio.save(str(audio_dir / f'sample_{i+1}_clean.wav'),
+                        clean_audio.squeeze(0).cpu(), sample_rate)
+
+        try:
+            with torch.no_grad():
+                output = model(clean_audio, noisy_audio)
+                reconstructed = model.decode(output['student_quantized'])
+                if reconstructed.dim() == 3:
+                    reconstructed = reconstructed.squeeze(1)
+                torchaudio.save(str(audio_dir / f'sample_{i+1}_vq_recon.wav'),
+                                reconstructed.cpu(), sample_rate)
+        except Exception as e:
+            print(f"  Warning: 音檔重建失敗 sample {i+1}: {e}")
+
+    torch.cuda.empty_cache()
+    print(f"  🎵 已儲存 {min(num_samples, len(dataloader))} 個 {split} 音檔樣本 → {audio_dir}")
+
+
+def plot_training_curves(history, output_dir, epoch):
+    """繪製 epoch-based 訓練曲線（4×3 佈局）
+
+    Args:
+        history: 訓練歷史字典
+        output_dir: 輸出目錄
+        epoch: 當前 epoch
+    """
+    fig, axes = plt.subplots(4, 3, figsize=(18, 20))
+    fig.suptitle(f'exp_0206 Plan Ori: Single VQ 4096 + EMA (Epoch {epoch})', fontsize=14)
+
+    epochs = range(1, len(history['train_total_loss']) + 1)
+
+    # Row 1: Losses
+    ax = axes[0, 0]
+    ax.plot(epochs, history['train_total_loss'], 'b-', label='Train', alpha=0.7)
+    if history.get('val_total_loss'):
+        ax.plot(epochs, history['val_total_loss'], 'r-', label='Val', alpha=0.7)
+    ax.set_title('Total Loss')
+    ax.set_xlabel('Epoch')
+    ax.legend()
+    ax.grid(True)
+
+    ax = axes[0, 1]
+    ax.plot(epochs, history['train_loss_commit'], 'b-', label='Train Commit', alpha=0.7)
+    if history.get('val_loss_commit'):
+        ax.plot(epochs, history['val_loss_commit'], 'r-', label='Val Commit', alpha=0.7)
+    ax.set_title('Commitment Loss')
+    ax.set_xlabel('Epoch')
+    ax.legend()
+    ax.grid(True)
+
+    ax = axes[0, 2]
+    ax.plot(epochs, history['train_loss_quant'], 'b-', label='Train', alpha=0.7)
+    if history.get('val_loss_quant'):
+        ax.plot(epochs, history['val_loss_quant'], 'r-', label='Val', alpha=0.7)
+    ax.set_title('L_quant (post-quant MSE)')
+    ax.set_xlabel('Epoch')
+    ax.legend()
+    ax.grid(True)
+
+    # Row 2: Collapse Metrics + Intermediate
+    ax = axes[1, 0]
+    ax.plot(epochs, history['used_codes'], 'darkorange', linewidth=2, label='Used Codes')
+    ax.axhline(y=410, color='orange', linestyle=':', alpha=0.5, label='P2 ≥ 410')
+    ax.axhline(y=2867, color='red', linestyle=':', alpha=0.5, label='P3 ≥ 2867')
+    ax.set_title('Used Codes / 4096')
+    ax.set_xlabel('Epoch')
+    ax.legend()
+    ax.grid(True)
+
+    ax = axes[1, 1]
+    if history.get('feature_mse'):
+        ax.plot(epochs, history['feature_mse'], 'brown', linewidth=2)
+        ax.axhline(y=0.1, color='red', linestyle='--', label='Threshold: ≤0.1')
+        ax.set_title('Feature MSE (z_q vs t_e)')
+        ax.legend()
+    ax.set_xlabel('Epoch')
+    ax.grid(True)
+
+    ax = axes[1, 2]
+    ax.plot(epochs, history['train_loss_inter'], 'b-', label='Train Inter', alpha=0.7)
+    if history.get('val_loss_inter'):
+        ax.plot(epochs, history['val_loss_inter'], 'r-', label='Val Inter', alpha=0.7)
+    ax.set_title('Intermediate Loss')
+    ax.set_xlabel('Epoch')
+    ax.legend()
+    ax.grid(True)
+
+    # Row 3: Training Dynamics
+    ax = axes[2, 0]
+    if history.get('train_intermediate_L3_loss'):
+        ax.plot(epochs, history['train_intermediate_L3_loss'],
+                'b-', label='L3 (w=0.3)', alpha=0.7)
+    if history.get('train_intermediate_L4_loss'):
+        ax.plot(epochs, history['train_intermediate_L4_loss'],
+                'g--', label='L4 (w=0.5)', alpha=0.7)
+    if history.get('train_intermediate_L6_loss'):
+        ax.plot(epochs, history['train_intermediate_L6_loss'],
+                'r-.', label='L6 (w=0.5)', alpha=0.7)
+    ax.set_title('Per-Layer Intermediate Loss (Train)')
+    ax.set_xlabel('Epoch')
+    ax.legend()
+    ax.grid(True)
+
+    ax = axes[2, 1]
+    if history.get('curriculum_phase'):
+        ax.plot(epochs, history['curriculum_phase'], 'orange', linewidth=2)
+    ax.set_title('Curriculum Phase')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Max Noise Ratio')
+    ax.set_ylim(0, 1.1)
+    ax.grid(True)
+
+    ax = axes[2, 2]
+    if history.get('lr'):
+        ax.plot(epochs, history['lr'], 'green', linewidth=2)
+        ax.set_title('Learning Rate')
+    ax.set_xlabel('Epoch')
+    ax.grid(True)
+
+    # Row 4: Codebook Health
+    ax = axes[3, 0]
+    ax.plot(epochs, history['entropy'], 'darkblue', linewidth=2)
+    ax.axhline(y=5.0, color='orange', linestyle=':', alpha=0.7, label='P2 ≥ 5.0')
+    ax.axhline(y=6.5, color='red', linestyle='--', alpha=0.7, label='P3 > 6.5')
+    ax.set_title('Entropy')
+    ax.set_xlabel('Epoch')
+    ax.legend()
+    ax.grid(True)
+
+    ax = axes[3, 1]
+    ax.plot(epochs, history['top10_mass'], 'darkred', linewidth=2)
+    ax.axhline(y=0.5, color='orange', linestyle=':', alpha=0.7, label='P2 ≤ 0.5')
+    ax.axhline(y=0.15, color='red', linestyle='--', alpha=0.7, label='P3 < 0.15')
+    ax.set_title('Top-10 Mass')
+    ax.set_xlabel('Epoch')
+    ax.legend()
+    ax.grid(True)
+
+    # Teacher vs Student entropy
+    ax = axes[3, 2]
+    ax.plot(epochs, history['entropy'], 'b-', linewidth=2, label='Student')
+    if history.get('teacher_entropy'):
+        ax.plot(epochs, history['teacher_entropy'], 'r--', linewidth=2, label='Teacher')
+    ax.set_title('Student vs Teacher Entropy')
+    ax.set_xlabel('Epoch')
+    ax.legend()
+    ax.grid(True)
+
+    plt.tight_layout()
+    plt.savefig(output_dir / f'training_curves_epoch{epoch:03d}.png', dpi=150)
+    plt.close()
+    print(f"  📊 Training curves saved: training_curves_epoch{epoch:03d}.png")
+
+
 def plot_step_metrics(metrics_history: list, output_dir: Path):
     """繪製 step-based 訓練曲線
 
@@ -867,6 +1057,8 @@ def main():
                         help='評估最大批次數')
     parser.add_argument('--save_checkpoint_every', type=int, default=10,
                         help='Epoch-based: 每 N epochs 存 checkpoint')
+    parser.add_argument('--save_audio_interval', type=int, default=50,
+                        help='Epoch-based: 每 N epochs 存音檔 + 繪製曲線')
 
     args = parser.parse_args()
 
@@ -1033,9 +1225,16 @@ def main():
         history = {
             'train_total_loss': [], 'train_loss_quant': [],
             'train_loss_inter': [], 'train_loss_commit': [],
+            'val_total_loss': [], 'val_loss_quant': [],
+            'val_loss_inter': [], 'val_loss_commit': [],
             'entropy': [], 'top10_mass': [],
             'used_codes': [], 'feature_mse': [],
             'lr': [], 'p2_pass': [], 'p3_pass': [],
+            'curriculum_phase': [],
+            'train_intermediate_L3_loss': [],
+            'train_intermediate_L4_loss': [],
+            'train_intermediate_L6_loss': [],
+            'teacher_entropy': [],
         }
 
         best_val_loss = float('inf')
@@ -1065,6 +1264,10 @@ def main():
             history['train_loss_quant'].append(train_metrics['loss_quant'])
             history['train_loss_inter'].append(train_metrics['loss_inter'])
             history['train_loss_commit'].append(train_metrics['loss_commit'])
+            history['val_total_loss'].append(val_metrics['val_total_loss'])
+            history['val_loss_quant'].append(val_metrics.get('val_loss_quant', 0))
+            history['val_loss_inter'].append(val_metrics.get('val_loss_inter', 0))
+            history['val_loss_commit'].append(val_metrics.get('val_loss_commit', 0))
             history['entropy'].append(val_metrics['entropy'])
             history['top10_mass'].append(val_metrics['top10_mass'])
             history['used_codes'].append(val_metrics['used_codes'])
@@ -1072,6 +1275,21 @@ def main():
             history['lr'].append(current_lr)
             history['p2_pass'].append(val_metrics['p2_pass'])
             history['p3_pass'].append(val_metrics['p3_pass'])
+            history['teacher_entropy'].append(val_metrics.get('teacher_entropy', 0))
+
+            # Curriculum phase
+            if curriculum_sampler is not None:
+                history['curriculum_phase'].append(curriculum_sampler.current_phase)
+            else:
+                history['curriculum_phase'].append(1.0)
+
+            # Per-layer intermediate losses (from train_metrics)
+            history['train_intermediate_L3_loss'].append(
+                train_metrics.get('intermediate_L3_loss', 0))
+            history['train_intermediate_L4_loss'].append(
+                train_metrics.get('intermediate_L4_loss', 0))
+            history['train_intermediate_L6_loss'].append(
+                train_metrics.get('intermediate_L6_loss', 0))
 
             print(f"\nEpoch {epoch}/{args.epochs} ({epoch_time:.1f}s)")
             print(f"  Train: loss={train_metrics['total_loss']:.4f} "
@@ -1110,6 +1328,20 @@ def main():
             with open(exp_dir / 'metrics_history.json', 'w') as f:
                 json.dump(history, f, indent=2)
 
+            # Save audio samples + training curves
+            if epoch % args.save_audio_interval == 0 or epoch == 1:
+                try:
+                    save_audio_samples(model, val_loader, device, exp_dir,
+                                       epoch, num_samples=2, split='val')
+                    save_audio_samples(model, train_loader, device, exp_dir,
+                                       epoch, num_samples=2, split='train')
+                except Exception as e:
+                    print(f"  ⚠️ 音檔儲存失敗: {e}")
+                try:
+                    plot_training_curves(history, exp_dir, epoch)
+                except Exception as e:
+                    print(f"  ⚠️ 繪圖失敗: {e}")
+
             gc.collect()
             torch.cuda.empty_cache()
 
@@ -1120,6 +1352,34 @@ def main():
             'vq_state_dict': model.vq.state_dict(),
             'config': config,
         }, exp_dir / 'final_model.pt')
+
+        # Final training curves
+        try:
+            plot_training_curves(history, exp_dir, args.epochs)
+        except Exception as e:
+            print(f"  ⚠️ 最終繪圖失敗: {e}")
+
+        # Summary JSON
+        summary = {
+            'experiment': 'exp_0206_plan_ori_single_vq_ema',
+            'mode': 'epoch',
+            'total_epochs': args.epochs,
+            'config': config,
+            'final_metrics': {
+                'train_total_loss': history['train_total_loss'][-1],
+                'val_total_loss': history['val_total_loss'][-1],
+                'entropy': history['entropy'][-1],
+                'top10_mass': history['top10_mass'][-1],
+                'used_codes': history['used_codes'][-1],
+                'feature_mse': history['feature_mse'][-1],
+                'p2_pass': history['p2_pass'][-1],
+                'p3_pass': history['p3_pass'][-1],
+            },
+            'best_val_loss': best_val_loss,
+        }
+        with open(exp_dir / 'summary.json', 'w') as f:
+            json.dump(summary, f, indent=2)
+        print(f"\n📋 Summary saved: {exp_dir / 'summary.json'}")
 
     print(f"\n✅ 訓練完成！結果儲存於 {exp_dir}")
 
