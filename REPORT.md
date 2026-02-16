@@ -2,6 +2,33 @@
 
 ---
 
+## 實驗 2026-02-11: exp_0206 Plan Ori — Long-run 300 epochs (進行中)
+
+### 狀態
+🔄 **訓練中** — 300-epoch long-run 已啟動，預計約 25 小時完成。
+
+### 新增功能（相對 short-run）
+- `save_audio_samples()`: 每 50 epochs 儲存 noisy/clean/vq_recon WAV（val + train 各 2 samples）
+- `plot_training_curves()`: 4×3 佈局完整訓練曲線（含 per-layer intermediate loss）
+- `summary.json`: 訓練結束時自動生成
+- 擴充 history 追蹤欄位至 20 個（新增 val losses, curriculum_phase, per-layer losses, teacher_entropy）
+
+### 執行命令
+```bash
+conda activate test
+python exp_0206/plan_ori/train_single_vq_ema.py \
+  --mode epoch --epochs 300 --batch_size 8 --grad_accum 2 \
+  --learning_rate 1e-4 --warmup_epochs 10 \
+  --save_checkpoint_every 10 --save_audio_interval 50 \
+  --eval_max_batches 30 --seed 42 --device cuda:0 \
+  --output_dir exp_0206/runs/plan_ori_long_20260211
+```
+
+### 輸出目錄
+`exp_0206/runs/plan_ori_long_20260211/`
+
+---
+
 ## 實驗 2026-02-11: exp_0206 Plan Ori — Single VQ K=4096 + EMA Update (Short-run)
 
 ### 實驗編號
