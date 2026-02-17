@@ -1,0 +1,14 @@
+{
+  "checkpoint": "/home/sbplab/ruizi/WavTokenize-feature-analysis/exp_0216/runs/augmented_long_20260216/best_model.pt",
+  "n_samples": 10,
+  "noisy_pesq": 1.7551287770271302,
+  "noisy_stoi": 0.6515555780851174,
+  "with_vq_pesq": 1.1672057867050172,
+  "with_vq_stoi": 0.5562278641493204,
+  "no_vq_pesq": 1.1850579857826233,
+  "no_vq_stoi": 0.5690634145501203,
+  "delta_pesq_with_vq": -0.587922990322113,
+  "delta_pesq_no_vq": -0.5700707912445069,
+  "delta_stoi_with_vq": -0.09532771393579709,
+  "delta_stoi_no_vq": -0.08249216353499711
+}
