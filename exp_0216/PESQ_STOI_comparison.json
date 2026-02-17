@@ -1,0 +1,29 @@
+{
+  "V2 (RVQ)": {
+    "noisy_pesq": 1.8056056499481201,
+    "noisy_stoi": 0.5614002459377423,
+    "recon_pesq": 1.0756617784500122,
+    "recon_stoi": 0.4676565102403687,
+    "pesq_improvement": -0.7299438714981079,
+    "stoi_improvement": -0.0937437356973736,
+    "n_samples": 2
+  },
+  "Plan Ori (VQ+EMA)": {
+    "noisy_pesq": 1.8056056499481201,
+    "noisy_stoi": 0.5614002459377423,
+    "recon_pesq": 1.0528329014778137,
+    "recon_stoi": 0.4459632937761022,
+    "pesq_improvement": -0.7527727484703064,
+    "stoi_improvement": -0.11543695216164007,
+    "n_samples": 2
+  },
+  "exp_0216 (Aug+LoRA-64)": {
+    "noisy_pesq": 1.8056056499481201,
+    "noisy_stoi": 0.5614002459377423,
+    "recon_pesq": 1.0784392952919006,
+    "recon_stoi": 0.43269608906700885,
+    "pesq_improvement": -0.7271663546562195,
+    "stoi_improvement": -0.12870415687073344,
+    "n_samples": 2
+  }
+}
