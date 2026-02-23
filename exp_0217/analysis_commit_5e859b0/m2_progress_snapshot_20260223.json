@@ -1,17 +1,26 @@
 {
   "date": "2026-02-23",
   "run_dir": "exp_0217/runs/t453_m2_interw002_epoch100_20260223",
-  "status": "running",
-  "epochs_target": 100,
-  "epochs_logged": 0,
-  "latest_progress": "Epoch 1:  19%|#8        | 242/1296 [00:51<02:54,  6.03it/s, loss=0.0597, quant=0.0484, commit=0.0016]",
-  "config_focus": {
-    "intermediate_weight": 0.02,
-    "t453_min_weight": 0.2,
-    "t453_ramp_epochs": 150,
-    "lambda_quant": 1.0,
-    "beta_commit": 1.0
+  "status": "running_mid_milestone_met",
+  "acceptance_status": "partial_met_full_not_met",
+  "acceptance_reason": "epoch10 checkpoint reached; full acceptance requires epoch50/100 completion and quality evaluation outputs.",
+  "milestones": {
+    "checkpoint_epoch010": true,
+    "checkpoint_epoch050": false,
+    "checkpoint_epoch100": false,
+    "summary_json": false
   },
-  "latest_logged_metrics": {},
-  "note": "metrics_history appears after epoch summary is written."
+  "checkpoint_count": 1,
+  "epochs_target": 100,
+  "epochs_logged": 15,
+  "latest_progress": "Epoch 16:  77%|#######7  | 998/1296 [03:00<00:53,  5.61it/s, loss=0.0401, quant=0.0252, commit=0.0014]",
+  "latest_logged_metrics": {
+    "feature_mse": 0.04149292393897971,
+    "val_total_loss": 0.0632465410977602,
+    "entropy": 8.912283897399902,
+    "top10_mass": 0.11696632206439972,
+    "used_codes": 1052,
+    "p2_pass": true,
+    "p3_pass": false
+  }
 }

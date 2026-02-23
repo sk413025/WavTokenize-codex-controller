@@ -297,3 +297,96 @@
 ### 當前阻塞
 - `metrics_history.json` 尚未生成（屬正常，需待 epoch summary 落盤）
 - 下一步：待 epoch1 結束後補 `mse/P2/P3` 首次量化快照
+
+### 進度更新（2026-02-23 23:08）
+- `metrics_history.json` 已生成且已寫入首個 epoch 指標（`epochs_logged=1`）。
+- 最新快照：
+  - `latest_progress=Epoch 2 ... 120/1296 (~9%)`
+  - `feature_mse=0.074107`
+  - `val_total_loss=0.097582`
+  - `entropy=9.6593`
+  - `top10_mass=0.07894`
+  - `used_codes=1269`
+  - `P2=pass`, `P3=fail`
+- 快照檔：
+  - `m2_progress_snapshot_20260223.json`
+
+### 進度更新（2026-02-23 23:18）
+- 目前驗收判定：**未滿足（進行中）**
+- 原因：
+  - 尚未到 `epoch10`（無 checkpoint 里程碑）
+  - 尚未到 `epoch50/100`（無音質驗收輸出）
+  - `summary.json` 尚未產生（run 未完成）
+- 目前量化狀態：
+  - `epochs_logged=3`
+  - `latest_progress=Epoch 4 ... 684/1296 (~53%)`
+  - `feature_mse=0.046958`
+  - `val_total_loss=0.069638`
+  - `P2=pass`, `P3=fail`
+- 追蹤檔：
+  - `m2_progress_snapshot_20260223.json`
+
+### 進度更新（2026-02-23 23:19）
+- 驗收狀態維持：**未滿足（進行中）**
+- 最新事實：
+  - `summary.json` 仍不存在（run 尚未完成）
+  - `checkpoints/` 目錄尚未出現（尚未達 `save_checkpoint_every=10` 節點）
+  - `Epoch 10/50/100` 關鍵節點皆尚未達成
+  - 最新進度：`Epoch 4 ... 969/1296 (~75%)`
+- 來源：
+  - `exp_0217/runs/t453_m2_interw002_epoch100_20260223/train.log`
+  - `exp_0217/runs/t453_m2_interw002_epoch100_20260223/metrics_history.json`
+
+### 進度更新（2026-02-23 23:51）
+- 驗收判定更新：**中期里程碑已滿足；完整驗收未滿足**
+- 已達成：
+  - `checkpoint_epoch010.pt` 已存在（`save_checkpoint_every=10` 里程碑達成）
+  - `epochs_logged=11`
+- 尚未達成：
+  - `checkpoint_epoch050.pt`、`checkpoint_epoch100.pt` 尚未產生
+  - `summary.json` 尚未產生
+  - `epoch50/100` 音質驗收輸出尚未產生
+- 最新量化值（last logged）：
+  - `feature_mse=0.043660`
+  - `val_total_loss=0.065521`
+  - `entropy=9.1980`
+  - `top10_mass=0.09037`
+  - `used_codes=1125`
+  - `P2=pass`, `P3=fail`
+- 快照：
+  - `m2_progress_snapshot_20260223.json`
+
+### 進度更新（2026-02-23 23:53）
+- 驗收狀態維持：**部分達成（中期）/ 完整未達**
+- 最新進度：
+  - `epochs_logged=12`
+  - `latest_progress=Epoch 13 ... 382/1296 (~29%)`
+- 最新已記錄指標：
+  - `feature_mse=0.043648`
+  - `val_total_loss=0.065614`
+  - `entropy=8.7915`
+  - `top10_mass=0.11350`
+  - `used_codes=1069`
+  - `P2=pass`, `P3=fail`
+- 尚缺完整驗收必要項：
+  - `checkpoint_epoch050.pt`
+  - `checkpoint_epoch100.pt`
+  - `summary.json`
+  - `epoch50/100` 音質驗收輸出
+
+### 進度更新（2026-02-24 00:07）
+- 驗收狀態維持：**部分達成（中期）/ 完整未達**
+- 最新進度：
+  - `epochs_logged=15`
+  - `latest_progress=Epoch 16 ... 998/1296 (~77%)`
+- 最新已記錄指標：
+  - `feature_mse=0.041493`
+  - `val_total_loss=0.063247`
+  - `entropy=8.9123`
+  - `top10_mass=0.11697`
+  - `used_codes=1052`
+  - `P2=pass`, `P3=fail`
+- 仍未達完整驗收的關鍵缺口：
+  - `checkpoint_epoch050.pt`、`checkpoint_epoch100.pt`
+  - `summary.json`
+  - `epoch50/100` 音質驗收輸出
