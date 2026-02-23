@@ -390,3 +390,83 @@
   - `checkpoint_epoch050.pt`、`checkpoint_epoch100.pt`
   - `summary.json`
   - `epoch50/100` 音質驗收輸出
+
+### 進度更新（2026-02-23 01:03）
+- 驗收狀態維持：**部分達成（中期）/ 完整未達**
+- 最新進度：
+  - `epochs_logged=29`
+  - `latest_progress=Epoch 30 ... 843/1296 (~65%)`
+- 新增里程碑：
+  - `checkpoint_epoch020.pt` 已生成（`checkpoint_count=2`）
+- 最新已記錄指標：
+  - `feature_mse=0.041182`
+  - `val_total_loss=0.062769`
+  - `entropy=9.3982`
+  - `top10_mass=0.09106`
+  - `used_codes=1210`
+  - `P2=pass`, `P3=fail`
+- 仍未達完整驗收的關鍵缺口：
+  - `checkpoint_epoch050.pt`、`checkpoint_epoch100.pt`
+  - `summary.json`
+  - `epoch50/100` 音質驗收輸出
+
+### 進度更新（2026-02-23 01:08）
+- 驗收狀態維持：**部分達成（中期）/ 完整未達**
+- 最新進度：
+  - `epochs_logged=30`
+  - `latest_progress=Epoch 31 ... 421/1296 (~32%)`
+- 新增里程碑：
+  - `checkpoint_epoch030.pt` 已生成（`checkpoint_count=3`）
+- 最新已記錄指標：
+  - `feature_mse=0.041973`
+  - `val_total_loss=0.063653`
+  - `entropy=9.2402`
+  - `top10_mass=0.10589`
+  - `used_codes=1248`
+  - `P2=pass`, `P3=fail`
+- 仍未達完整驗收的關鍵缺口：
+  - `checkpoint_epoch050.pt`、`checkpoint_epoch100.pt`
+  - `summary.json`
+  - `epoch50/100` 音質驗收輸出
+
+### 進度更新（2026-02-23 01:33）
+- 驗收狀態維持：**部分達成（中期）/ 完整未達**
+- 最新進度：
+  - `epochs_logged=37`
+  - `latest_progress=Epoch 37 ... 1296/1296 (100%)`
+- 最新已記錄指標：
+  - `feature_mse=0.040397`
+  - `val_total_loss=0.061992`
+  - `entropy=9.2894`
+  - `top10_mass=0.11513`
+  - `used_codes=1254`
+  - `P2=pass`, `P3=fail`
+- 仍未達完整驗收的關鍵缺口：
+  - `checkpoint_epoch050.pt`、`checkpoint_epoch100.pt`
+  - `summary.json`
+  - `epoch50/100` 音質驗收輸出
+
+### 進度更新（2026-02-23 02:37）
+- 驗收狀態：**部分達成（中期）/ 完整未達**
+- 最新進度：
+  - `epochs_logged=53`
+  - `latest_progress=Epoch 54 ... 47/1296 (~4%)`
+- 新增里程碑：
+  - `checkpoint_epoch050.pt` 已生成（`checkpoint_count=5`）
+  - `epoch50` 音質驗收已完成：
+    - `audio_quality_m2_epoch050.json`
+    - `audio_quality_m2_epoch050.md`
+- `epoch50` 音質（val）：
+  - `ΔPESQ=-0.291325`（相對 baseline 增益 `+0.004286`，未達 `+0.03`）
+  - `ΔSTOI=-0.067137`（相對 baseline 增益 `-0.006757`，未達 `+0.01`）
+- 最新已記錄訓練指標：
+  - `feature_mse=0.040934`
+  - `val_total_loss=0.062603`
+  - `entropy=8.8920`
+  - `top10_mass=0.14522`
+  - `used_codes=1100`
+  - `P2=pass`, `P3=fail`
+- 仍未達完整驗收的關鍵缺口：
+  - `checkpoint_epoch100.pt`
+  - `summary.json`
+  - `epoch100` 音質驗收輸出

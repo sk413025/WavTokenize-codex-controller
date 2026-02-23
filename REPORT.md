@@ -445,3 +445,72 @@ CUDA_VISIBLE_DEVICES=2 python -u exp_0128/baseline_token_analysis/analyze_baseli
 
 ### 日期
 2026-02-06
+
+---
+
+## exp_0223: Decoder LoRA Fine-tune（2026-02-23）
+
+### 背景與動機
+
+exp\_0206 → exp\_0217 的多次 encoder-side 實驗（LoRA rank、T453 加權、augmentation）均無法突破
+frozen decoder 的 PESQ 天花板 (1.790)。根因分析確認：feature-space MSE 訓練目標與感知指標脫鉤，
+且 frozen decoder 無法從 student VQ tokens 重建高品質音訊。
+
+因此轉向 **decoder-side fine-tune**：對 decoder backbone 的 ConvNeXt pwconv1/pwconv2 加 LoRA (rank=32)，
+讓 decoder 學習從 student VQ tokens 還原更乾淨的音訊。
+
+### 實驗設計
+
+- **架構**：Encoder + VQ 完全凍結（繼承 exp\_0217 epoch 175），Decoder ConvNeXt 加 LoRA
+- **可訓練參數**：2.36M / 166.5M (1.42%)
+- **v1 Loss**：MSE(recon\_wav, clean\_wav) — 純 wav-domain
+- **v2 Loss**：λ\_wav × MSE + λ\_stft × MR-STFT + λ\_mel(=45) × MelSpec L1
+
+### v1 結果（MSE-only — 失敗, Silence Collapse）
+
+| 指標 | 值 |
+|---|---|
+| val\_wav\_mse (best) | 0.015318 |
+| 全零輸出 MSE | 0.011500 |
+| val recon RMS | -38 ~ -53 dB（近乎靜音） |
+| clean RMS | -19 ~ -20 dB（正常） |
+| 結論 | MSE-only 導致模型壓縮輸出能量，epoch 5 後停止改善 |
+
+v1 在 77 epoch 時手動終止。
+
+### v2 初步結果（MR-STFT + Mel — 進行中）
+
+| 指標 | Epoch 1 | Epoch 2 |
+|---|---|---|
+| total\_loss | 88.08 | 27.78 |
+| val\_mel\_loss | 0.931 | 0.840 |
+| val\_noisy\_mel（基線） | 1.208 | 1.208 |
+| val\_wav\_mse | 0.0201 | 0.0201 |
+
+Mel Loss 已低於 noisy 基線（0.84 < 1.21），表示 decoder 正在改善頻譜品質。
+
+### 關鍵發現
+
+1. **MSE-only 的 silence collapse**：wav-domain MSE 會懲罰相位錯誤，模型的最優策略是縮小輸出幅度
+2. **頻譜 loss 防止 collapse**：Mel L1 和 STFT SC/LogMag 會懲罰缺失的能量，強制模型輸出正確頻譜
+3. **WavTokenizer 原始也使用 Mel Loss (coeff=45)**：v2 直接沿用已驗證的設計
+4. **不使用 GAN**：Discriminator 126.8M 參數佔 GPU 太多，且 G(2.36M)/D(126.8M) 嚴重不對稱
+
+### 如何重現
+
+```bash
+conda activate test
+cd /home/sbplab/ruizi/WavTokenize-feature-analysis
+
+# v1（MSE-only, 會 collapse）
+python exp_0223/train_decoder_lora.py --mode epoch --epochs 150 --device cuda:1
+
+# v2（MR-STFT + Mel, 推薦）
+python exp_0223/train_decoder_lora_v2.py --mode epoch --epochs 150 --device cuda:1
+
+# 架構文件
+cat exp_0223/ARCHITECTURE.md
+```
+
+### 日期
+2026-02-23
