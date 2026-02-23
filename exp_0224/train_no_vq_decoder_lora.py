@@ -25,12 +25,16 @@ Loss:
     跳過 VQ 後，讓 Decoder LoRA 學習直接從連續 encoder feature 還原音訊，
     是否優於 exp_0223（從 VQ 量化 token 還原）？
 
-執行：
-    # Smoke test
-    python exp_0224/train_no_vq_decoder_lora.py --mode smoke
+執行順序（必須先跑完 exp_0224a）：
+    # Step 1: 先等 exp_0224a 完成（train_no_vq.py, 300 epochs）
 
-    # 正式訓練
-    python exp_0224/train_no_vq_decoder_lora.py --mode epoch --epochs 150 --device cuda:1
+    # Step 2: 用 exp_0224a best_model.pt 啟動 exp_0224b
+    python exp_0224/train_no_vq_decoder_lora.py \
+        --mode epoch --epochs 300 --device cuda:1 \
+        --encoder_ckpt exp_0224/runs/no_vq_epoch_YYYYMMDD_HHMMSS/best_model.pt
+
+    # Smoke test（用 exp_0217 作 fallback encoder）
+    python exp_0224/train_no_vq_decoder_lora.py --mode smoke
 """
 
 import torch
@@ -70,6 +74,12 @@ from exp_0216.data_augmented import AugmentedCurriculumDataset, collate_fn_curri
 # Constants
 # ============================================================
 
+# exp_0224a best_model.pt（exp_0224b 的 encoder 起點）
+# exp_0224a 訓練完成後路徑會在 exp_0224/runs/no_vq_epoch_*/best_model.pt
+# 啟動時請用 --encoder_ckpt 指定實際路徑
+EXP0224A_BEST_CKPT_GLOB = 'exp_0224/runs/no_vq_epoch_*/best_model.pt'
+
+# fallback: 若 exp_0224a 尚未完成，用 exp_0217
 EXP0217_BEST_CKPT = (
     Path(__file__).parent.parent /
     'exp_0217/runs/t453_weighted_epoch_20260217_104843/best_model.pt'
@@ -557,7 +567,9 @@ def main():
     parser.add_argument('--stft_hop_sizes', type=str, default='512,256,128')
     parser.add_argument('--stft_win_sizes', type=str, default='2048,1024,512')
 
-    parser.add_argument('--encoder_ckpt', type=str, default=str(EXP0217_BEST_CKPT))
+    parser.add_argument('--encoder_ckpt', type=str, default=str(EXP0217_BEST_CKPT),
+                        help='Encoder checkpoint 路徑。應指定 exp_0224a best_model.pt，'
+                             '例如: exp_0224/runs/no_vq_epoch_*/best_model.pt')
 
     parser.add_argument('--snr_remix_prob', type=float, default=0.5)
     parser.add_argument('--snr_remix_min', type=float, default=-5.0)
