@@ -1,0 +1,109 @@
+{
+  "n_samples": 30,
+  "indices": [
+    51,
+    54,
+    61,
+    65,
+    178,
+    191,
+    209,
+    228,
+    285,
+    407,
+    447,
+    457,
+    476,
+    501,
+    563,
+    859,
+    864,
+    1034,
+    1116,
+    1149,
+    1209,
+    1232,
+    1309,
+    1330,
+    1385,
+    1436,
+    1466,
+    1508,
+    1516,
+    1518
+  ],
+  "baselines": {
+    "noisy_raw": {
+      "pesq_mean": 1.5354410807291667,
+      "stoi_mean": 0.5861451160720221,
+      "delta_pesq_mean": -3.1084473927815757,
+      "delta_pesq_std": 0.22271945846719896,
+      "delta_stoi_mean": -0.41385488392797587,
+      "delta_stoi_std": 0.08101212505435205,
+      "n_pesq_positive": 0,
+      "n_stoi_positive": 0
+    },
+    "noisy_teacher_vq": {
+      "pesq_mean": 1.2030962347984313,
+      "stoi_mean": 0.5104720184213113,
+      "delta_pesq_mean": -3.440792238712311,
+      "delta_pesq_std": 0.11199002462507808,
+      "delta_stoi_mean": -0.4895279815786867,
+      "delta_stoi_std": 0.06559762909165145,
+      "n_pesq_positive": 0,
+      "n_stoi_positive": 0
+    },
+    "clean_teacher_vq": {
+      "pesq_mean": 1.7898582100868226,
+      "stoi_mean": 0.7442343525232414,
+      "delta_pesq_mean": -2.85403026342392,
+      "delta_pesq_std": 0.2326264929860034,
+      "delta_stoi_mean": -0.2557656474767565,
+      "delta_stoi_std": 0.07044524007312009,
+      "n_pesq_positive": 0,
+      "n_stoi_positive": 0
+    }
+  },
+  "students": {
+    "V2 (4-Layer RVQ)": {
+      "pesq_mean": 1.1370696942011516,
+      "stoi_mean": 0.5023488713777513,
+      "delta_pesq_mean": -3.5068187793095906,
+      "delta_pesq_std": 0.0861882697326274,
+      "delta_stoi_mean": -0.49765112862224664,
+      "delta_stoi_std": 0.0790463213961118,
+      "n_pesq_positive": 0,
+      "n_stoi_positive": 0
+    },
+    "Plan Ori (1-Layer VQ)": {
+      "pesq_mean": 1.156840459505717,
+      "stoi_mean": 0.5079881831333892,
+      "delta_pesq_mean": -3.4870480140050253,
+      "delta_pesq_std": 0.10497954203647152,
+      "delta_stoi_mean": -0.49201181686660883,
+      "delta_stoi_std": 0.07743218683392107,
+      "n_pesq_positive": 0,
+      "n_stoi_positive": 0
+    },
+    "exp_0216 (Aug+LoRA-64)": {
+      "pesq_mean": 1.1523191928863525,
+      "stoi_mean": 0.5081468963996876,
+      "delta_pesq_mean": -3.4915692806243896,
+      "delta_pesq_std": 0.10186855279064866,
+      "delta_stoi_mean": -0.4918531036003104,
+      "delta_stoi_std": 0.08527071115600571,
+      "n_pesq_positive": 0,
+      "n_stoi_positive": 0
+    },
+    "exp_0217 (T453 Weighted)": {
+      "pesq_mean": 1.1471388220787049,
+      "stoi_mean": 0.5106289433479597,
+      "delta_pesq_mean": -3.4967496514320375,
+      "delta_pesq_std": 0.09580995411927885,
+      "delta_stoi_mean": -0.48937105665203834,
+      "delta_stoi_std": 0.07992265192953518,
+      "n_pesq_positive": 0,
+      "n_stoi_positive": 0
+    }
+  }
+}
