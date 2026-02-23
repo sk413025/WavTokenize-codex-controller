@@ -1,0 +1,53 @@
+{
+  "snapshot_time": "2026-02-22T22:42:40",
+  "run_dir": "exp_0217/runs/t453_m1_minw03_epoch100_debug",
+  "run_exists": true,
+  "config_core": {
+    "epochs": 100,
+    "seed": 42,
+    "batch_size": 8,
+    "grad_accum": 2,
+    "lora_rank": 64,
+    "lora_alpha": 128,
+    "t453_min_weight": 0.3,
+    "t453_ramp_epochs": 150,
+    "save_checkpoint_every": 10,
+    "save_audio_interval": 50
+  },
+  "epochs_logged": 100,
+  "latest_logged_metrics": {
+    "epoch": 100,
+    "train_total_loss": 0.04151376262795824,
+    "val_total_loss": 0.07155815213918686,
+    "feature_mse": 0.03952606932725757,
+    "entropy": 8.733837127685547,
+    "top10_mass": 0.2006939798593521,
+    "used_codes": 1150,
+    "p2_pass": true,
+    "p3_pass": false
+  },
+  "log_parse": {
+    "exists": true,
+    "latest_progress_bar": {
+      "epoch": 100,
+      "percent": 100,
+      "step": 1296,
+      "total": 1296
+    },
+    "latest_epoch_summary": {
+      "epoch": 100,
+      "total_epochs": 100,
+      "epoch_time_sec": 239.5
+    },
+    "latest_gate_line": {
+      "p2": "pass",
+      "p3": "fail",
+      "lr": "1.00e-06"
+    },
+    "warnings": {
+      "audio_save_failed": true,
+      "torchcodec_error": true,
+      "nan_detected": false
+    }
+  }
+}

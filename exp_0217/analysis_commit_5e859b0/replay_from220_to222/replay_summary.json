@@ -1,0 +1,9 @@
+{
+  "source_run": "exp_0216/runs/augmented_long_20260216",
+  "source_checkpoint": "exp_0216/runs/augmented_long_20260216/checkpoints/checkpoint_epoch220.pt",
+  "start_epoch": 220,
+  "target_epoch": 222,
+  "history_file": "exp_0217/analysis_commit_5e859b0/replay_from220_to222/replay_history.json",
+  "final_checkpoint": "exp_0217/analysis_commit_5e859b0/replay_from220_to222/checkpoints/checkpoint_epoch222_replay.pt",
+  "note": "supplemental replay artifact for acceptance gap closure"
+}

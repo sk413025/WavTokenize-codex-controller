@@ -1,0 +1,17 @@
+{
+  "date": "2026-02-23",
+  "run_dir": "exp_0217/runs/t453_m2_interw002_epoch100_20260223",
+  "status": "running",
+  "epochs_target": 100,
+  "epochs_logged": 0,
+  "latest_progress": "Epoch 1:  19%|#8        | 242/1296 [00:51<02:54,  6.03it/s, loss=0.0597, quant=0.0484, commit=0.0016]",
+  "config_focus": {
+    "intermediate_weight": 0.02,
+    "t453_min_weight": 0.2,
+    "t453_ramp_epochs": 150,
+    "lambda_quant": 1.0,
+    "beta_commit": 1.0
+  },
+  "latest_logged_metrics": {},
+  "note": "metrics_history appears after epoch summary is written."
+}

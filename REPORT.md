@@ -2,6 +2,169 @@
 
 ---
 
+## 實驗 2026-02-17 ~ 2026-02-23: exp_0217 — T453 Token-Aware Curriculum Weighting + Val 音質根因分析
+
+### 實驗編號
+`EXP-20260217-exp0217-t453-weighted-val-analysis`
+
+### 背景與動機
+exp_0216（Aug + LoRA-64）完成 300 epoch 訓練後，overfitting 已顯著改善（best/final gap 很小），但 **val 音質仍未達預期**（best val MSE ≈ 0.0381，未突破目標 <0.035）。核心問題：為何泛化穩定後，驗證集主觀/客觀音質仍不夠好？
+
+Token 453 (T453) 是 WavTokenizer codebook 中最常見的 token：
+- Val clean_tokens 中平均佔 **19.45%**，Train 中佔 **13.10%**
+- T453 對應語音中較為靜態/低能量的片段
+- 若訓練初期大量看到高 T453 樣本，可能導致 token diversity 下降
+
+### 變更摘要
+
+| 改變 | exp_0216 | exp_0217 |
+|------|----------|----------|
+| 採樣策略 | SNR Curriculum | T453 Weighted Sampling |
+| T453 處理 | 無 | 初期降權，漸進升至平等 |
+| 資料增強 | 4 種 | 4 種（相同） |
+| LoRA rank | 64 | 64（相同） |
+
+### 加權公式
+```
+w(sample, epoch) = 1.0 - (1 - min_weight) × t453_ratio × (1 - epoch_progress)
+epoch_progress = epoch / ramp_epochs   (clipped at 1.0)
+```
+
+### 第一階段：T453 加權訓練（Early Stage，Epoch 1→14）
+
+Run: `exp_0217/runs/t453_weighted_epoch_20260217_104843`
+
+| 指標 | Epoch 1 | Epoch 14 | 趨勢 |
+|------|---------|----------|------|
+| feature_mse | 0.0737 | 0.0420 | ↓ 改善 |
+| val_total_loss | 0.1086 | 0.0743 | ↓ 改善 |
+| entropy | 9.67 | 8.71 | ↓ 下降（風險） |
+| used_codes | 1280 | 1011 | ↓ 下降（風險） |
+| top10_mass | 0.0749 | 0.1385 | ↑（仍 <0.15） |
+
+與 exp_0216 同期比較：feature_mse **略優**（0.0420 vs 0.0432），但 entropy/used_codes **較差**（8.71/1011 vs 9.00/1203）。
+
+### 第二階段：Commit 5e859b0 Val 音質根因分析
+
+針對 exp_0216 完整 300 epoch 結果進行系統性根因分析。
+
+#### 假設評分結果
+
+| 假設 | 描述 | 評分 |
+|------|------|------|
+| **H2** | 目標函數與感知音質不一致 | **Strong Support** |
+| H1 | 資料分布落差（Data Shift） | Partial Support |
+| H3 | 架構上限（Capacity/Bottleneck） | Partial Support |
+| H4 | 增強策略副作用 | Insufficient Evidence |
+
+#### 核心發現
+- **ΔPESQ / ΔSTOI 全部為負**：在 N=100、epoch={050,100,150,200,220,250,300} 下，train/val 的感知音質 delta 全部為負
+- **MSE 改善但感知指標未跟上**：feature_mse 持續改善，但 PESQ/STOI 無轉正
+- **T453 分桶有顯著差異**：高 T453 比例樣本（[0.3,0.5]）的 ΔSTOI 明顯較差（-0.1035 vs 整體 -0.0604）
+
+#### 分層分析摘要（Val, Epoch 300, N=100）
+
+| T453 Bin | n | feature_mse | ΔPESQ | ΔSTOI |
+|----------|--:|----------:|------:|------:|
+| [0,0.1) | 22 | 0.03452 | -0.2185 | -0.0560 |
+| [0.1,0.2) | 33 | 0.03494 | -0.2766 | -0.0419 |
+| [0.2,0.3) | 21 | 0.03293 | -0.4005 | -0.0447 |
+| [0.3,0.5] | 24 | 0.03773 | -0.3007 | -0.1035 |
+
+### 第三階段：M1 最小改動驗證（t453_min_weight 0.2→0.3）
+
+Run: `exp_0217/runs/t453_m1_minw03_epoch100_debug`（100 epochs）
+
+#### 驗收結果
+
+| 門檻 | 要求 | 實際 | 結果 |
+|------|------|------|------|
+| Val ΔPESQ 提升 ≥+0.03 | baseline: -0.2956 | best gain: -0.0038 | **Fail** |
+| Val ΔSTOI 提升 ≥+0.01 | baseline: -0.0604 | best gain: -0.0070 | **Fail** |
+| best_val_mse 退化 ≤1% | baseline: 0.038064 | M1: 0.038994 (+2.44%) | **Fail** |
+| P2 持續通過 | — | — | **Pass** |
+
+**M1 驗收判定：No-Go（未達門檻）**
+
+### 預期結果
+- T453 加權採樣改善 token diversity 並提升 val 音質
+- 建立 MSE / PESQ / STOI 的對照關係
+
+### 實際執行結果
+1. T453 加權採樣在 early stage（epoch 1-14）feature_mse 略優但 token diversity 略差於 exp_0216
+2. 系統性根因分析確認 **H2（目標函數與感知音質不一致）** 為最強支持的假設
+3. M1 最小改動（t453_min_weight 0.2→0.3）未能滿足任何感知音質門檻
+
+### 解讀實驗結果
+1. **MSE 與感知音質脫鉤是主要瓶頸**：feature_mse 持續改善，但 PESQ/STOI 不跟隨，說明目前的訓練目標（MSE-based）無法直接保證聽感品質
+2. **T453 加權採樣不是解方**：單純調整採樣權重無法突破目標函數本身的限制
+3. **資料分布差異是次要因素**：高 T453 bin 確實音質較差，但即使低 T453 樣本的 ΔPESQ 仍為負
+4. **量化瓶頸部分存在**：with_vq 相對 no_vq 有負向差距，但不足以單獨定主因
+
+### 實驗反思
+- **訓練目標需要根本性改變**：從 MSE-only 轉向加入感知損失（perceptual loss, multi-resolution STFT loss）可能是必要方向
+- **先評估再改動的流程有效**：系統性的假設驗證避免了盲目修改，確認了問題根源
+- **單因子實驗設計正確但結論明確**：M1 的 No-Go 結果快速排除了採樣策略的改善空間
+- **後續應優先探索 loss 設計變更**，而非繼續在資料/採樣層面調整
+
+### 檔案結構
+```
+exp_0217/
+├── README.md                          # 實驗主文件
+├── data_t453_weighted.py              # T453WeightedSampler
+├── train_t453_weighted.py             # 訓練腳本
+├── T453_analysis.png                  # T453 分析圖表
+├── PRE_MODIFICATION_EVALUATION_20260217.md  # 先評估結論
+├── COMMIT_5e859b0_VAL_AUDIO_ANALYSIS_PLAN.md  # 分析規劃
+├── COMMIT_5e859b0_VAL_AUDIO_ANALYSIS_SPEC.md  # 分析規格
+├── analysis_commit_5e859b0/           # 分析產物目錄
+│   ├── FINAL_DECISION_REPORT_20260219.md
+│   ├── M1_ACCEPTANCE_EVALUATION_20260222.md
+│   ├── M2_DEFINITION_20260223.md
+│   ├── baseline_metrics_table.csv
+│   ├── audio_quality_by_epoch.json/.md
+│   ├── stratified_quality_report.md
+│   ├── hypothesis_scoring.json
+│   ├── statistical_tests_summary.json/.md
+│   ├── next_experiment_recommendation.md
+│   ├── mse_vs_pesq_stoi.png
+│   ├── quality_by_{t453,snr,length}_bin.png
+│   └── ...
+└── runs/                              # 訓練 runs
+    ├── t453_weighted_epoch_20260217_104843/
+    └── t453_m1_minw03_epoch100_debug/
+```
+
+### 如何重現
+
+```bash
+# 1. 環境
+conda activate test
+cd /home/sbplab/ruizi/WavTokenize-feature-analysis
+
+# 2. T453 加權訓練（Early Stage）
+python exp_0217/train_t453_weighted.py \
+    --epochs 300 --batch_size 8 --seed 42 \
+    --t453_min_weight 0.2 --t453_ramp_epochs 150
+
+# 3. Val 音質根因分析（需要 exp_0216 的 300 epoch 結果）
+python exp_0217/analysis_commit_5e859b0/generate_missing_spec_outputs.py
+python exp_0217/analysis_commit_5e859b0/compute_statistical_tests.py
+
+# 4. M1 最小改動驗證
+python exp_0217/train_t453_weighted.py \
+    --epochs 100 --batch_size 8 --seed 42 \
+    --t453_min_weight 0.3 --t453_ramp_epochs 150
+
+# 5. M1 音質評估
+python exp_0217/analysis_commit_5e859b0/evaluate_m1_checkpoint_audio.py
+```
+
+### 日期
+2026-02-17 ~ 2026-02-23
+
+---
+
 ## 實驗 2026-02-11: exp_0206 Plan Ori — Long-run 300 epochs (進行中)
 
 ### 狀態

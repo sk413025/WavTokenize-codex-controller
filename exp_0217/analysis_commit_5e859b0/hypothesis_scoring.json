@@ -1,0 +1,111 @@
+{
+  "date": "2026-02-19",
+  "target_commit": "5e859b0b8ae0bf54d7cf77449f239ae2aeaa0edb",
+  "scoring_rule": "0=不支持/證據不足,1=部分支持,2=強支持",
+  "hypotheses": [
+    {
+      "id": "H1_data_shift",
+      "score": 1,
+      "confidence": "medium",
+      "status": "partial_support",
+      "evidence": [
+        {
+          "metric": "T453 ratio val vs train",
+          "value": "19.45% vs 13.10%",
+          "source": "exp_0217/README.md:12"
+        },
+        {
+          "metric": "val@epoch300 ΔPESQ by T453 bin",
+          "value": "[0,0.1):-0.2185, [0.1,0.2):-0.2766, [0.2,0.3):-0.4005, [0.3,0.5]:-0.3007 (n=100)",
+          "source": "exp_0217/analysis_commit_5e859b0/stratified_quality_report.md:10"
+        },
+        {
+          "metric": "val@epoch300 ΔSTOI by T453 bin",
+          "value": "[0,0.1):-0.0560, [0.1,0.2):-0.0419, [0.2,0.3):-0.0447, [0.3,0.5]:-0.1035 (n=100)",
+          "source": "exp_0217/analysis_commit_5e859b0/stratified_quality_report.md:10"
+        },
+        {
+          "metric": "val@epoch300 T453 bin pairwise tests (Mann-Whitney + FDR)",
+          "value": "ΔPESQ [0,0.1) vs [0.2,0.3): q=0.0126; ΔSTOI [0.1,0.2) vs [0.3,0.5]: q=0.0005",
+          "source": "exp_0217/analysis_commit_5e859b0/statistical_tests_summary.md:35"
+        }
+      ],
+      "comment": "分布差異與分桶退化方向一致，且部分分桶差異達 FDR 顯著；仍不足以單獨解釋全部退化。"
+    },
+    {
+      "id": "H2_objective_mismatch",
+      "score": 2,
+      "confidence": "high",
+      "status": "strong_support",
+      "evidence": [
+        {
+          "metric": "train ΔPESQ across epochs (N=100 each)",
+          "value": "epoch050~-0.5464, epoch300~-0.4824 (all negative)",
+          "source": "exp_0217/analysis_commit_5e859b0/audio_quality_by_epoch.md:14"
+        },
+        {
+          "metric": "val ΔPESQ across epochs (N=100 each)",
+          "value": "epoch050~-0.2846, epoch300~-0.2956 (all negative)",
+          "source": "exp_0217/analysis_commit_5e859b0/audio_quality_by_epoch.md:25"
+        },
+        {
+          "metric": "feature_mse improved while ΔPESQ/ΔSTOI remained negative",
+          "value": "train feature_mse 0.03489->0.02983, val feature_mse 0.03596->0.03509, but quality deltas stayed < 0",
+          "source": "exp_0217/analysis_commit_5e859b0/audio_quality_by_epoch.md:14"
+        }
+      ],
+      "comment": "在 N=100 的 epoch 序列上，MSE 與感知音質持續脫鉤，為主要根因。"
+    },
+    {
+      "id": "H3_capacity_bottleneck",
+      "score": 1,
+      "confidence": "medium",
+      "status": "partial_support",
+      "evidence": [
+        {
+          "metric": "with_vq vs no_vq delta PESQ",
+          "value": "-0.5879 vs -0.5701 (gap -0.0179)",
+          "source": "exp_0216/PESQ_STOI_novq_comparison.json:10"
+        },
+        {
+          "metric": "with_vq vs no_vq delta STOI",
+          "value": "-0.0953 vs -0.0825 (gap -0.0128)",
+          "source": "exp_0216/PESQ_STOI_novq_comparison.json:12"
+        },
+        {
+          "metric": "single VQ + frozen decoder architecture",
+          "value": "post-VQ path introduces additional quality loss risk",
+          "source": "THESIS_ARCHITECTURE.md:296"
+        }
+      ],
+      "comment": "量化路徑有一致負向差距，但證據仍不足以定為主因。"
+    },
+    {
+      "id": "H4_augmentation_side_effect",
+      "score": 0,
+      "confidence": "low",
+      "status": "insufficient_evidence",
+      "evidence": [
+        {
+          "metric": "augmentation configuration",
+          "value": "SNR remix/gain/crop/stretch on train only",
+          "source": "exp_0216/runs/augmented_long_20260216/summary.json:35"
+        },
+        {
+          "metric": "direct augmentation ablation evidence",
+          "value": "not available in this analysis scope",
+          "source": "exp_0217/COMMIT_5e859b0_VAL_AUDIO_ANALYSIS_SPEC.md:14"
+        }
+      ],
+      "comment": "目前無法從既有資料直接歸因為 augmentation 副作用。"
+    }
+  ],
+  "primary_root_cause": "H2_objective_mismatch",
+  "secondary_root_causes": [
+    "H1_data_shift",
+    "H3_capacity_bottleneck"
+  ],
+  "blocked_by": [
+    "epoch_222 original checkpoint missing (checkpoint_epoch222.pt not found); mitigated by supplemental replay checkpoint_epoch222_replay.pt"
+  ]
+}
