@@ -470,3 +470,23 @@
   - `checkpoint_epoch100.pt`
   - `summary.json`
   - `epoch100` 音質驗收輸出
+
+### 進度更新（2026-02-23 05:55，M2 結案）
+- M2 執行實驗已完成：
+  - `epochs_logged=100`
+  - `checkpoint_epoch100.pt` 已生成
+  - `summary.json`、`final_model.pt` 已生成
+- `epoch100` 音質驗收已完成：
+  - `audio_quality_m2_epoch100.json`
+  - `audio_quality_m2_epoch100.md`
+- 完整驗收結果（對照既定門檻）：
+  - `ΔPESQ` 增益門檻（`>= +0.03`）：**Fail**
+  - `ΔSTOI` 增益門檻（`>= +0.01`）：**Fail**
+  - `best_val_mse` 退化門檻（`<= 1%`）：**Fail**（`+2.59%`）
+  - `P2`: **Pass**
+  - `P3`: `fail`（監控項，非硬 gate）
+- 最終判定：
+  - **M2 = No-Go（未達完整驗收門檻）**
+- 結案文件：
+  - `M2_ACCEPTANCE_EVALUATION_20260223.md`
+  - `m2_progress_snapshot_20260223.json`

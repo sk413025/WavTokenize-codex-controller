@@ -143,3 +143,40 @@ M1 執行實驗：
 - `exp_0217/analysis_commit_5e859b0/M2_DEFINITION_20260223.md`
 - `exp_0217/analysis_commit_5e859b0/M2_EXECUTION_GATE_20260223.md`
 - `exp_0217/runs/t453_weighted_epoch_20260217_104843/cross_experiment_300epoch_check_20260219.json`
+
+---
+
+## 7) M2 執行驗收結果（2026-02-23 更新）
+
+M2 執行實驗：
+- Run: `exp_0217/runs/t453_m2_interw002_epoch100_20260223`
+- 設定：`intermediate_weight: 0.03 -> 0.02`（單因子；其餘固定）
+- 完成度：`100 epochs`，checkpoint `010~100` 已生成
+
+驗收結果（沿用第 3 節門檻）：
+1. Val `ΔPESQ` 提升 `>= +0.03`
+   - `epoch050` 增益：`+0.004286`
+   - `epoch100` 增益：`-0.006192`
+   - 結果：**Fail**
+2. Val `ΔSTOI` 提升 `>= +0.01`
+   - `epoch050` 增益：`-0.006757`
+   - `epoch100` 增益：`-0.005400`
+   - 結果：**Fail**
+3. `best_val_mse` 退化 `<= 1%`
+   - Baseline: `0.038064`（exp_0216）
+   - M2 best: `0.039052`
+   - 退化：`+2.59%`
+   - 結果：**Fail**
+4. `P2` 持續通過
+   - 結果：**Pass**
+5. `P3` 監控（非硬 gate）
+   - 結果：`fail`（監控紀錄）
+
+結論：
+- M2 最小改動方案之完整驗收判定：**No-Go（未達門檻）**。
+
+證據：
+- `exp_0217/analysis_commit_5e859b0/M2_ACCEPTANCE_EVALUATION_20260223.md`
+- `exp_0217/analysis_commit_5e859b0/audio_quality_m2_epoch050.json`
+- `exp_0217/analysis_commit_5e859b0/audio_quality_m2_epoch100.json`
+- `exp_0217/runs/t453_m2_interw002_epoch100_20260223/summary.json`
