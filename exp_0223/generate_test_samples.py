@@ -104,6 +104,11 @@ EXPERIMENTS = [
         'ckpt': 'exp_0224/runs/no_vq_epoch_20260223_055458/best_model.pt',
         'lora_rank': 64, 'lora_alpha': 128,
     },
+    {
+        'name': 'noisy_through_teacher',
+        'folder': 'noisy_through_teacher',
+        'type': 'teacher_baseline',
+    },
 ]
 
 
@@ -258,6 +263,51 @@ def run_no_vq_experiment(exp, loader, out_dir):
     return metrics_list
 
 
+def run_teacher_baseline(exp, loader, out_dir):
+    """Teacher baseline: noisy → Teacher Encoder → Teacher VQ → Frozen Decoder"""
+    from decoder.pretrained import WavTokenizer
+
+    print(f"  Loading Teacher WavTokenizer (noisy_through_teacher)...")
+    teacher = WavTokenizer.from_pretrained0802(WAVTOK_CONFIG, WAVTOK_CKPT)
+    teacher = teacher.to(DEVICE)
+    teacher.eval()
+
+    bandwidth_id = torch.tensor([0], device=DEVICE)
+
+    metrics_list = []
+    with torch.no_grad():
+        for i, batch in enumerate(loader):
+            noisy = batch['noisy_audio'].to(DEVICE)
+            clean = batch['clean_audio'].to(DEVICE)
+            if clean.dim() == 2: clean = clean.unsqueeze(1)
+            if noisy.dim() == 2: noisy = noisy.unsqueeze(1)
+
+            # noisy → Teacher Encoder+VQ → quantized continuous features → Decoder
+            features, _ = teacher.encode_infer(noisy, bandwidth_id=bandwidth_id)
+            recon = teacher.decode(features, bandwidth_id=bandwidth_id)
+            if recon.dim() == 2:
+                recon = recon.unsqueeze(1)
+
+            T = min(clean.shape[-1], recon.shape[-1])
+            c = clean[0, 0, :T].cpu().numpy().astype(np.float32)
+            r = recon[0, 0, :T].cpu().numpy().astype(np.float32)
+            n = noisy[0, 0, :T].cpu().numpy().astype(np.float32)
+
+            idx = i + 1
+            save_wav(n, out_dir / f'sample{idx:02d}_noisy.wav')
+            save_wav(r, out_dir / f'sample{idx:02d}_recon.wav')
+            save_wav(c, out_dir / f'sample{idx:02d}_clean.wav')
+
+            p_r, p_n, s_r, s_n = compute_metrics(c, r, n)
+            metrics_list.append({'pesq_recon': p_r, 'pesq_noisy': p_n,
+                                  'stoi_recon': s_r, 'stoi_noisy': s_n})
+            print(f"    sample{idx}: PESQ={p_r:.4f} (noisy={p_n:.4f}), STOI={s_r:.4f}")
+
+    del teacher
+    torch.cuda.empty_cache()
+    return metrics_list
+
+
 def run_decoder_lora_experiment(exp, loader, out_dir):
     """Decoder LoRA 類型實驗（exp_0223 v2）"""
     from exp_0223.models_decoder_lora import TeacherStudentDecoderLoRA
@@ -329,6 +379,8 @@ def main():
                 metrics_list = run_decoder_lora_experiment(exp, loader, out_dir)
             elif exp['type'] == 'no_vq':
                 metrics_list = run_no_vq_experiment(exp, loader, out_dir)
+            elif exp['type'] == 'teacher_baseline':
+                metrics_list = run_teacher_baseline(exp, loader, out_dir)
             else:
                 metrics_list = run_encoder_vq_experiment(exp, loader, out_dir)
 

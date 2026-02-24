@@ -155,5 +155,32 @@
         "stoi_noisy": 0.6314200012175207
       }
     ]
+  },
+  "noisy_through_teacher": {
+    "note": "Baseline: noisy → Teacher Encoder+VQ → Frozen Decoder (公平比較基準)",
+    "pesq_mean": 1.6765,
+    "pesq_noisy_mean": 2.4689,
+    "stoi_mean": 0.5266,
+    "stoi_noisy_mean": 0.6317,
+    "per_sample": [
+      {
+        "pesq_recon": 1.6786,
+        "pesq_noisy": 2.3639,
+        "stoi_recon": 0.5915,
+        "stoi_noisy": 0.6654
+      },
+      {
+        "pesq_recon": 1.8778,
+        "pesq_noisy": 2.5907,
+        "stoi_recon": 0.4647,
+        "stoi_noisy": 0.5984
+      },
+      {
+        "pesq_recon": 1.4731,
+        "pesq_noisy": 2.4520,
+        "stoi_recon": 0.5237,
+        "stoi_noisy": 0.6314
+      }
+    ]
   }
 }

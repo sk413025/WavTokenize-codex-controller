@@ -1,20 +1,31 @@
 # PESQ/STOI 比較表
 
-**Val indices**: [51, 54, 61]  
+**Val indices**: [51, 54, 61]
 **評估條件**: PESQ nb (8kHz resample), STOI (24kHz)
 
 ## 各組平均結果
 
-| 實驗 | PESQ (recon) | STOI (recon) | ΔPESQ vs noisy | ΔSTOI vs noisy |
-|------|-------------|-------------|----------------|----------------|
-| V2 | 1.2312 | 0.4791 | -1.2377 | -0.1526 |
-| Plan_Ori | 1.2514 | 0.4833 | -1.2175 | -0.1484 |
-| exp_0216 | 1.1996 | 0.4601 | -1.2693 | -0.1716 |
-| exp_0217 | 1.2032 | 0.4620 | -1.2657 | -0.1698 |
-| exp_0223_v2 | 1.2053 | 0.5216 | -1.2636 | -0.1101 |
-| exp_0224a (No-VQ, ep190) | **1.5856** | **0.6275** | -0.8832 | -0.0042 |
+> `noisy_through_teacher` = noisy → Teacher Encoder+VQ → Frozen Decoder（公平比較基準）
+> 其餘實驗的 ΔPESQ / ΔSTOI 皆相對此基準計算
+
+| 實驗 | PESQ (recon) | STOI (recon) | ΔPESQ vs teacher_baseline | ΔSTOI vs teacher_baseline |
+|------|-------------|-------------|--------------------------|--------------------------|
+| **noisy_through_teacher** (baseline) | 1.6765 | 0.5266 | — | — |
+| V2 | 1.2312 | 0.4791 | -0.4453 | -0.0475 |
+| Plan_Ori | 1.2514 | 0.4833 | -0.4251 | -0.0433 |
+| exp_0216 | 1.1996 | 0.4601 | -0.4769 | -0.0665 |
+| exp_0217 | 1.2032 | 0.4620 | -0.4733 | -0.0646 |
+| exp_0223_v2 | 1.2053 | 0.5216 | -0.4712 | -0.0050 |
+| exp_0224a (No-VQ, ep190) | **1.5856** | **0.6275** | -0.0909 | +0.1009 |
 
 ## Per-Sample 明細
+
+### noisy_through_teacher (baseline)
+| Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
+|--------|-----------|-----------|-----------|-----------|
+| 1 | 1.6786 | 2.3639 | 0.5915 | 0.6654 |
+| 2 | 1.8778 | 2.5907 | 0.4647 | 0.5984 |
+| 3 | 1.4731 | 2.4520 | 0.5237 | 0.6314 |
 
 ### V2
 | Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
@@ -64,3 +75,9 @@
 - `noisy`: 原始帶噪輸入（LDV 感測器音訊）
 - `clean`: 對應乾淨音訊（ground truth）
 - `recon`: 各實驗重建輸出
+
+## 解讀說明
+
+- **PESQ(noisy) >> PESQ(recon)** 屬正常現象：LDV noisy 與 clean 時序高度對齊，PESQ 對時序對齊敏感
+- **公平基準** (`noisy_through_teacher`) = noisy 直接經過相同的 Encoder+VQ+Decoder pipeline
+- exp_0224a 的 ΔPESQ vs baseline 僅 -0.09，是目前最接近 teacher baseline 的實驗
