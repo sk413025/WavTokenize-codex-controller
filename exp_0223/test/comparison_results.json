@@ -177,9 +177,92 @@
       },
       {
         "pesq_recon": 1.4731,
-        "pesq_noisy": 2.4520,
+        "pesq_noisy": 2.452,
         "stoi_recon": 0.5237,
         "stoi_noisy": 0.6314
+      }
+    ]
+  },
+  "exp_0224b_ep16": {
+    "checkpoint": "best_model.pt",
+    "note": "best_model.pt (val_mse criterion, epoch=16)",
+    "pesq_mean": 1.8089817365010579,
+    "pesq_noisy_mean": 2.4688850243886313,
+    "stoi_mean": 0.6559162663407454,
+    "stoi_noisy_mean": 0.6317224196660925,
+    "per_sample": [
+      {
+        "pesq_recon": 1.9358768463134766,
+        "pesq_noisy": 2.3638834953308105,
+        "stoi_recon": 0.7031001239147266,
+        "stoi_noisy": 0.6653891473155885
+      },
+      {
+        "pesq_recon": 1.7923378944396973,
+        "pesq_noisy": 2.5907249450683594,
+        "stoi_recon": 0.6120771620010929,
+        "stoi_noisy": 0.5983581087806211
+      },
+      {
+        "pesq_recon": 1.69873046875,
+        "pesq_noisy": 2.4520466327667236,
+        "stoi_recon": 0.6525715131064168,
+        "stoi_noisy": 0.6314200029020682
+      }
+    ]
+  },
+  "exp_0224b_ep20": {
+    "checkpoint": "checkpoint_epoch020.pt",
+    "note": "epoch 20 (closest to val_total best ep23=31.84; training in progress)",
+    "pesq_mean": 1.7119711637496948,
+    "pesq_noisy_mean": 2.4688850243886313,
+    "stoi_mean": 0.6526205306019972,
+    "stoi_noisy_mean": 0.6317224196660925,
+    "per_sample": [
+      {
+        "pesq_recon": 1.7946832180023193,
+        "pesq_noisy": 2.3638834953308105,
+        "stoi_recon": 0.7005665375896011,
+        "stoi_noisy": 0.6653891473155885
+      },
+      {
+        "pesq_recon": 1.728729248046875,
+        "pesq_noisy": 2.5907249450683594,
+        "stoi_recon": 0.6062055065687919,
+        "stoi_noisy": 0.5983581087806211
+      },
+      {
+        "pesq_recon": 1.6125010251998901,
+        "pesq_noisy": 2.4520466327667236,
+        "stoi_recon": 0.6510895476475987,
+        "stoi_noisy": 0.6314200029020682
+      }
+    ]
+  },
+  "noisy_through_teacher_no_vq": {
+    "note": "Baseline: noisy → Teacher Encoder (跳過VQ) → Teacher Decoder",
+    "pesq_mean": 1.7075384457906086,
+    "pesq_noisy_mean": 2.4688850243886313,
+    "stoi_mean": 0.5312261532781899,
+    "stoi_noisy_mean": 0.6317224196660925,
+    "per_sample": [
+      {
+        "pesq_recon": 1.705214262008667,
+        "pesq_noisy": 2.3638834953308105,
+        "stoi_recon": 0.5941834570234714,
+        "stoi_noisy": 0.6653891473155885
+      },
+      {
+        "pesq_recon": 1.834261178970337,
+        "pesq_noisy": 2.5907249450683594,
+        "stoi_recon": 0.47390948858611304,
+        "stoi_noisy": 0.5983581087806211
+      },
+      {
+        "pesq_recon": 1.5831398963928223,
+        "pesq_noisy": 2.4520466327667236,
+        "stoi_recon": 0.5255855142249853,
+        "stoi_noisy": 0.6314200029020682
       }
     ]
   }
