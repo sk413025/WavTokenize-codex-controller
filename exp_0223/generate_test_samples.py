@@ -97,6 +97,13 @@ EXPERIMENTS = [
         'lora_rank': 64, 'lora_alpha': 128,
         'decoder_lora_rank': 32, 'decoder_lora_alpha': 64,
     },
+    {
+        'name': 'exp_0224a',
+        'folder': 'exp_0224a',
+        'type': 'no_vq',
+        'ckpt': 'exp_0224/runs/no_vq_epoch_20260223_055458/best_model.pt',
+        'lora_rank': 64, 'lora_alpha': 128,
+    },
 ]
 
 
@@ -206,6 +213,59 @@ def run_encoder_vq_experiment(exp, loader, out_dir):
     return metrics_list
 
 
+def run_no_vq_experiment(exp, loader, out_dir):
+    """No-VQ Encoder LoRA 類型實驗（exp_0224a）"""
+    from exp_0224.models_no_vq import TeacherStudentNoVQ
+
+    print(f"  Loading {exp['name']} (No-VQ encoder LoRA)...")
+    model = TeacherStudentNoVQ(
+        wavtok_config=WAVTOK_CONFIG, wavtok_ckpt=WAVTOK_CKPT,
+        lora_rank=exp['lora_rank'], lora_alpha=exp['lora_alpha'],
+        device=DEVICE,
+    ).to(DEVICE)
+
+    ckpt = torch.load(str(exp['ckpt']), map_location='cpu', weights_only=False)
+    if 'model_state_dict' in ckpt:
+        model.load_state_dict(ckpt['model_state_dict'], strict=False)
+    elif 'encoder_lora_state' in ckpt:
+        model.student.load_state_dict(ckpt['encoder_lora_state'], strict=False)
+    model.eval()
+
+    metrics_list = []
+    with torch.no_grad():
+        for i, batch in enumerate(loader):
+            noisy = batch['noisy_audio'].to(DEVICE)
+            clean = batch['clean_audio'].to(DEVICE)
+            if clean.dim() == 2: clean = clean.unsqueeze(1)
+            if noisy.dim() == 2: noisy = noisy.unsqueeze(1)
+
+            out = model.forward_wav(clean, noisy)
+            recon = out['recon_wav']
+
+            T = min(clean.shape[-1], recon.shape[-1])
+            c = clean[0, 0, :T].cpu().numpy().astype(np.float32)
+            r = recon[0, 0, :T].cpu().numpy().astype(np.float32)
+            n = noisy[0, 0, :T].cpu().numpy().astype(np.float32)
+
+            c /= (np.abs(c).max() + 1e-8)
+            r /= (np.abs(r).max() + 1e-8)
+            n /= (np.abs(n).max() + 1e-8)
+
+            idx = i + 1
+            save_wav(n, out_dir / f'sample{idx:02d}_noisy.wav')
+            save_wav(r, out_dir / f'sample{idx:02d}_recon.wav')
+            save_wav(c, out_dir / f'sample{idx:02d}_clean.wav')
+
+            p_r, p_n, s_r, s_n = compute_metrics(c, r, n)
+            metrics_list.append({'pesq_recon': p_r, 'pesq_noisy': p_n,
+                                  'stoi_recon': s_r, 'stoi_noisy': s_n})
+            print(f"    sample{idx}: PESQ={p_r:.4f} (noisy={p_n:.4f}), STOI={s_r:.4f}")
+
+    del model
+    torch.cuda.empty_cache()
+    return metrics_list
+
+
 def run_decoder_lora_experiment(exp, loader, out_dir):
     """Decoder LoRA 類型實驗（exp_0223 v2）"""
     from exp_0223.models_decoder_lora import TeacherStudentDecoderLoRA
@@ -279,6 +339,8 @@ def main():
         try:
             if exp['type'] == 'decoder_lora':
                 metrics_list = run_decoder_lora_experiment(exp, loader, out_dir)
+            elif exp['type'] == 'no_vq':
+                metrics_list = run_no_vq_experiment(exp, loader, out_dir)
             else:
                 metrics_list = run_encoder_vq_experiment(exp, loader, out_dir)
 
