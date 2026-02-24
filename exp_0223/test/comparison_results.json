@@ -130,27 +130,28 @@
     ]
   },
   "exp_0224a": {
-    "pesq_mean": 1.4159758488337199,
+    "checkpoint": "checkpoint_epoch190.pt (best val_total=34.347)",
+    "pesq_mean": 1.5856,
     "pesq_noisy_mean": 2.4688847064971924,
-    "stoi_mean": 0.5708008448282878,
+    "stoi_mean": 0.6275,
     "stoi_noisy_mean": 0.6317224208228187,
     "per_sample": [
       {
-        "pesq_recon": 1.3160,
+        "pesq_recon": 1.5962,
         "pesq_noisy": 2.3638830184936523,
-        "stoi_recon": 0.6165,
+        "stoi_recon": 0.6607,
         "stoi_noisy": 0.665389149324617
       },
       {
-        "pesq_recon": 1.5426,
+        "pesq_recon": 1.6398,
         "pesq_noisy": 2.590724468231201,
-        "stoi_recon": 0.5018,
+        "stoi_recon": 0.5928,
         "stoi_noisy": 0.5983581119263184
       },
       {
-        "pesq_recon": 1.3893,
+        "pesq_recon": 1.5208,
         "pesq_noisy": 2.4520466327667236,
-        "stoi_recon": 0.5941,
+        "stoi_recon": 0.6289,
         "stoi_noisy": 0.6314200012175207
       }
     ]

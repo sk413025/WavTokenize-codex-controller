@@ -194,10 +194,6 @@ def run_encoder_vq_experiment(exp, loader, out_dir):
             r = recon[0, 0, :T].cpu().numpy().astype(np.float32)
             n = noisy[0, 0, :T].cpu().numpy().astype(np.float32)
 
-            c /= (np.abs(c).max() + 1e-8)
-            r /= (np.abs(r).max() + 1e-8)
-            n /= (np.abs(n).max() + 1e-8)
-
             idx = i + 1
             save_wav(n, out_dir / f'sample{idx:02d}_noisy.wav')
             save_wav(r, out_dir / f'sample{idx:02d}_recon.wav')
@@ -247,10 +243,6 @@ def run_no_vq_experiment(exp, loader, out_dir):
             r = recon[0, 0, :T].cpu().numpy().astype(np.float32)
             n = noisy[0, 0, :T].cpu().numpy().astype(np.float32)
 
-            c /= (np.abs(c).max() + 1e-8)
-            r /= (np.abs(r).max() + 1e-8)
-            n /= (np.abs(n).max() + 1e-8)
-
             idx = i + 1
             save_wav(n, out_dir / f'sample{idx:02d}_noisy.wav')
             save_wav(r, out_dir / f'sample{idx:02d}_recon.wav')
@@ -298,10 +290,6 @@ def run_decoder_lora_experiment(exp, loader, out_dir):
             c = clean[0, 0, :T].cpu().numpy().astype(np.float32)
             r = recon[0, 0, :T].cpu().numpy().astype(np.float32)
             n = noisy[0, 0, :T].cpu().numpy().astype(np.float32)
-
-            c /= (np.abs(c).max() + 1e-8)
-            r /= (np.abs(r).max() + 1e-8)
-            n /= (np.abs(n).max() + 1e-8)
 
             idx = i + 1
             save_wav(n, out_dir / f'sample{idx:02d}_noisy.wav')
