@@ -164,46 +164,62 @@ $$
 
 ### 3.3 Multi-Resolution STFT Loss（頻譜域）
 
+用三種不同的「視窗大小」同時觀察頻譜，各自有不同側重：
+
 ```
-解析度 1:  n_fft=2048, hop=512,  win=2048  (低頻精細)
-解析度 2:  n_fft=1024, hop=256,  win=1024  (中頻平衡)
-解析度 3:  n_fft=512,  hop=128,  win=512   (高頻時間解析)
+解析度 1:  n_fft=2048, hop=512,  win=2048  → 頻率解析度高，適合辨識基頻/諧波
+解析度 2:  n_fft=1024, hop=256,  win=1024  → 頻率與時間兼顧
+解析度 3:  n_fft=512,  hop=128,  win=512   → 時間解析度高，適合捕捉快速瞬態
 ```
 
-每個解析度計算兩個子損失：
+每個解析度各算兩個子損失，再加總：
 
-**Spectral Convergence Loss**：
+**① Spectral Convergence (SC)**：量化「頻譜形狀」整體差距
+```
+         ‖ |S_clean| - |S_recon| ‖_F          ← 各頻率的幅度差（Frobenius norm）
+L_SC = ─────────────────────────────
+              ‖ |S_clean| ‖_F                  ← 除以 clean 的幅度作正規化
+```
+→ 值越小代表 recon 的頻譜「輪廓」越像 clean；對頻譜整體能量分布敏感。
 
-$$
-\mathcal{L}_{\text{SC}} = \frac{\| |S| - |\hat{S}| \|_F}{\| |S| \|_F + \epsilon}
-$$
+**② Log Magnitude (LogMag)**：在對數尺度比較幅度
+```
+L_LogMag = mean( | log|S_clean| - log|S_recon| | )
+```
+→ 對數尺度讓低能量頻段（如安靜段）和高能量頻段（如母音）受同等重視，
+  避免大能量段主導梯度。
 
-**Log Magnitude Loss**：
+**三個解析度平均**：
+```
+L_MR-STFT = (1/3) × Σ_r [ L_SC(r) + L_LogMag(r) ]
+```
 
-$$
-\mathcal{L}_{\text{LogMag}} = \frac{1}{N} \sum \left| \log |S| - \log |\hat{S}| \right|
-$$
-
-MR-STFT 合併：
-
-$$
-\mathcal{L}_{\text{MR-STFT}} = \frac{1}{R} \sum_{r=1}^{R} \left( \mathcal{L}_{\text{SC}}^{(r)} + \mathcal{L}_{\text{LogMag}}^{(r)} \right), \quad R=3
-$$
-
-- **作用**：捕捉多解析度頻譜結構，對相位偏移和頻譜塌縮敏感
-- **加權**：$\lambda = 1.0$
+- **作用**：補足 MSE 無法偵測的頻譜塌縮、諧波失真、時序錯位
+- **加權**：λ = 1.0
 
 ### 3.4 Mel Spectrogram L1 Loss（感知域）
 
-$$
-\mathcal{L}_{\text{Mel}} = \frac{1}{M \cdot T'} \sum_{m,t} \left| \log \text{Mel}(\hat{x})_{m,t} - \log \text{Mel}(x)_{m,t} \right|
-$$
+先把波形轉換成 Mel 頻譜，再在**對數 Mel 尺度**上做 L1 比較：
 
-Mel 參數：`sr=24000, n_fft=1024, hop=256, n_mels=100, power=1`
+```
+步驟 1：audio → STFT（n_fft=1024, hop=256）→ 幅度頻譜 |S|
+步驟 2：|S| × Mel filterbank（100 個 mel 頻帶）→ Mel 幅度
+步驟 3：取對數 → log-Mel（模擬人耳的對數感知）
+步驟 4：計算 recon 與 clean 的 log-Mel 差距
 
-- **作用**：模擬人耳感知，在 mel 尺度下比較音訊差異
-- **加權**：$\lambda = 45.0$（沿用 WavTokenizer 原始訓練的 `mel_loss_coeff`）
-- **主導性**：佔 total loss 的 ~85%，確保感知品質優先
+L_Mel = mean( | log-Mel(recon) - log-Mel(clean) | )
+        ↑ 對 100 個 mel 頻帶 × 所有時間幀取平均
+```
+
+**為什麼用 Mel 而不直接用 STFT？**
+- 線性頻率的 STFT 中，高頻佔了大多數 bin，但人耳對低頻更敏感
+- Mel 濾波器組模擬人耳的非線性頻率感知（低頻密集、高頻稀疏）
+- 結果：語音基頻和共振峰（決定音色/清晰度的頻段）得到更多監督
+
+**為什麼 λ=45？**
+- 直接沿用 WavTokenizer 原始訓練設定的 `mel_loss_coeff=45`
+- 使 Mel loss 在數值上主導 total loss（~85%），確保感知品質優先
+- 副作用：val_total 的最佳 epoch 由 Mel loss 決定（不是 val_mse）
 
 ### 3.5 為什麼不用 GAN Loss？
 

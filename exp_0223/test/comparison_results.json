@@ -265,5 +265,32 @@
         "stoi_noisy": 0.6314200029020682
       }
     ]
+  },
+  "clean_through_teacher_no_vq": {
+    "note": "Upper bound: clean → Teacher Encoder (跳過VQ) → Teacher Decoder",
+    "pesq_mean": 2.483832677205404,
+    "pesq_noisy_mean": 2.4688850243886313,
+    "stoi_mean": 0.7614482052201618,
+    "stoi_noisy_mean": 0.6317224196660925,
+    "per_sample": [
+      {
+        "pesq_recon": 2.3256304264068604,
+        "pesq_noisy": 2.3638834953308105,
+        "stoi_recon": 0.7849459300205093,
+        "stoi_noisy": 0.6653891473155885
+      },
+      {
+        "pesq_recon": 2.500553846359253,
+        "pesq_noisy": 2.5907249450683594,
+        "stoi_recon": 0.7378953961820041,
+        "stoi_noisy": 0.5983581087806211
+      },
+      {
+        "pesq_recon": 2.6253137588500977,
+        "pesq_noisy": 2.4520466327667236,
+        "stoi_recon": 0.7615032894579719,
+        "stoi_noisy": 0.6314200029020682
+      }
+    ]
   }
 }

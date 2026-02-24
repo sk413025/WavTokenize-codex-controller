@@ -10,6 +10,7 @@
 
 | 實驗 | PESQ (recon) | STOI (recon) | ΔPESQ vs teacher_baseline | ΔSTOI vs teacher_baseline |
 |------|-------------|-------------|--------------------------|--------------------------|
+| clean_through_teacher_no_vq (上限) | 2.4838 | 0.7614 | +0.8073 | +0.2348 |
 | **noisy_through_teacher** (baseline) | 1.6765 | 0.5266 | — | — |
 | noisy_through_teacher_no_vq | 1.7075 | 0.5312 | +0.0310 | +0.0046 |
 | V2 | 1.2312 | 0.4791 | -0.4453 | -0.0475 |
@@ -25,6 +26,13 @@
 > exp_0224b 訓練中（目前 ~30/300 epochs），上述為中期結果
 
 ## Per-Sample 明細
+
+### clean_through_teacher_no_vq（理論上限：clean encoder → 跳過VQ → decoder）
+| Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
+|--------|-----------|-----------|-----------|-----------|
+| 1 | 2.3256 | 2.3639 | 0.7849 | 0.6654 |
+| 2 | 2.5006 | 2.5907 | 0.7379 | 0.5984 |
+| 3 | 2.6253 | 2.4520 | 0.7615 | 0.6314 |
 
 ### noisy_through_teacher (baseline)
 | Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
@@ -107,6 +115,7 @@
 
 - **PESQ(noisy) >> PESQ(recon)** 屬正常現象：LDV noisy 與 clean 時序高度對齊，PESQ 對時序對齊敏感
 - **公平基準** (`noisy_through_teacher`) = noisy 直接經過相同的 Encoder+VQ+Decoder pipeline
+- **clean_through_teacher_no_vq**（理論上限）：PESQ=2.484, STOI=0.761 — encoder 壓縮+decoder 重建的系統上限
 - **noisy_through_teacher_no_vq**：跳過 VQ 後 PESQ 僅微升 +0.031（1.677→1.708），說明 VQ 本身損失有限
 - **exp_0224b_ep16** 突破 teacher baseline！PESQ=1.809 > 1.677（+0.132），STOI=0.656 > 0.527（+0.129）
 - exp_0224b 超越 no_vq baseline（1.809 > 1.708），說明 Decoder LoRA 有實質貢獻（不只是跳過 VQ）

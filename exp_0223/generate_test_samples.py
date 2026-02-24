@@ -109,6 +109,29 @@ EXPERIMENTS = [
         'folder': 'noisy_through_teacher',
         'type': 'teacher_baseline',
     },
+    {
+        'name': 'noisy_through_teacher_no_vq',
+        'folder': 'noisy_through_teacher_no_vq',
+        'type': 'teacher_baseline_no_vq',
+    },
+    {
+        'name': 'exp_0224b_ep16',
+        'folder': 'exp_0224b_ep16',
+        'type': 'no_vq_dec_lora',
+        'ckpt': 'exp_0224/runs/no_vq_dec_lora_epoch_20260224_002834/best_model.pt',
+        'lora_rank': 64, 'lora_alpha': 128,
+        'decoder_lora_rank': 32, 'decoder_lora_alpha': 64,
+        'note': 'best_model.pt (val_mse criterion, epoch=16)',
+    },
+    {
+        'name': 'exp_0224b_ep20',
+        'folder': 'exp_0224b_ep20',
+        'type': 'no_vq_dec_lora',
+        'ckpt': 'exp_0224/runs/no_vq_dec_lora_epoch_20260224_002834/checkpoint_epoch020.pt',
+        'lora_rank': 64, 'lora_alpha': 128,
+        'decoder_lora_rank': 32, 'decoder_lora_alpha': 64,
+        'note': 'epoch 20 (closest to val_total best ep23=31.84; training in progress)',
+    },
 ]
 
 
@@ -263,6 +286,100 @@ def run_no_vq_experiment(exp, loader, out_dir):
     return metrics_list
 
 
+def run_teacher_baseline_no_vq(exp, loader, out_dir):
+    """Teacher baseline (No-VQ): noisy → Teacher Encoder → 跳過VQ → Teacher Decoder"""
+    from decoder.pretrained import WavTokenizer
+
+    print(f"  Loading Teacher WavTokenizer (noisy_through_teacher_no_vq)...")
+    teacher = WavTokenizer.from_pretrained0802(WAVTOK_CONFIG, WAVTOK_CKPT)
+    teacher = teacher.to(DEVICE)
+    teacher.eval()
+
+    bandwidth_id = torch.tensor([0], device=DEVICE)
+
+    metrics_list = []
+    with torch.no_grad():
+        for i, batch in enumerate(loader):
+            noisy = batch['noisy_audio'].to(DEVICE)
+            clean = batch['clean_audio'].to(DEVICE)
+            if clean.dim() == 2: clean = clean.unsqueeze(1)
+            if noisy.dim() == 2: noisy = noisy.unsqueeze(1)
+
+            # noisy → Teacher Encoder → 連續 features（跳過 VQ）→ Teacher Decoder
+            # encode_infer 回傳的是 VQ 後的 quantized，需繞過 VQ 直接取 encoder 輸出
+            raw_emb = teacher.feature_extractor.encodec.encoder(noisy)  # [B, 512, T]
+            recon = teacher.decode(raw_emb, bandwidth_id=bandwidth_id)
+            if recon.dim() == 2:
+                recon = recon.unsqueeze(1)
+
+            T = min(clean.shape[-1], recon.shape[-1])
+            c = clean[0, 0, :T].cpu().numpy().astype(np.float32)
+            r = recon[0, 0, :T].cpu().numpy().astype(np.float32)
+            n = noisy[0, 0, :T].cpu().numpy().astype(np.float32)
+
+            idx = i + 1
+            save_wav(n, out_dir / f'sample{idx:02d}_noisy.wav')
+            save_wav(r, out_dir / f'sample{idx:02d}_recon.wav')
+            save_wav(c, out_dir / f'sample{idx:02d}_clean.wav')
+
+            p_r, p_n, s_r, s_n = compute_metrics(c, r, n)
+            metrics_list.append({'pesq_recon': p_r, 'pesq_noisy': p_n,
+                                  'stoi_recon': s_r, 'stoi_noisy': s_n})
+            print(f"    sample{idx}: PESQ={p_r:.4f} (noisy={p_n:.4f}), STOI={s_r:.4f}")
+
+    del teacher
+    torch.cuda.empty_cache()
+    return metrics_list
+
+
+def run_no_vq_decoder_lora_experiment(exp, loader, out_dir):
+    """No-VQ + Decoder LoRA 類型實驗（exp_0224b）"""
+    from exp_0224.models_no_vq_decoder_lora import TeacherStudentNoVQDecoderLoRA
+
+    print(f"  Loading {exp['name']} (No-VQ + Decoder LoRA)...")
+    model = TeacherStudentNoVQDecoderLoRA(
+        wavtok_config=WAVTOK_CONFIG, wavtok_ckpt=WAVTOK_CKPT,
+        lora_rank=exp['lora_rank'], lora_alpha=exp['lora_alpha'],
+        device=DEVICE,
+        decoder_lora_rank=exp['decoder_lora_rank'],
+        decoder_lora_alpha=exp['decoder_lora_alpha'],
+    ).to(DEVICE)
+
+    ckpt = torch.load(str(exp['ckpt']), map_location='cpu', weights_only=False)
+    model.load_state_dict(ckpt['model_state_dict'], strict=False)
+    model.eval()
+
+    metrics_list = []
+    with torch.no_grad():
+        for i, batch in enumerate(loader):
+            noisy = batch['noisy_audio'].to(DEVICE)
+            clean = batch['clean_audio'].to(DEVICE)
+            if clean.dim() == 2: clean = clean.unsqueeze(1)
+            if noisy.dim() == 2: noisy = noisy.unsqueeze(1)
+
+            out = model.forward_wav(clean, noisy)
+            recon = out['recon_wav']
+
+            T = min(clean.shape[-1], recon.shape[-1])
+            c = clean[0, 0, :T].cpu().numpy().astype(np.float32)
+            r = recon[0, 0, :T].cpu().numpy().astype(np.float32)
+            n = noisy[0, 0, :T].cpu().numpy().astype(np.float32)
+
+            idx = i + 1
+            save_wav(n, out_dir / f'sample{idx:02d}_noisy.wav')
+            save_wav(r, out_dir / f'sample{idx:02d}_recon.wav')
+            save_wav(c, out_dir / f'sample{idx:02d}_clean.wav')
+
+            p_r, p_n, s_r, s_n = compute_metrics(c, r, n)
+            metrics_list.append({'pesq_recon': p_r, 'pesq_noisy': p_n,
+                                  'stoi_recon': s_r, 'stoi_noisy': s_n})
+            print(f"    sample{idx}: PESQ={p_r:.4f} (noisy={p_n:.4f}), STOI={s_r:.4f}")
+
+    del model
+    torch.cuda.empty_cache()
+    return metrics_list
+
+
 def run_teacher_baseline(exp, loader, out_dir):
     """Teacher baseline: noisy → Teacher Encoder → Teacher VQ → Frozen Decoder"""
     from decoder.pretrained import WavTokenizer
@@ -369,7 +486,7 @@ def main():
     for exp in EXPERIMENTS:
         print(f"\n{'='*50}")
         print(f"Processing: {exp['name']}")
-        print(f"  Ckpt: {exp['ckpt']}")
+        print(f"  Ckpt: {exp.get('ckpt', 'N/A (teacher baseline)')}")
 
         out_dir = TEST_DIR / exp['folder']
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -379,6 +496,10 @@ def main():
                 metrics_list = run_decoder_lora_experiment(exp, loader, out_dir)
             elif exp['type'] == 'no_vq':
                 metrics_list = run_no_vq_experiment(exp, loader, out_dir)
+            elif exp['type'] == 'no_vq_dec_lora':
+                metrics_list = run_no_vq_decoder_lora_experiment(exp, loader, out_dir)
+            elif exp['type'] == 'teacher_baseline_no_vq':
+                metrics_list = run_teacher_baseline_no_vq(exp, loader, out_dir)
             elif exp['type'] == 'teacher_baseline':
                 metrics_list = run_teacher_baseline(exp, loader, out_dir)
             else:
