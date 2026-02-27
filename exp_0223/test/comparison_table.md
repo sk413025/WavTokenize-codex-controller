@@ -1,6 +1,6 @@
 # PESQ/STOI 比較表
 
-**Val indices**: [51, 54, 61]
+**Val indices**: [51, 54, 61]  
 **評估條件**: PESQ nb (8kHz resample), STOI (24kHz)
 
 ## 各組平均結果
@@ -10,38 +10,48 @@
 
 | 實驗 | PESQ (recon) | STOI (recon) | ΔPESQ vs teacher_baseline | ΔSTOI vs teacher_baseline |
 |------|-------------|-------------|--------------------------|--------------------------|
-| clean_through_teacher_no_vq (上限) | 2.4838 | 0.7614 | +0.8073 | +0.2348 |
-| **noisy_through_teacher** (baseline) | 1.6765 | 0.5266 | — | — |
+| clean_through_teacher_no_vq (上限, 無VQ) | 2.4838 | 0.7614 | +0.8073 | +0.2348 |
+| clean_through_teacher (上限, 有VQ) | 2.3517 | 0.7501 | +0.6752 | +0.2235 |
+| **noisy_through_teacher** (baseline) | 1.6765 | 0.5266 | +0.0000 | +0.0000 |
 | noisy_through_teacher_no_vq | 1.7075 | 0.5312 | +0.0310 | +0.0046 |
 | V2 | 1.2312 | 0.4791 | -0.4453 | -0.0475 |
 | Plan_Ori | 1.2514 | 0.4833 | -0.4251 | -0.0433 |
 | exp_0216 | 1.1996 | 0.4601 | -0.4769 | -0.0665 |
 | exp_0217 | 1.2032 | 0.4620 | -0.4733 | -0.0646 |
 | exp_0223_v2 | 1.2053 | 0.5216 | -0.4712 | -0.0050 |
-| exp_0224a (No-VQ, ep190) | 1.5856 | 0.6275 | -0.0909 | +0.1009 |
-| exp_0224b_ep16 (No-VQ+DecLoRA, ep31†) | **1.8090** | **0.6559** | **+0.1325** | **+0.1293** |
-| exp_0224b_ep20 (No-VQ+DecLoRA, ep20) | 1.7120 | 0.6526 | +0.0355 | +0.1260 |
-
-> † best_model.pt 實際為 epoch 31（val_mse 準則，訓練仍在進行中）
-> exp_0224b 訓練中（目前 ~30/300 epochs），上述為中期結果
+| exp_0224a | 1.5856 | 0.6275 | -0.0909 | +0.1009 |
+| **exp_0224b_best** (No-VQ+DecLoRA from 0224a, ep142) | 1.8683 | 0.6668 | +0.1918 | +0.1402 |
+| exp_0225a (No-VQ scratch encoder) | 1.5539 | 0.6307 | -0.1226 | +0.1041 |
+| exp_0225b (No-VQ+DecLoRA from 0225a, ep33) | 1.7310 | 0.6535 | +0.0545 | +0.1269 |
+| exp_0225c (No-VQ+DecLoRA+Phase from 0225a, ep5) | 1.6475 | 0.6459 | -0.0290 | +0.1193 |
+| exp_0225d (No-VQ+DecLoRA+FM from 0225a, ep14) | 1.7124 | 0.6523 | +0.0359 | +0.1257 |
+| **exp_0226_best_total** (E2E LoRA, ep142) | 1.8163 | 0.6869 | +0.1398 | +0.1603 |
+| exp_0226a (EncOnly+FeatAlign, ep156) | 1.5353 | 0.6267 | -0.1412 | +0.1001 |
 
 ## Per-Sample 明細
 
-### clean_through_teacher_no_vq（理論上限：clean encoder → 跳過VQ → decoder）
+### clean_through_teacher_no_vq
 | Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
 |--------|-----------|-----------|-----------|-----------|
 | 1 | 2.3256 | 2.3639 | 0.7849 | 0.6654 |
 | 2 | 2.5006 | 2.5907 | 0.7379 | 0.5984 |
 | 3 | 2.6253 | 2.4520 | 0.7615 | 0.6314 |
 
-### noisy_through_teacher (baseline)
+### clean_through_teacher
+| Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
+|--------|-----------|-----------|-----------|-----------|
+| 1 | 2.1922 | 2.3639 | 0.7627 | 0.6654 |
+| 2 | 2.4465 | 2.5907 | 0.7389 | 0.5984 |
+| 3 | 2.4164 | 2.4520 | 0.7486 | 0.6314 |
+
+### noisy_through_teacher
 | Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
 |--------|-----------|-----------|-----------|-----------|
 | 1 | 1.6786 | 2.3639 | 0.5915 | 0.6654 |
 | 2 | 1.8778 | 2.5907 | 0.4647 | 0.5984 |
 | 3 | 1.4731 | 2.4520 | 0.5237 | 0.6314 |
 
-### noisy_through_teacher_no_vq (Teacher Encoder, 跳過VQ)
+### noisy_through_teacher_no_vq
 | Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
 |--------|-----------|-----------|-----------|-----------|
 | 1 | 1.7052 | 2.3639 | 0.5942 | 0.6654 |
@@ -83,26 +93,61 @@
 | 2 | 1.1219 | 2.5907 | 0.4699 | 0.5984 |
 | 3 | 1.2290 | 2.4520 | 0.4982 | 0.6314 |
 
-### exp_0224a (No-VQ, ep190)
+### exp_0224a
 | Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
 |--------|-----------|-----------|-----------|-----------|
 | 1 | 1.5962 | 2.3639 | 0.6607 | 0.6654 |
 | 2 | 1.6398 | 2.5907 | 0.5928 | 0.5984 |
 | 3 | 1.5208 | 2.4520 | 0.6289 | 0.6314 |
 
-### exp_0224b_ep16 (No-VQ+DecLoRA, best_model.pt = ep31†)
+### exp_0224b_best
 | Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
 |--------|-----------|-----------|-----------|-----------|
-| 1 | 1.9359 | 2.3639 | 0.7031 | 0.6654 |
-| 2 | 1.7923 | 2.5907 | 0.6121 | 0.5984 |
-| 3 | 1.6987 | 2.4520 | 0.6526 | 0.6314 |
+| 1 | 1.8713 | 2.3639 | 0.7000 | 0.6654 |
+| 2 | 1.8311 | 2.5907 | 0.6242 | 0.5984 |
+| 3 | 1.9024 | 2.4520 | 0.6763 | 0.6314 |
 
-### exp_0224b_ep20 (No-VQ+DecLoRA, epoch 20)
+### exp_0225a
 | Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
 |--------|-----------|-----------|-----------|-----------|
-| 1 | 1.7947 | 2.3639 | 0.7006 | 0.6654 |
-| 2 | 1.7287 | 2.5907 | 0.6062 | 0.5984 |
-| 3 | 1.6125 | 2.4520 | 0.6511 | 0.6314 |
+| 1 | 1.5186 | 2.3639 | 0.6662 | 0.6654 |
+| 2 | 1.6102 | 2.5907 | 0.5951 | 0.5984 |
+| 3 | 1.5330 | 2.4520 | 0.6307 | 0.6314 |
+
+### exp_0225b
+| Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
+|--------|-----------|-----------|-----------|-----------|
+| 1 | 1.7273 | 2.3639 | 0.7066 | 0.6654 |
+| 2 | 1.7708 | 2.5907 | 0.6118 | 0.5984 |
+| 3 | 1.6949 | 2.4520 | 0.6421 | 0.6314 |
+
+### exp_0225c
+| Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
+|--------|-----------|-----------|-----------|-----------|
+| 1 | 1.6393 | 2.3639 | 0.6950 | 0.6654 |
+| 2 | 1.7026 | 2.5907 | 0.5918 | 0.5984 |
+| 3 | 1.6005 | 2.4520 | 0.6510 | 0.6314 |
+
+### exp_0225d
+| Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
+|--------|-----------|-----------|-----------|-----------|
+| 1 | 1.7389 | 2.3639 | 0.7107 | 0.6654 |
+| 2 | 1.7757 | 2.5907 | 0.6020 | 0.5984 |
+| 3 | 1.6227 | 2.4520 | 0.6442 | 0.6314 |
+
+### exp_0226_best_total
+| Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
+|--------|-----------|-----------|-----------|-----------|
+| 1 | 1.7419 | 2.3639 | 0.7222 | 0.6654 |
+| 2 | 1.7136 | 2.5907 | 0.6439 | 0.5984 |
+| 3 | 1.9934 | 2.4520 | 0.6947 | 0.6314 |
+
+### exp_0226a
+| Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
+|--------|-----------|-----------|-----------|-----------|
+| 1 | 1.4894 | 2.3639 | 0.6659 | 0.6654 |
+| 2 | 1.5832 | 2.5907 | 0.5859 | 0.5984 |
+| 3 | 1.5334 | 2.4520 | 0.6283 | 0.6314 |
 
 ## 音檔說明
 
@@ -115,8 +160,7 @@
 
 - **PESQ(noisy) >> PESQ(recon)** 屬正常現象：LDV noisy 與 clean 時序高度對齊，PESQ 對時序對齊敏感
 - **公平基準** (`noisy_through_teacher`) = noisy 直接經過相同的 Encoder+VQ+Decoder pipeline
-- **clean_through_teacher_no_vq**（理論上限）：PESQ=2.484, STOI=0.761 — encoder 壓縮+decoder 重建的系統上限
-- **noisy_through_teacher_no_vq**：跳過 VQ 後 PESQ 僅微升 +0.031（1.677→1.708），說明 VQ 本身損失有限
-- **exp_0224b_ep16** 突破 teacher baseline！PESQ=1.809 > 1.677（+0.132），STOI=0.656 > 0.527（+0.129）
-- exp_0224b 超越 no_vq baseline（1.809 > 1.708），說明 Decoder LoRA 有實質貢獻（不只是跳過 VQ）
-- best_model.pt 顯示的 epoch 31 而非 16，表示訓練期間有更新覆蓋（val_mse 更低的 checkpoint）
+- **clean_through_teacher_no_vq**（無VQ上限）：PESQ=2.484, STOI=0.761
+- **clean_through_teacher**（有VQ上限）：PESQ=2.352, STOI=0.750
+- **exp_0226**（E2E LoRA，ep142）：目前 PESQ 最高但音檔有機械音（phase artifact）
+- **exp_0226a**（EncOnly+FeatAlign，ep156）：無機械音，encoder-only ceiling

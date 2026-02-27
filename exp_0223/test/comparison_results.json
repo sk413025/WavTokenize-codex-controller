@@ -129,30 +129,57 @@
       }
     ]
   },
-  "exp_0224a": {
-    "checkpoint": "checkpoint_epoch190.pt (best val_total=34.347)",
-    "pesq_mean": 1.5856,
-    "pesq_noisy_mean": 2.4688847064971924,
-    "stoi_mean": 0.6275,
-    "stoi_noisy_mean": 0.6317224208228187,
+  "clean_through_teacher_no_vq": {
+    "note": "Upper bound: clean → Teacher Encoder (跳過VQ) → Teacher Decoder",
+    "pesq_mean": 2.483832677205404,
+    "pesq_noisy_mean": 2.4688850243886313,
+    "stoi_mean": 0.7614482052201618,
+    "stoi_noisy_mean": 0.6317224196660925,
     "per_sample": [
       {
-        "pesq_recon": 1.5962,
-        "pesq_noisy": 2.3638830184936523,
-        "stoi_recon": 0.6607,
-        "stoi_noisy": 0.665389149324617
+        "pesq_recon": 2.3256304264068604,
+        "pesq_noisy": 2.3638834953308105,
+        "stoi_recon": 0.7849459300205093,
+        "stoi_noisy": 0.6653891473155885
       },
       {
-        "pesq_recon": 1.6398,
-        "pesq_noisy": 2.590724468231201,
-        "stoi_recon": 0.5928,
-        "stoi_noisy": 0.5983581119263184
+        "pesq_recon": 2.500553846359253,
+        "pesq_noisy": 2.5907249450683594,
+        "stoi_recon": 0.7378953961820041,
+        "stoi_noisy": 0.5983581087806211
       },
       {
-        "pesq_recon": 1.5208,
+        "pesq_recon": 2.6253137588500977,
         "pesq_noisy": 2.4520466327667236,
-        "stoi_recon": 0.6289,
-        "stoi_noisy": 0.6314200012175207
+        "stoi_recon": 0.7615032894579719,
+        "stoi_noisy": 0.6314200029020682
+      }
+    ]
+  },
+  "clean_through_teacher": {
+    "note": "Upper bound (with VQ): clean → Teacher Encoder+VQ → Teacher Decoder",
+    "pesq_mean": 2.351706107457479,
+    "pesq_noisy_mean": 2.4688850243886313,
+    "stoi_mean": 0.7500620583299801,
+    "stoi_noisy_mean": 0.6317224196660925,
+    "per_sample": [
+      {
+        "pesq_recon": 2.192178249359131,
+        "pesq_noisy": 2.3638834953308105,
+        "stoi_recon": 0.7626616559264738,
+        "stoi_noisy": 0.6653891473155885
+      },
+      {
+        "pesq_recon": 2.446531057357788,
+        "pesq_noisy": 2.5907249450683594,
+        "stoi_recon": 0.7389321261575695,
+        "stoi_noisy": 0.5983581087806211
+      },
+      {
+        "pesq_recon": 2.4164090156555176,
+        "pesq_noisy": 2.4520466327667236,
+        "stoi_recon": 0.7485923929058969,
+        "stoi_noisy": 0.6314200029020682
       }
     ]
   },
@@ -182,6 +209,250 @@
         "stoi_noisy": 0.6314
       }
     ]
+  },
+  "noisy_through_teacher_no_vq": {
+    "note": "Baseline: noisy → Teacher Encoder (跳過VQ) → Teacher Decoder",
+    "pesq_mean": 1.7075384457906086,
+    "pesq_noisy_mean": 2.4688850243886313,
+    "stoi_mean": 0.5312261532781899,
+    "stoi_noisy_mean": 0.6317224196660925,
+    "per_sample": [
+      {
+        "pesq_recon": 1.705214262008667,
+        "pesq_noisy": 2.3638834953308105,
+        "stoi_recon": 0.5941834570234714,
+        "stoi_noisy": 0.6653891473155885
+      },
+      {
+        "pesq_recon": 1.834261178970337,
+        "pesq_noisy": 2.5907249450683594,
+        "stoi_recon": 0.47390948858611304,
+        "stoi_noisy": 0.5983581087806211
+      },
+      {
+        "pesq_recon": 1.5831398963928223,
+        "pesq_noisy": 2.4520466327667236,
+        "stoi_recon": 0.5255855142249853,
+        "stoi_noisy": 0.6314200029020682
+      }
+    ]
+  },
+  "exp_0224a": {
+    "checkpoint": "checkpoint_epoch190.pt (best val_total=34.347)",
+    "pesq_mean": 1.5856,
+    "pesq_noisy_mean": 2.4688847064971924,
+    "stoi_mean": 0.6275,
+    "stoi_noisy_mean": 0.6317224208228187,
+    "per_sample": [
+      {
+        "pesq_recon": 1.5962,
+        "pesq_noisy": 2.3638830184936523,
+        "stoi_recon": 0.6607,
+        "stoi_noisy": 0.665389149324617
+      },
+      {
+        "pesq_recon": 1.6398,
+        "pesq_noisy": 2.590724468231201,
+        "stoi_recon": 0.5928,
+        "stoi_noisy": 0.5983581119263184
+      },
+      {
+        "pesq_recon": 1.5208,
+        "pesq_noisy": 2.4520466327667236,
+        "stoi_recon": 0.6289,
+        "stoi_noisy": 0.6314200012175207
+      }
+    ]
+  },
+  "exp_0224b_best": {
+    "checkpoint": "best_model.pt (val_mse criterion, epoch=142, val_mse=0.02744)",
+    "pesq_mean": 1.8682529131571453,
+    "pesq_noisy_mean": 2.4688850243886313,
+    "stoi_mean": 0.6668438054903363,
+    "stoi_noisy_mean": 0.6317224196660925,
+    "per_sample": [
+      {
+        "pesq_recon": 1.8713109493255615,
+        "pesq_noisy": 2.3638834953308105,
+        "stoi_recon": 0.7000404478742663,
+        "stoi_noisy": 0.6653891473155885
+      },
+      {
+        "pesq_recon": 1.8310933113098145,
+        "pesq_noisy": 2.5907249450683594,
+        "stoi_recon": 0.6241518143625236,
+        "stoi_noisy": 0.5983581087806211
+      },
+      {
+        "pesq_recon": 1.9023544788360596,
+        "pesq_noisy": 2.4520466327667236,
+        "stoi_recon": 0.6763391542342188,
+        "stoi_noisy": 0.6314200029020682
+      }
+    ]
+  },
+  "exp_0225a": {
+    "checkpoint": "best_model_val_total.pt (val_total=35.50, scratch encoder, no exp_0217 prior)",
+    "pesq_mean": 1.5539308389027913,
+    "pesq_noisy_mean": 2.4688850243886313,
+    "stoi_mean": 0.6306866285278705,
+    "stoi_noisy_mean": 0.6317224196660925,
+    "per_sample": [
+      {
+        "pesq_recon": 1.5185832977294922,
+        "pesq_noisy": 2.3638834953308105,
+        "stoi_recon": 0.6662412531299805,
+        "stoi_noisy": 0.6653891473155885
+      },
+      {
+        "pesq_recon": 1.610222578048706,
+        "pesq_noisy": 2.5907249450683594,
+        "stoi_recon": 0.595075997351134,
+        "stoi_noisy": 0.5983581087806211
+      },
+      {
+        "pesq_recon": 1.5329866409301758,
+        "pesq_noisy": 2.4520466327667236,
+        "stoi_recon": 0.630742635102497,
+        "stoi_noisy": 0.6314200029020682
+      }
+    ]
+  },
+  "exp_0225b": {
+    "checkpoint": "best_model.pt (val_wav_mse criterion, epoch=33, val_wav_mse=0.02762; encoder init from exp_0225a)",
+    "pesq_mean": 1.7310101985931396,
+    "pesq_noisy_mean": 2.4688850243886313,
+    "stoi_mean": 0.653489915402666,
+    "stoi_noisy_mean": 0.6317224196660925,
+    "per_sample": [
+      {
+        "pesq_recon": 1.7273211479187012,
+        "pesq_noisy": 2.3638834953308105,
+        "stoi_recon": 0.7066286622416944,
+        "stoi_noisy": 0.6653891473155885
+      },
+      {
+        "pesq_recon": 1.7708063125610352,
+        "pesq_noisy": 2.5907249450683594,
+        "stoi_recon": 0.6117818503079155,
+        "stoi_noisy": 0.5983581087806211
+      },
+      {
+        "pesq_recon": 1.6949031352996826,
+        "pesq_noisy": 2.4520466327667236,
+        "stoi_recon": 0.6420592336583879,
+        "stoi_noisy": 0.6314200029020682
+      }
+    ]
+  },
+  "exp_0225c": {
+    "checkpoint": "best_model.pt (val_wav_mse criterion, epoch=5, val_wav_mse=0.02768; encoder from 0225a; +phase loss)",
+    "pesq_mean": 1.6474825938542683,
+    "pesq_noisy_mean": 2.4688850243886313,
+    "stoi_mean": 0.6459186124425212,
+    "stoi_noisy_mean": 0.6317224196660925,
+    "per_sample": [
+      {
+        "pesq_recon": 1.639296054840088,
+        "pesq_noisy": 2.3638834953308105,
+        "stoi_recon": 0.6949839946893409,
+        "stoi_noisy": 0.6653891473155885
+      },
+      {
+        "pesq_recon": 1.7026370763778687,
+        "pesq_noisy": 2.5907249450683594,
+        "stoi_recon": 0.591817295943436,
+        "stoi_noisy": 0.5983581087806211
+      },
+      {
+        "pesq_recon": 1.6005146503448486,
+        "pesq_noisy": 2.4520466327667236,
+        "stoi_recon": 0.6509545466947867,
+        "stoi_noisy": 0.6314200029020682
+      }
+    ]
+  },
+  "exp_0225d": {
+    "checkpoint": "best_model.pt (val_wav_mse criterion, epoch=14, val_wav_mse=0.02760; encoder from 0225a; +FM loss)",
+    "pesq_mean": 1.7124163309733074,
+    "pesq_noisy_mean": 2.4688850243886313,
+    "stoi_mean": 0.6522955565656006,
+    "stoi_noisy_mean": 0.6317224196660925,
+    "per_sample": [
+      {
+        "pesq_recon": 1.7388503551483154,
+        "pesq_noisy": 2.3638834953308105,
+        "stoi_recon": 0.7106906002802745,
+        "stoi_noisy": 0.6653891473155885
+      },
+      {
+        "pesq_recon": 1.7756929397583008,
+        "pesq_noisy": 2.5907249450683594,
+        "stoi_recon": 0.6020300962247224,
+        "stoi_noisy": 0.5983581087806211
+      },
+      {
+        "pesq_recon": 1.6227056980133057,
+        "pesq_noisy": 2.4520466327667236,
+        "stoi_recon": 0.6441659731918048,
+        "stoi_noisy": 0.6314200029020682
+      }
+    ]
+  },
+  "exp_0226_best_total": {
+    "checkpoint": "best_model_val_total.pt (epoch=142, val_total=31.68; E2E encoder+decoder LoRA)",
+    "pesq_mean": 1.8162867228190105,
+    "pesq_noisy_mean": 2.4688850243886313,
+    "stoi_mean": 0.6869146622980223,
+    "stoi_noisy_mean": 0.6317224196660925,
+    "per_sample": [
+      {
+        "pesq_recon": 1.741851806640625,
+        "pesq_noisy": 2.3638834953308105,
+        "stoi_recon": 0.7221957322813645,
+        "stoi_noisy": 0.6653891473155885
+      },
+      {
+        "pesq_recon": 1.713638186454773,
+        "pesq_noisy": 2.5907249450683594,
+        "stoi_recon": 0.6438521239683882,
+        "stoi_noisy": 0.5983581087806211
+      },
+      {
+        "pesq_recon": 1.9933701753616333,
+        "pesq_noisy": 2.4520466327667236,
+        "stoi_recon": 0.6946961306443142,
+        "stoi_noisy": 0.6314200029020682
+      }
+    ]
+  },
+  "exp_0226a": {
+    "checkpoint": "best_model_val_total.pt (epoch=156, val_total=35.6065; encoder-only + feat-align)",
+    "pesq_mean": 1.5353464682896931,
+    "pesq_noisy_mean": 2.4688850243886313,
+    "stoi_mean": 0.6266929728292895,
+    "stoi_noisy_mean": 0.6317224196660925,
+    "per_sample": [
+      {
+        "pesq_recon": 1.4894459247589111,
+        "pesq_noisy": 2.3638834953308105,
+        "stoi_recon": 0.6658688541195591,
+        "stoi_noisy": 0.6653891473155885
+      },
+      {
+        "pesq_recon": 1.5832247734069824,
+        "pesq_noisy": 2.5907249450683594,
+        "stoi_recon": 0.5858661234762322,
+        "stoi_noisy": 0.5983581087806211
+      },
+      {
+        "pesq_recon": 1.533368706703186,
+        "pesq_noisy": 2.4520466327667236,
+        "stoi_recon": 0.6283439408920771,
+        "stoi_noisy": 0.6314200029020682
+      }
+    ],
+    "folder": "exp_0226a"
   },
   "exp_0224b_ep16": {
     "checkpoint": "best_model.pt",
@@ -235,60 +506,6 @@
         "pesq_recon": 1.6125010251998901,
         "pesq_noisy": 2.4520466327667236,
         "stoi_recon": 0.6510895476475987,
-        "stoi_noisy": 0.6314200029020682
-      }
-    ]
-  },
-  "noisy_through_teacher_no_vq": {
-    "note": "Baseline: noisy → Teacher Encoder (跳過VQ) → Teacher Decoder",
-    "pesq_mean": 1.7075384457906086,
-    "pesq_noisy_mean": 2.4688850243886313,
-    "stoi_mean": 0.5312261532781899,
-    "stoi_noisy_mean": 0.6317224196660925,
-    "per_sample": [
-      {
-        "pesq_recon": 1.705214262008667,
-        "pesq_noisy": 2.3638834953308105,
-        "stoi_recon": 0.5941834570234714,
-        "stoi_noisy": 0.6653891473155885
-      },
-      {
-        "pesq_recon": 1.834261178970337,
-        "pesq_noisy": 2.5907249450683594,
-        "stoi_recon": 0.47390948858611304,
-        "stoi_noisy": 0.5983581087806211
-      },
-      {
-        "pesq_recon": 1.5831398963928223,
-        "pesq_noisy": 2.4520466327667236,
-        "stoi_recon": 0.5255855142249853,
-        "stoi_noisy": 0.6314200029020682
-      }
-    ]
-  },
-  "clean_through_teacher_no_vq": {
-    "note": "Upper bound: clean → Teacher Encoder (跳過VQ) → Teacher Decoder",
-    "pesq_mean": 2.483832677205404,
-    "pesq_noisy_mean": 2.4688850243886313,
-    "stoi_mean": 0.7614482052201618,
-    "stoi_noisy_mean": 0.6317224196660925,
-    "per_sample": [
-      {
-        "pesq_recon": 2.3256304264068604,
-        "pesq_noisy": 2.3638834953308105,
-        "stoi_recon": 0.7849459300205093,
-        "stoi_noisy": 0.6653891473155885
-      },
-      {
-        "pesq_recon": 2.500553846359253,
-        "pesq_noisy": 2.5907249450683594,
-        "stoi_recon": 0.7378953961820041,
-        "stoi_noisy": 0.5983581087806211
-      },
-      {
-        "pesq_recon": 2.6253137588500977,
-        "pesq_noisy": 2.4520466327667236,
-        "stoi_recon": 0.7615032894579719,
         "stoi_noisy": 0.6314200029020682
       }
     ]
