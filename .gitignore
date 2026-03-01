@@ -201,3 +201,18 @@ Thumbs.db
 training_small_test.log
 exp_*/training_output.log
 exp_*/test/results/
+
+# IDE / tool settings
+.claude/
+.obsidian/
+
+# PDF binaries
+*.pdf
+
+# nohup logs (still running, frequently updated)
+nohup_train.log
+exp_*/nohup_train.log
+
+# Old train logs
+exp_*/v2_train.log
+exp_*/*_train.log
