@@ -27,6 +27,8 @@
 | exp_0225d (No-VQ+DecLoRA+FM from 0225a, ep14) | 1.7124 | 0.6523 | +0.0359 | +0.1257 |
 | **exp_0226_best_total** (E2E LoRA, ep142) | 1.8163 | 0.6869 | +0.1398 | +0.1603 |
 | exp_0226a (EncOnly+FeatAlign, ep156) | 1.5353 | 0.6267 | -0.1412 | +0.1001 |
+| exp_0226b (EncOnly+FeatAlign+HF-Mel, ep42) | 1.5353 | 0.6102 | -0.1412 | +0.0836 |
+| exp_0227  (EncOnly+FeatAlign+MRD-FM, ep161) | 1.5711 | 0.6204 | -0.1054 | +0.0938 |
 
 ## Per-Sample 明細
 
@@ -149,6 +151,20 @@
 | 2 | 1.5832 | 2.5907 | 0.5859 | 0.5984 |
 | 3 | 1.5334 | 2.4520 | 0.6283 | 0.6314 |
 
+### exp_0226b
+| Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
+|--------|-----------|-----------|-----------|-----------|
+| 1 | 1.4713 | 2.3639 | 0.6554 | 0.6654 |
+| 2 | 1.5534 | 2.5907 | 0.5641 | 0.5984 |
+| 3 | 1.5814 | 2.4520 | 0.6110 | 0.6314 |
+
+### exp_0227
+| Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
+|--------|-----------|-----------|-----------|-----------|
+| 1 | 1.5002 | 2.3639 | 0.6684 | 0.6654 |
+| 2 | 1.6294 | 2.5907 | 0.5795 | 0.5984 |
+| 3 | 1.5837 | 2.4520 | 0.6131 | 0.6314 |
+
 ## 音檔說明
 
 各子目錄包含 3 組音檔（sampleNN_noisy / clean / recon）：
@@ -162,5 +178,7 @@
 - **公平基準** (`noisy_through_teacher`) = noisy 直接經過相同的 Encoder+VQ+Decoder pipeline
 - **clean_through_teacher_no_vq**（無VQ上限）：PESQ=2.484, STOI=0.761
 - **clean_through_teacher**（有VQ上限）：PESQ=2.352, STOI=0.750
-- **exp_0226**（E2E LoRA，ep142）：目前 PESQ 最高但音檔有機械音（phase artifact）
-- **exp_0226a**（EncOnly+FeatAlign，ep156）：無機械音，encoder-only ceiling
+- **exp_0226_best_total**（E2E LoRA，ep142）：目前 PESQ 最高但音檔有機械音（phase artifact）
+- **exp_0226a**（EncOnly+FeatAlign）：無機械音，encoder-only ceiling
+- **exp_0226b**（+HF-Mel）：在 0226a 基礎上強調高頻 mel bin 40+（~1.6kHz）
+- **exp_0227**（+MRD-FM）：用預訓練 MRD 辨別器的特徵圖做 Feature Matching
