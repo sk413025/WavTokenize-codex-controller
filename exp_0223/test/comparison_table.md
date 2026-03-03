@@ -31,6 +31,7 @@
 | exp_0227  (EncOnly+FeatAlign+MRD-FM, ep161) | 1.5711 | 0.6204 | -0.1054 | +0.0938 |
 | exp_0228_fm (EncOnly+FeatAlign+MRD-FM+HuBERT, ep77) | 1.5495 | 0.6183 | -0.1270 | +0.0917 |
 | exp_0229b (LatentBWE on enc_0227, ep140) | 1.5415 | 0.6274 | -0.1350 | +0.1008 |
+| exp_0229c (LatentBWE-v2+HF-emph on enc_0227, ep87) | 1.6086 | 0.6230 | -0.0679 | +0.0964 |
 
 ## Per-Sample 明細
 
@@ -181,6 +182,13 @@
 | 2 | 1.6204 | 2.5907 | 0.6092 | 0.5984 |
 | 3 | 1.5344 | 2.4520 | 0.6013 | 0.6314 |
 
+### exp_0229c
+| Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
+|--------|-----------|-----------|-----------|-----------|
+| 1 | 1.4881 | 2.3639 | 0.6536 | 0.6654 |
+| 2 | 1.7212 | 2.5907 | 0.5935 | 0.5984 |
+| 3 | 1.6164 | 2.4520 | 0.6221 | 0.6314 |
+
 ## 音檔說明
 
 各子目錄包含 3 組音檔（sampleNN_noisy / clean / recon）：
@@ -200,3 +208,4 @@
 - **exp_0227**（+MRD-FM）：用預訓練 MRD 辨別器的特徵圖做 Feature Matching
 - **exp_0228_fm**（+HuBERT）：在 0227 基礎上加入 frozen HuBERT 語音學特徵監督（layers 6-8）
 - **exp_0229b**（LatentBWE）：凍結 enc_0227，在 latent 域插入可訓練 LatentBWE（~0.5M params）
+- **exp_0229c**（LatentBWE-v2+HF-emph）：擴大模型容量（hidden 128→256, kernel 3→5, blocks 6→8, ~2.8M），加入 HF-emphasis STFT Loss（4kHz cutoff, 5× 加重）
