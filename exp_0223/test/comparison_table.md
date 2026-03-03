@@ -29,6 +29,8 @@
 | exp_0226a (EncOnly+FeatAlign, ep156) | 1.5353 | 0.6267 | -0.1412 | +0.1001 |
 | exp_0226b (EncOnly+FeatAlign+HF-Mel, ep42) | 1.5353 | 0.6102 | -0.1412 | +0.0836 |
 | exp_0227  (EncOnly+FeatAlign+MRD-FM, ep161) | 1.5711 | 0.6204 | -0.1054 | +0.0938 |
+| exp_0228_fm (EncOnly+FeatAlign+MRD-FM+HuBERT, ep77) | 1.5495 | 0.6183 | -0.1270 | +0.0917 |
+| exp_0229b (LatentBWE on enc_0227, ep140) | 1.5415 | 0.6274 | -0.1350 | +0.1008 |
 
 ## Per-Sample 明細
 
@@ -165,6 +167,20 @@
 | 2 | 1.6294 | 2.5907 | 0.5795 | 0.5984 |
 | 3 | 1.5837 | 2.4520 | 0.6131 | 0.6314 |
 
+### exp_0228_fm
+| Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
+|--------|-----------|-----------|-----------|-----------|
+| 1 | 1.5457 | 2.3639 | 0.6616 | 0.6654 |
+| 2 | 1.5781 | 2.5907 | 0.5639 | 0.5984 |
+| 3 | 1.5247 | 2.4520 | 0.6294 | 0.6314 |
+
+### exp_0229b
+| Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
+|--------|-----------|-----------|-----------|-----------|
+| 1 | 1.4696 | 2.3639 | 0.6718 | 0.6654 |
+| 2 | 1.6204 | 2.5907 | 0.6092 | 0.5984 |
+| 3 | 1.5344 | 2.4520 | 0.6013 | 0.6314 |
+
 ## 音檔說明
 
 各子目錄包含 3 組音檔（sampleNN_noisy / clean / recon）：
@@ -182,3 +198,5 @@
 - **exp_0226a**（EncOnly+FeatAlign）：無機械音，encoder-only ceiling
 - **exp_0226b**（+HF-Mel）：在 0226a 基礎上強調高頻 mel bin 40+（~1.6kHz）
 - **exp_0227**（+MRD-FM）：用預訓練 MRD 辨別器的特徵圖做 Feature Matching
+- **exp_0228_fm**（+HuBERT）：在 0227 基礎上加入 frozen HuBERT 語音學特徵監督（layers 6-8）
+- **exp_0229b**（LatentBWE）：凍結 enc_0227，在 latent 域插入可訓練 LatentBWE（~0.5M params）
