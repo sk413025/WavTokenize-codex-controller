@@ -605,3 +605,115 @@ PYTHONPATH=/home/sbplab/ruizi/WavTokenize-self-supervised:$PYTHONPATH \
 
 ### 日期
 2026-03-04
+
+---
+
+## exp_0305: 選擇性 LoRA 層實驗 (Selective-Layer LoRA)
+
+### 日期
+2026-03-04
+
+### 實驗背景與動機
+
+exp_0304 對 14 個音檔（4 說話人 × clean/noisy × 多個 utterance）
+進行了完整的 WavTokenizer 18 層 feature map 分析，量化了每層的：
+- `noise_sensitivity` = 1 − cos_sim(clean, noisy) — 受噪音干擾的程度
+- `content_shared`    = cross-speaker cos_sim       — 語音內容穩定度
+- `temporal_detail`   = normalized temporal std     — 高頻時間細節保留量
+
+過去 exp_0224a (all-18 LoRA rank=64) 在 epoch 300 達到 val_wav_mse=0.0233，
+但同時消耗 ~740K 訓練參數，其中大量集中在「對去噪幾乎無貢獻」的深層。
+
+**核心問題：** 只集中訓練「確實有噪音或高頻損失」的層，能否以更少參數達到相當或更好的結果？
+
+### exp_0224a Baseline 現況分析
+
+| 指標 | 數值 |
+|------|------|
+| 架構 | Encoder LoRA (all-18, rank=64) + No-VQ + Decoder frozen |
+| 損失 | λ_wav=1.0 × MSE + λ_stft=1.0 × MR-STFT + λ_mel=45.0 × Mel |
+| **中間層監督** | **❌ 無** |
+| 與官方 WavTokenizer 的差異 | 跳過 RVQ 量化，encoder 輸出直接送 frozen decoder |
+| best val_wav_mse | **0.0233** (epoch ~100+) |
+| last val_wav_mse | 0.0300 (epoch 300, lr→0 後輕微退化) |
+| val_noisy_mse baseline | **0.0415** (無去噪的 MSE 下限) |
+| val_stft_sc best | 0.6468 |
+| val_mel best | 0.7442 |
+| 可訓練參數 | ~926K |
+| LR 最終 | **0.0** (已完全收斂/lr decayed) |
+
+---
+
+### LoRA 層選擇依據（exp_0304 量化證據）
+
+決策準則（基於 conv18_14wav_role_metrics.csv）：
+
+```
+LoRA   ← noise_sensitivity > 0.10  OR  temporal_detail > 0.15
+Freeze ← content_shared > 0.93     AND noise_sensitivity < 0.10
+```
+
+| L# | 模組                | noise  | content | temporal | 決策 | 原因 |
+|----|-------------------|--------|---------|----------|------|------|
+| L0  | model[0] stem     | 0.745  | 0.510   | 0.003    | ■ LoRA | 噪音最多進入點 |
+| L2  | RB1-Conv2         | 0.245  | 0.862   | 0.024    | ■ LoRA | 噪音>0.10 |
+| L3  | RB1-Shortcut      | 0.404  | 0.784   | 0.016    | ■ LoRA | Shortcut 直接繞入噪音 |
+| L4  | Down1             | 0.106  | **0.949** | 0.095  | □ Freeze | content 高 |
+| L5  | RB2-Conv1         | 0.063  | **0.974** | 0.255  | □ Freeze | noise 極低，讓 L6 LoRA 補高頻 |
+| L6  | RB2-Conv2         | 0.156  | 0.920   | **0.330** | ■ LoRA | temporal 高 |
+| L7  | RB2-Shortcut      | 0.086  | 0.961   | 0.072    | □ Freeze | content 高 |
+| L8  | Down2             | 0.197  | 0.906   | **0.524** | ■ LoRA | temporal 峰值區 |
+| L9  | RB3-Conv1         | 0.139  | 0.929   | **0.687** | ■ LoRA | ★全網 temporal 最高，高頻恢復核心 |
+| L10 | RB3-Conv2         | 0.028  | **0.988** | 0.292  | □ Freeze | 幾乎無噪音 |
+| L11 | RB3-Shortcut      | 0.326  | 0.838   | 0.174    | ■ LoRA | 深層 Shortcut 再次繞入噪音 |
+| L12 | Down3             | 0.164  | 0.919   | 0.185    | ■ LoRA（plan_b 新增） | 橋接層 |
+| L15 | RB4-Shortcut      | 0.008  | **0.996** | 0.042  | □ Freeze | ★最純淨層，絕對凍結 |
+| L17 | output conv       | 0.147  | 0.815   | 0.001    | □ Freeze | 保留解碼器接口特徵 |
+
+**高頻恢復路徑**：噪音抑制 L6 → L8（Down2，temporal x2 跳升）→ L9（temporal=0.687 ★★）
+
+---
+
+### exp_0305 三種 Plan 設計
+
+| Plan | LoRA 層 | rank | 估算參數 | 說明 |
+|------|---------|------|---------|------|
+| plan_a | 6 層 (L0,L2,L3,L8,L9,L11) | 32 | ~245K | exp_0304 adapt_top6 直接推薦 |
+| **plan_b** | **8 層 (+L6, L12)** | **32** | **~307K** | **推薦首選（加橋接層）** |
+| plan_c | 18 層 (全部) | 10 | ~288K | 等參數預算均勻分配的對照 |
+
+### 預期結果
+
+- plan_b ≤ exp_0224a val_mse（相當或更好，且參數降低 67%）
+- plan_c > plan_b（均勻分配的 low-rank 無法捕捉高噪音層的複雜去噪）
+- plan_b 的 STFT SC 和 Mel loss 改善幅度 > plan_c（高頻恢復更好）
+
+### 如何重現
+
+```bash
+cd /home/sbplab/ruizi/WavTokenize-feature-analysis
+
+# 產生決策視覺化圖表（僅需 numpy + matplotlib）
+python3 exp_0305/visualize_layer_decision.py
+
+# Smoke test
+python3 exp_0305/train_selective_lora.py --plan plan_b --mode smoke
+
+# 正式訓練 plan_b（推薦先跑）
+python3 exp_0305/train_selective_lora.py --plan plan_b --epochs 300 --device cuda:0
+
+# 等參數對照
+python3 exp_0305/train_selective_lora.py --plan plan_c --epochs 300 --device cuda:0
+
+# adapt_top6 最精簡版
+python3 exp_0305/train_selective_lora.py --plan plan_a --epochs 300 --device cuda:0
+```
+
+### 視覺化證據
+
+產生於 `exp_0305/decision_evidence/`：
+1. `plot_layer_decision_matrix.png` — 18 層 noise/content/temporal 三列長條圖 + 決策標色
+2. `plot_noise_vs_temporal.png` — Noise vs Temporal 散點決策圖（含決策邊界）
+3. `plot_decision_heatmap.png` — plan_a/b/c 覆蓋範圍對照熱力圖
+4. `plot_param_budget.png` — 各方案訓練參數預算比較
+
