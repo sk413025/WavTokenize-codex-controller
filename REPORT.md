@@ -514,3 +514,94 @@ cat exp_0223/ARCHITECTURE.md
 
 ### 日期
 2026-02-23
+
+---
+
+## 實驗 2026-03-04: exp_0304 — 材質泛化 (Material Generalization)
+
+### 實驗編號
+`EXP-20260304-exp0304-material-generalization`
+
+### 背景與動機
+先前實驗（exp_0224a/0227/0229c）的 Encoder LoRA 僅在 box/papercup/plastic 三種材質訓練，模型學到的是「LDV 頻譜分佈 → 語音頻譜分佈」的映射，而非通用降噪。分析顯示：
+
+- LDV 頻譜特徵：低頻能量集中，高頻物理性不存在（H/L ratio 0.01~0.02）
+- AWGN 頻譜特徵：能量均勻分佈（H/L ratio ≈ 0.49）
+- 未知材質 mac 可用（因為共享 LDV 頻譜 signature），但恢復品質有限
+- clean+AWGN 完全失敗（MSE 反而惡化 1.48x）
+
+核心問題：如何讓模型泛化到未見過的 LDV 材質？
+
+### 方法設計
+
+#### 方法 1+2（主方案）：隨機頻率響應增強 + 頻譜正規化
+
+在 exp_0216 的 4 種增強（SNR Remix, Random Gain, Random Crop, Time Stretch）基礎上新增：
+
+| 增強策略 | 機率 | 說明 |
+|---------|------|------|
+| Random Frequency Response | 0.5 | 隨機 parametric EQ (2~5 bands, ±10dB)，模擬不同材質 h(f) |
+| Spectral Envelope Normalization | 0.3 | 將頻譜包絡映射到 canonical LDV 分佈（指數衰減+抖動） |
+| Random Low-pass | 0.3 | 隨機截止頻率 (2~6kHz)，模擬不同材質高頻衰減 |
+| Resonance Injection | 0.3 | 隨機共振峰 (1~3 peaks, Q=5~30)，模擬材質機械共振 |
+
+架構同 exp_0226a：TeacherStudentNoVQ + Feature Alignment Loss
+- 初始化自 exp_0227 best_model_val_total.pt (PESQ=1.5711, ep161)
+- Loss: λ_wav×MSE + λ_stft×MR-STFT + λ_mel×Mel + λ_feat×FeatAlign
+
+#### 方法 3（備用方案）：Domain Adversarial Training
+
+在方法 1+2 基礎上額外加入：
+- MaterialClassifier：Global Average Pooling + 3 層 MLP → 分類 box/papercup/plastic
+- GradientReversalLayer：backward 時反轉梯度 (λ_grl 隨訓練漸進增加，DANN schedule)
+- Loss += λ_adv × CrossEntropy(material_pred, material_label)
+- 目標：material accuracy 降至 chance level (33%)，表示 features 已材質不變
+
+### 實作檔案
+
+| 檔案 | 說明 |
+|------|------|
+| `exp_0304/data_material_aug.py` | MaterialAugDataset: 8 種增強的資料集 |
+| `exp_0304/train_material_gen.py` | 方法 1+2 主訓練腳本 |
+| `exp_0304/train_material_adv.py` | 方法 3 備用對抗訓練腳本 |
+
+### Smoke Test 結果
+
+| 腳本 | 狀態 | 備註 |
+|------|------|------|
+| train_material_gen.py | ✅ PASS | 3 epoch smoke, train_total 從 64.3→44.6→53.1 |
+| train_material_adv.py | ✅ PASS | 3 epoch smoke, adv_loss=0 (因 val 無材質標籤，正常) |
+
+### 預期結果
+
+1. 方法 1+2 應讓模型在已知材質上維持同等或略好的 PESQ/STOI
+2. 在未知材質（如 mac）上，應有明顯改善（目前 PESQ baseline ≈ 1.3~1.5）
+3. 若方法 1+2 不足，方法 3 可進一步強制 feature 空間材質不變
+
+### 如何重現
+
+```bash
+conda activate test
+cd /home/sbplab/ruizi/WavTokenize-feature-analysis
+
+# 方法 1+2（主方案）Smoke test
+PYTHONPATH=/home/sbplab/ruizi/WavTokenize-self-supervised:$PYTHONPATH \
+/home/sbplab/miniconda3/envs/test/bin/python exp_0304/train_material_gen.py --mode smoke
+
+# 方法 1+2 正式訓練
+PYTHONPATH=/home/sbplab/ruizi/WavTokenize-self-supervised:$PYTHONPATH \
+/home/sbplab/miniconda3/envs/test/bin/python exp_0304/train_material_gen.py \
+    --mode epoch --epochs 300 --device cuda:0
+
+# 方法 3（備用）Smoke test
+PYTHONPATH=/home/sbplab/ruizi/WavTokenize-self-supervised:$PYTHONPATH \
+/home/sbplab/miniconda3/envs/test/bin/python exp_0304/train_material_adv.py --mode smoke
+
+# 方法 3 正式訓練
+PYTHONPATH=/home/sbplab/ruizi/WavTokenize-self-supervised:$PYTHONPATH \
+/home/sbplab/miniconda3/envs/test/bin/python exp_0304/train_material_adv.py \
+    --mode epoch --epochs 300 --device cuda:0 --lambda_adv 0.1
+```
+
+### 日期
+2026-03-04
