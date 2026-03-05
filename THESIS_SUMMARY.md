@@ -1,7 +1,9 @@
 # 論文統整：基於 WavTokenizer 的 LDV 語音增強系統
 
-> 整理日期：2026-02-24
-> 適用架構：exp_0224（兩階段：0224a Encoder LoRA + 0224b Decoder LoRA）
+> 初版日期：2026-02-24 ｜ 更新日期：2026-03-02
+> 主推架構：**Encoder-only LoRA + Frozen Decoder**（無機械音、保留 token 相容性）
+> 消融對照：Decoder LoRA（exp_0224b）/ E2E LoRA（exp_0226）作為 ablation study
+> ⚠️ **損失函數仍在迭代中**（exp_0225~0229 系列），架構已確定但最佳 loss 配置待定
 
 ---
 
@@ -71,7 +73,7 @@ WavTokenizer 的架構天然支援**兩種推論模式**，訓練時使用連續
 
 ```
 模式 A：連續特徵路徑（訓練時使用，品質最佳）
-  Noisy → Student Encoder → 連續特徵 [B,512,T/320] → Decoder LoRA → Clean Audio
+  Noisy → Student Encoder → 連續特徵 [B,512,T/320] → Frozen Decoder → Clean Audio
                               ↑
                         跳過 VQ，無量化損失
 
@@ -199,9 +201,9 @@ class ConvNeXtBlock(nn.Module):
 
 相位感知設計使 WavTokenizer decoder 在低碼率下仍能重建高品質語音（vs 純幅度頻譜 vocoder）。
 
-### 2.3 官方訓練方式：本質上是 VQ + HiFi-GAN
+### 2.3 官方訓練方式：GAN 對抗訓練（判別器非 HiFi-GAN）
 
-WavTokenizer 的訓練方式跟 HiFi-GAN 幾乎相同——都是 **Generator-Discriminator 的 GAN 對抗訓練**，WavTokenizer 只是在 Generator 前面多了 Encoder + VQ：
+WavTokenizer 的訓練**範式**與 HiFi-GAN 相似——都是 **Generator-Discriminator 的 GAN 對抗訓練**——但**判別器組合不同**：HiFi-GAN 使用 MPD + MSD（Multi-Scale Discriminator），WavTokenizer 則使用 MPD + MRD（Multi-Resolution Discriminator，源自 UnivNet）+ DAC Discriminator，**整個系統不含任何 MSD**。WavTokenizer 在 Generator 前面多了 Encoder + VQ：
 
 ```
 WavTokenizer 官方訓練架構
@@ -226,25 +228,34 @@ WavTokenizer 官方訓練架構
 
 **這就是 WavTokenizer 音質好的核心原因——不是 Encoder/Decoder 本身特別厲害，而是 GAN 對抗訓練讓 Decoder 學會了生成聽感自然的波形（包括正確的 phase）。**
 
+> **⚠️ 對本研究的關鍵啟示：Decoder 的自然波形生成能力是 GAN 對抗訓練的產物。**
+> GAN 的梯度方向是「讓 Discriminator 無法區分 real/fake」→ 引導 Decoder 學習正確的 phase pattern。
+> 若使用 MSE/Mel loss（而非 GAN）去微調 Decoder，梯度方向從「自然度」轉為「逐點精度」→
+> Decoder 原本由 GAN 建立的精細 phase generation 能力被破壞 → 產生機械音。
+> **這是本研究選擇凍結 Decoder、僅微調 Encoder 的根本理論依據（見 6.3 節消融分析）。**
+
 ### 2.4 三個 Discriminator 的互補角色
 
 | Discriminator | 分析域 | 原理 | 捕捉的特徵 | 參數量 |
 |---------------|--------|------|-----------|-------|
 | **MPD** (Multi-Period) | 時域 | 把 waveform 以不同週期 p=[2,3,5,7,11] reshape 成 2D → Conv2d 判別 | 基頻 (F0)、週期性結構、語音的振動模式 | ~15M |
 | **MRD** (Multi-Resolution) | 頻域 | 在 3 個 STFT 解析度 [(1024,256,1024), (2048,512,2048), (512,128,512)] 上取 magnitude spectrogram → Conv2d 判別 | 諧波結構、共振峰、頻譜包絡、高頻細節 | ~26M |
-| **DAC** (DAC Discriminator) | 混合 | 來自 Descript Audio Codec，含自己的 MPD + MSD + MRD 變體 | 上述兩者的互補覆蓋，增加判別多樣性 | ~42M |
+| **DAC** (DAC Discriminator) | 混合 | 來自 Descript Audio Codec，含自己的 MPD + MRD 變體（`rates=[]`，**無 MSD**） | 上述兩者的互補覆蓋，增加判別多樣性 | ~42M |
 
 > **三者合計約 84M 參數**，佔官方 checkpoint 1091 個 state_dict key 中的 800 個（73%）。
+>
+> ⚠️ **DAC Discriminator 的 `rates=[]`**：儘管 DAC 原始設計（Descript Audio Codec）含 MPD + MSD + MRD，WavTokenizer 設定 `rates=[]` 使 MSD 不被啟用，實際只使用 DAC 內部的 MPD（periods=[2,3,5,7,11]）+ MRD（fft_sizes=[2048,1024,512]）。加上主判別器的 MPD + MRD，**整個系統不含任何 MSD（Multi-Scale Discriminator）**。
 
 **Generator Loss 組成（官方 `experiment.py`）：**
 
-$$L_{gen} = \underbrace{L_{adv}^{MPD} + \lambda_{mrd} \cdot L_{adv}^{MRD}}_{\text{GAN 對抗 loss}} + \underbrace{L_{FM}^{MPD} + \lambda_{mrd} \cdot L_{FM}^{MRD}}_{\text{Feature Matching loss}} + \underbrace{45 \cdot L_{mel}}_{\text{Mel 重建}} + 1000 \cdot L_{commit} + L_{DAC}$$
+$$L_{gen} = \underbrace{L_{adv}^{MPD} + \lambda_{mrd} \cdot L_{adv}^{MRD}}_{\text{GAN 對抗 loss}} + \underbrace{L_{FM}^{MPD} + \lambda_{mrd} \cdot L_{FM}^{MRD}}_{\text{Feature Matching loss}} + \underbrace{45 \cdot L_{mel}}_{\text{Mel 重建}} + 1000 \cdot L_{commit} + \underbrace{L_{adv}^{DAC} + L_{FM}^{DAC}}_{\text{DAC 對抗 + FM}}$$
 
 其中：
 - **GAN adversarial loss**：逼迫 Generator 輸出能騙過 Discriminator 的波形
 - **Feature Matching loss**：L1(Disc 中間層 feature map of recon, Disc 中間層 feature map of real)，穩定 GAN 訓練
 - **Mel loss (λ=45)**：保證頻譜整體結構正確
 - **Commit loss (×1000)**：VQ codebook 對齊
+- **DAC loss**：分為 `loss_dac_1`（DAC adversarial）+ `loss_dac_2`（DAC feature matching），由 `DACGANLoss.generator_loss()` 分別回傳
 
 > **Feature Matching（FM）在官方訓練中已經存在**——它是 GAN 訓練的穩定劑。本研究 exp_0225d / exp_0227 的做法是：在不能做 GAN 對抗訓練的情況下，**單獨提取 FM loss 作為感知回饋**。
 
@@ -272,7 +283,11 @@ $$L_{gen} = \underbrace{L_{adv}^{MPD} + \lambda_{mrd} \cdot L_{adv}^{MRD}}_{\tex
 | 目的 | 訓練 clean speech codec | 微調使其適應 LDV noisy input |
 
 > 本研究的 λ=45 直接沿用 WavTokenizer 官方設定，確保 Mel 損失主導感知品質優化。
-> **本研究缺少 GAN 對抗訓練是音質不如官方 codec 重建的主要原因之一**，也是 Decoder LoRA 產生機械音的背景。
+>
+> **GAN 在本研究中的角色：不是使用的技術，而是「不動 Decoder」的理論依據。**
+> 本研究不使用 GAN 對抗訓練（資源與能力不對等，見 2.5 節），但理解 GAN 如何塑造 Decoder 能力至關重要——
+> 它解釋了為什麼用 MSE/Mel loss 微調 Decoder 會產生機械音（梯度方向不同，破壞 phase generation），
+> 從而論證凍結 Decoder 的必要性。
 
 ### 2.7 BibTeX 引用
 
@@ -290,30 +305,31 @@ $$L_{gen} = \underbrace{L_{adv}^{MPD} + \lambda_{mrd} \cdot L_{adv}^{MRD}}_{\tex
 
 ---
 
-## 三、研究問題澄清
+## 三、研究問題與核心貢獻
 
-### 3.1 你的理解是否有誤？
+### 3.1 問題澄清
 
-**基本正確，補充以下細節：**
+**基本定位**：
 
 > ✅ WavTokenizer 已有成熟的 encoder-decoder：能重建輸入語者的聲音特徵
 > ✅ VQ 離散化可對接下游語音模型
-> ⚠️ **補充**：原始 WavTokenizer 的 encoder 訓練在 clean speech 上，直接輸入 LDV noisy 會造成 distribution shift，導致重建品質下降
-> ⚠️ **補充**：LDV 噪聲不是加性白噪，而是材質共振造成的乘性/卷積型噪聲，與一般降噪任務不同
+> ⚠️ **關鍵問題**：原始 WavTokenizer 的 encoder 在 clean speech 上訓練，直接輸入 LDV noisy 會造成 distribution shift → 重建品質下降
+> ⚠️ **噪聲特殊性**：LDV 噪聲不是加性白噪，而是材質共振造成的乘性/卷積型噪聲，需特殊處理
 
-### 3.2 你的工作的核心貢獻
+### 3.2 核心貢獻
 
 ```
 原始 WavTokenizer（輸入限制 clean speech）
-          ↓ 你的貢獻
+          ↓ 本研究貢獻
 改良版系統（可接受 LDV noisy speech，輸出 clean speech 重建）
 ```
 
 具體技術貢獻：
-1. **Student Encoder LoRA**：讓 encoder 學習從 LDV noisy 提取與 clean 等價的特徵
-2. **VQ 瓶頸分析**：量化 VQ 對語音增強的影響（+0.031 PESQ，相對有限）
-3. **Decoder LoRA**：讓 decoder 學習從 student encoder 的連續特徵重建 clean speech
-4. **消融實驗設計**：2×2 矩陣（有/無 VQ × Encoder/Decoder LoRA）系統量化各組件貢獻
+1. **Student Encoder LoRA**：僅微調 encoder，讓其從 LDV noisy 提取與 clean 等價的特徵，同時保留 decoder 完整性
+2. **VQ 瓶頸量化分析**：量化 VQ 對語音增強的影響，建立跳過 VQ 的訓練策略
+3. **Encoder-only vs Decoder LoRA vs E2E 消融分析**：系統性比較三種微調策略的 PESQ/STOI/聽感差異，論證 encoder-only 為最佳實用方案
+4. **PESQ/STOI 悖論分析**：解釋 encoder-only PESQ 微降但 STOI 顯著上升的 distribution mismatch 機制
+5. **保留 Tokenization 能力**：不動 decoder → 推論時可重新啟用 VQ → 離散 token 可對接下游 LLM/ASR
 
 ### 3.3 Teacher-Student 架構設計
 
@@ -346,10 +362,12 @@ Teacher-Student 架構概覽
   │                       │                             │
   │                 [跳過 VQ / 經過 VQ]                   │
   │                       │                             │
-  │                 [Decoder + LoRA] ──► Student Output  │
+  │                 [Frozen Decoder / Decoder+LoRA*] ──► Student Output  │
   └─────────────────────────────────────────────────────┘
 ══════════════════════════════════════════════════════════════════
 ```
+
+> \* Decoder LoRA 僅用於消融實驗（exp_0224b / 0225b-d），**主推方案為 Frozen Decoder**。
 
 **核心思想**：
 
@@ -358,13 +376,13 @@ Teacher-Student 架構概覽
 | **Teacher** | 原始 WavTokenizer（完全凍結），輸入 clean speech，代表「理想行為」 |
 | **Student** | LoRA 微調後的 WavTokenizer，輸入 LDV noisy speech，學習產生與 Teacher 等價的輸出 |
 | **知識蒸餾目標** | Student(noisy) 的輸出 ≈ Teacher(clean) 的輸出，或直接 ≈ clean audio |
-| **漸進式訓練** | 先訓練 Student Encoder（Phase 1-2），再訓練 Decoder（Phase 3），避免同時優化太多參數 |
+| **訓練策略** | 僅訓練 Student Encoder LoRA，Decoder 完全凍結（主推方案）|
 
 **各階段的 Teacher-Student 關係**：
 
 | 階段 | Teacher 提供 | Student 學習 | Loss 目標 |
 |------|-------------|-------------|----------|
-| Phase 1（exp_0217）| Teacher VQ tokens（clean） | Student Encoder LoRA | Feature MSE：student tokens ≈ teacher tokens |
+| Phase 1（exp_0217）| Teacher encoder output（clean, pre-VQ 連續特徵） | Student Encoder LoRA + VQ | Masked MSE(student quantized vs teacher encoder out) + IntermediateSupervision(L3,L4,L6) + VQ commit |
 | Phase 2（exp_0224a）| Clean audio waveform | Student Encoder LoRA | MSE + MR-STFT + Mel：recon ≈ clean wav |
 | Phase 3（exp_0224b）| Clean audio waveform | Decoder LoRA | MSE + MR-STFT + Mel：recon ≈ clean wav |
 
@@ -372,13 +390,18 @@ Teacher-Student 架構概覽
 
 ---
 
-## 三、系統架構（exp_0224b，最終採用）
+## 四、系統架構
 
-### 3.1 整體架構圖
+> ⚠️ 以下描述基礎架構。最終採用 **Encoder-only LoRA + Frozen Decoder**（見第六章分析）。
+> Decoder LoRA 版本（exp_0224b）及 E2E 版本（exp_0226）僅作為消融對照。
+
+### 4.1 整體架構圖
+
+**A. Encoder-only 版本（主推方案，exp_0224a / 0225a / 0226a / 0227）**
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                     exp_0224b 系統架構                            │
+│              Encoder-only LoRA 系統架構（主推）                    │
 │                                                                  │
 │  LDV Noisy Audio                Clean Audio (GT)                 │
 │  [B, 1, T]                      [B, 1, T]                       │
@@ -386,8 +409,7 @@ Teacher-Student 架構概覽
 │       ▼                              │  (僅用於計算 Loss)         │
 │  ┌──────────────────┐               │                           │
 │  │  Student Encoder │               │                           │
-│  │  + LoRA (r=64)   │ ← FROZEN      │                           │
-│  │ (from exp_0224a) │               │                           │
+│  │  + LoRA (r=64)   │ ← ✅ 可訓練    │                           │
 │  └────────┬─────────┘               │                           │
 │           │                         │                           │
 │           ▼                         │                           │
@@ -396,13 +418,12 @@ Teacher-Student 架構概覽
 │  (連續特徵，跳過 VQ)                 │                           │
 │           │                         │                           │
 │           ▼                         ▼                           │
-│  ┌──────────────────────┐   ┌───────────────┐                   │
-│  │  WavTokenizer        │   │  Loss 計算     │                   │
-│  │  Decoder Backbone    │   │               │                   │
-│  │  (ConvNeXt × 12)     │   │  L_MSE        │                   │
-│  │  pwconv1: LoRA r=32  │◄──│  L_MR-STFT    │                   │
-│  │  pwconv2: LoRA r=32  │   │  L_Mel × 45   │                   │
-│  │  + FourierHead       │   └───────────────┘                   │
+│  ┌──────────────────────┐   ┌────────────────────┐              │
+│  │  WavTokenizer        │   │  Loss 計算          │              │
+│  │  Decoder Backbone    │   │  (各實驗不同，      │              │
+│  │  (ConvNeXt × 12)     │   │   見第五章)         │              │
+│  │  ❄️ 完全凍結          │◄──│                    │              │
+│  │  + FourierHead ❄️    │   └────────────────────┘              │
 │  └────────┬─────────────┘                                       │
 │           │                                                      │
 │           ▼                                                      │
@@ -411,14 +432,32 @@ Teacher-Student 架構概覽
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.2 訓練流程（三階段）
+**B. Decoder LoRA 版本（消融對照，exp_0224b / 0225b~d）**
 
 ```
-Phase 1（exp_0217）：Encoder LoRA 預訓練
-  初始：WavTokenizer 預訓練 Encoder + LoRA (r=64)
-  Noisy → [Student Encoder LoRA] → VQ → tokens
-  Loss: Feature MSE（student VQ tokens vs teacher VQ tokens）
-  目標：學習從 LDV noisy 提取與 clean 等價的 VQ tokens
+┌──────────────────────────────────────────────────────────────────┐
+│              Decoder LoRA 系統架構（消融對照）                     │
+│                                                                  │
+│  LDV Noisy Audio → [Student Encoder + LoRA ❄️ 凍結]              │
+│                     → [跳過 VQ]                                   │
+│                     → [Decoder + LoRA r=32 ✅ 可訓練]             │
+│                     → recon_wav                                  │
+│                                                                  │
+│  ⚠️ PESQ 較高但產生機械音（phase artifact），見第六章分析           │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 4.2 訓練流程（漸進式）
+
+```
+Phase 1（exp_0217）：Encoder LoRA + VQ 預訓練
+  初始：WavTokenizer 預訓練 Encoder + LoRA (r=64) + VQ (EMA)
+  Noisy → [Student Encoder LoRA] → VQ → quantized
+  Loss: λ_quant × Masked MSE（student quantized vs teacher encoder output）
+        + 0.03 × IntermediateSupervision（L3, L4, L6 中間層對齊）
+        + β_commit × VQ commit loss
+  ⚠️ Teacher 提供的是 pre-VQ 連續特徵（teacher_encoder_out），非 VQ tokens
+  目標：學習從 LDV noisy 提取 encoder 特徵，經 VQ 後對齊 teacher encoder 連續輸出
   結果：PESQ=1.203（有 VQ bottleneck）
 
 Phase 2（exp_0224a）：Encoder LoRA 繼續訓練，跳過 VQ
@@ -436,7 +475,21 @@ Phase 3（exp_0224b）：Decoder LoRA 訓練
   結果：PESQ=1.866（ep50/300，訓練中）
 ```
 
-### 3.3 各階段訓練設定對比
+> **⚠️ 兩條獨立的訓練線（Training Lineage）**
+>
+> 上述 Phase 1→2→3 僅描述 **Lineage A（exp_0217 → 0224a → 0224b）**。
+> 後續實驗發現從頭訓練 Encoder LoRA 也可行，形成第二條線：
+>
+> | Lineage | 路徑 | 說明 |
+> |---------|------|------|
+> | **A** | exp_0217 → 0224a → 0224b | Phase 1 VQ 預訓練 → Phase 2 跳過 VQ → Phase 3 Decoder LoRA |
+> | **B** | exp_0225a → 0225b-d / 0226 / 0226a / 0226b | 直接跳過 VQ 從頭訓練 Encoder LoRA，不經 Phase 1 |
+>
+> Lineage B 的 exp_0225a 直接從 WavTokenizer pretrained 起始（不繼承 exp_0217），
+> 後續 exp_0226a（EncOnly + FeatAlign）和 exp_0226（E2E）均初始化自 exp_0225a。
+> **第六章的消融分析涵蓋兩條線的實驗結果。**
+
+### 4.3 各階段訓練設定對比
 
 | 項目 | exp_0217 | exp_0224a | exp_0224b |
 |------|----------|-----------|-----------|
@@ -444,10 +497,10 @@ Phase 3（exp_0224b）：Decoder LoRA 訓練
 | Encoder LoRA | ✅ 可訓練 | ✅ 可訓練（繼承0217）| ❄️ 凍結（繼承0224a ep190）|
 | VQ | ✅ 使用 | ❌ 跳過 | ❌ 跳過 |
 | Decoder | ❄️ 凍結 | ❄️ 凍結 | ✅ LoRA 可訓練 |
-| Loss 目標 | Feature MSE（VQ tokens）| MSE+STFT+Mel（wav）| MSE+STFT+Mel（wav）|
+| Loss 目標 | Masked MSE + IntermediateSupervision + VQ commit | MSE+STFT+Mel（wav）| MSE+STFT+Mel（wav）|
 | 最佳 PESQ | 1.203 | 1.586（ep190）| 1.866（ep50/300）|
 
-### 3.4 可訓練參數統計
+### 4.4 可訓練參數統計
 
 | 模組 | 參數量 | 狀態（exp_0224b） |
 |------|--------|-----------------|
@@ -458,9 +511,9 @@ Phase 3（exp_0224b）：Decoder LoRA 訓練
 | Decoder LoRA pwconv1+2 (r=32) | **~2.36M** | ✅ **可訓練** |
 | FourierHead | ~39.4M | ❄️ Frozen |
 | **可訓練比例** | | **1.42%** |
-### 3.5 LoRA 微調策略
+### 4.5 LoRA 微調策略
 
-#### 3.5.1 為什麼選擇 LoRA？
+#### 4.5.1 為什麼選擇 LoRA？
 
 **LoRA（Low-Rank Adaptation）** 是一種參數高效微調方法，核心概念：**不動原始權重，在旁邊加一條「小路」來微調行為**。
 
@@ -532,7 +585,7 @@ W_new = W₀  +  (B · A) × (α/r)
 | **可組合性** | LoRA 權重可獨立保存、載入，方便不同實驗間切換 |
 | **推論無額外開銷** | LoRA 可合併回原始權重（$W' = W_0 + BA$），推論速度不變 |
 
-#### 3.5.2 LoRA 注入位置與超參數
+#### 4.5.2 LoRA 注入位置與超參數
 
 本研究針對 WavTokenizer 的不同模組採用不同的 LoRA 配置：
 
@@ -578,7 +631,7 @@ ConvNeXtBlock 中 LoRA 注入位置
  × 12 blocks = 24 個 LoRA adapters
 ```
 
-#### 3.5.3 Encoder vs Decoder LoRA rank 的設計考量
+#### 4.5.3 Encoder vs Decoder LoRA rank 的設計考量
 
 | 考量 | Encoder LoRA (r=64) | Decoder LoRA (r=32) |
 |------|-------------------|-------------------|
@@ -589,9 +642,12 @@ ConvNeXtBlock 中 LoRA 注入位置
 | 設計哲學 | 「大」LoRA 用於困難的跨域映射 | 「小」LoRA 用於精細的增量適應 |
 ---
 
-## 四、損失函數
+## 五、損失函數
 
-### 4.1 設計哲學：三個尺度監督
+> ⚠️ 本章描述基礎損失函數（MSE + MR-STFT + Mel），適用於 exp_0224a/b。
+> exp_0225～0229 系列在此基礎上新增/調整 loss 組合，見第六章損失函數迭代歷程。
+
+### 5.1 設計哲學：三個尺度監督
 
 模型輸出的重建波形需從**三個互補角度**與原始 clean 語音比較，避免任何單一 loss 的盲點：
 
@@ -612,7 +668,7 @@ ConvNeXtBlock 中 LoRA 注入位置
 ═══════════════════════════════════════════════════════════════════
 ```
 
-### 4.2 總損失
+### 5.2 總損失
 
 ```
 L_total = L_MSE  +  L_MR-STFT  +  45 × L_Mel
@@ -622,7 +678,7 @@ L_total = L_MSE  +  L_MR-STFT  +  45 × L_Mel
 
 > λ=45 直接沿用 WavTokenizer 官方設定。45×L_Mel 約佔 total loss 的 ~85%，確保模型優先優化「聽起來對不對」。
 
-### 4.3 各項說明
+### 5.3 各項說明
 
 **① MSE Loss（波形域 — 「波形長得像不像？」）**
 
@@ -692,7 +748,7 @@ L_total = L_MSE  +  L_MR-STFT  +  45 × L_Mel
 
 - **為什麼 λ=45？** 使 Mel loss 約佔 total loss 的 ~85%——因為 Mel 頻譜最接近人耳感知，優先保障「聽起來好不好」而非「波形點對點對齊」
 
-### 4.4 三種 Loss 的互補關係
+### 5.4 三種 Loss 的互補關係
 
 | Loss | 監督域 | 解決什麼問題 | 單獨使用的缺陷 |
 |------|--------|------------|---------------|
@@ -703,112 +759,270 @@ L_total = L_MSE  +  L_MR-STFT  +  45 × L_Mel
 
 ---
 
-## 五、實驗結果
+## 六、實驗結果與分析
 
-### 5.1 消融實驗比較矩陣
-
-| 架構 | Encoder | VQ | Decoder | PESQ | STOI | 說明 |
-|------|---------|-----|---------|------|------|------|
-| exp_0217 | LoRA 訓練 | ✓ 有 | Frozen | 1.203 | 0.462 | 基線（有VQ瓶頸）|
-| exp_0223 v2 | Frozen | ✓ 有 | LoRA 訓練 | 1.205 | 0.522 | Decoder LoRA（有VQ）|
-| exp_0224a (ep190) | LoRA 訓練 | ✗ 跳過 | Frozen | 1.586 | 0.628 | 跳過VQ，Encoder 對齊 |
-| **exp_0224b (ep50)** | **Frozen** | **✗ 跳過** | **LoRA 訓練** | **1.866** | **0.660** | **目前最佳（訓練中）**|
-
-### 5.2 系統上下限分析
+### 6.1 系統上下限分析
 
 | 路徑 | PESQ | STOI | 意義 |
 |------|------|------|------|
-| clean → Teacher（無VQ） | 2.484 | 0.761 | 系統絕對上限 |
-| clean → Teacher（有VQ） | 2.352 | 0.750 | VQ 損失 −0.132 |
-| noisy → Teacher（有VQ，公平基準） | 1.677 | 0.527 | 公平比較基準線 |
-| noisy → Teacher（無VQ） | 1.708 | 0.531 | 跳過VQ僅 +0.031 |
-| **exp_0224b ep50（中期）** | **1.866** | **0.660** | **目前最佳，50/300 epochs** |
+| clean → Teacher（無VQ） | 2.484 | 0.761 | 系統絕對上限（理想 codec 重建） |
+| clean → Teacher（有VQ） | 2.352 | 0.750 | 有 VQ 的上限 |
+| **noisy → Teacher（有VQ）** | **1.677** | **0.527** | **公平比較基準線**（noisy_through_teacher） |
+| noisy → Teacher（無VQ） | 1.708 | 0.531 | 去除 VQ → 僅 +0.031 PESQ |
 
-### 5.3 關鍵發現
+### 6.2 VQ 量化瓶頸分析
 
-1. **VQ 瓶頸有限**：clean audio 跳過 VQ 僅提升 +0.132 PESQ；noisy 僅 +0.031 → VQ 量化本身不是主要瓶頸
+> 本節量化說明 VQ 量化誤差的影響，justify 訓練時跳過 VQ 的決定。
 
-2. **Distribution shift 是真正瓶頸**：exp_0224a（student encoder 輸出 → frozen decoder，ep190）PESQ=1.586，接近但仍低於 noisy no-vq baseline（1.708），說明即使 encoder 針對無VQ路徑訓練，student encoder 輸出與 teacher decoder 期望輸入仍存在 distribution mismatch
+| 比較 | PESQ 差異 | STOI 差異 | 說明 |
+|------|----------|----------|------|
+| clean: 有VQ vs 無VQ | 2.352 vs 2.484 (**−0.132**) | 0.750 vs 0.761 (−0.011) | VQ 量化誤差：clean 路徑損失 |
+| noisy: 有VQ vs 無VQ | 1.677 vs 1.708 (−0.031) | 0.527 vs 0.531 (−0.005) | VQ 量化誤差在 noisy 影響更小 |
+| exp_0217（有VQ） vs exp_0224a（無VQ） | 1.203 vs 1.586 (**+0.383**) | 0.462 vs 0.628 (**+0.166**) | 跳過 VQ 的巨大提升 |
 
-3. **Decoder LoRA 有效補償 distribution shift**：exp_0224b 在 decoder 學習適應後達到 PESQ=1.866，比 noisy no-vq baseline 高 +0.158
+**解讀**：
+- VQ 在 clean path 造成 −0.132 PESQ，在 noisy path 僅 −0.031：說明 noisy encoder 輸出本身已偏離 codebook 分佈，VQ 強制量化反而是二次傷害
+- exp_0217→0224a 的 +0.383 PESQ 提升中，VQ 去除只貢獻 ~0.031，其餘 ~0.352 來自 loss 從「Feature MSE（VQ空間）」改為「全路徑波形 loss」
+- **結論**：跳過 VQ 一方面消除量化瓶頸，更重要的是讓 loss 直接優化最終波形品質
 
-4. **訓練仍在進行**：目前 50/300 epochs，仍有大幅提升空間（距上限 2.484 差 0.618）
+### 6.3 Encoder-only vs Decoder LoRA vs E2E：為什麼選 Encoder-only
+
+> 本節是論文核心論述。
+
+**完整實驗比較表**（所有 Δ 相對 `noisy_through_teacher` 基準 PESQ=1.677, STOI=0.527）：
+
+| 實驗 | 微調位置 | Loss 配置 | PESQ | STOI | ΔPESQ | ΔSTOI | 備註 |
+|------|---------|----------|------|------|-------|-------|------|
+| noisy_through_teacher | — | — | 1.677 | 0.527 | 0 | 0 | 公平基準 |
+| exp_0224a | Enc LoRA | MSE+STFT+Mel | 1.586 | 0.628 | −0.091 | **+0.101** | Encoder-only 基礎版 |
+| exp_0225a | Enc LoRA (scratch) | MSE+STFT+Mel | 1.554 | 0.631 | −0.123 | **+0.104** | 從頭訓練（非繼承） |
+| exp_0226a | Enc LoRA+FeatAlign | MSE+STFT+Mel+FeatAlign | 1.535 | 0.627 | −0.141 | **+0.100** | +特徵對齊 loss |
+| exp_0226b | Enc LoRA+FeatAlign+HF-Mel | +HF-Mel(bin40+) | 1.535 | 0.610 | −0.141 | +0.084 | +高頻 mel 強調 |
+| exp_0227 | Enc LoRA+FeatAlign+MRD-FM | +FrozenMRD FM | 1.571 | 0.620 | −0.105 | **+0.094** | +MRD Feature Matching |
+| **exp_0224b** | **Dec LoRA** | MSE+STFT+Mel | **1.868** | **0.667** | **+0.192** | **+0.140** | PESQ 最高，但有機械音 ⚠️ |
+| exp_0225b | Dec LoRA (from 0225a) | MSE+STFT+Mel | 1.731 | 0.654 | +0.055 | +0.127 | |
+| exp_0225c | Dec LoRA+Phase | +Phase loss | 1.648 | 0.646 | −0.029 | +0.119 | Phase 修正效果有限 |
+| exp_0225d | Dec LoRA+FM | +FrozenMRD FM | 1.712 | 0.652 | +0.036 | +0.126 | |
+| **exp_0226** | **E2E LoRA** | MSE+STFT+Mel | **1.816** | **0.687** | **+0.140** | **+0.160** | 最高 STOI，但仍有機械音 ⚠️ |
+
+**三種策略對比分析**：
+
+| 面向 | Encoder-only | Decoder LoRA | E2E LoRA |
+|------|-------------|-------------|----------|
+| PESQ vs 基準 | −0.09~−0.14 ↘ | **+0.19** ↗ | +0.14 ↗ |
+| STOI vs 基準 | **+0.094~+0.101** ↗ | +0.140 ↗ | **+0.160** ↗ |
+| 機械音 | ❌ 無 | ⚠️ 有 | ⚠️ 有 |
+| Token 相容性 | ✅ 保留 | ❌ Decoder 被修改 | ❌ 兩端都被修改 |
+| 展示適用性 | ✅ 適合實體展示 | ❌ 不適合（聽感差） | ❌ 不適合（聽感差） |
+
+#### 6.3.1 為什麼 Decoder LoRA PESQ 上升但產生機械音？
+
+**PESQ 上升的原因**：Decoder LoRA 讓解碼器**學習適應** student encoder 的輸出分佈。原本 student encoder 輸出 ≈ 但 ≠ teacher encoder 輸出，凍結的 decoder 面對這個微小的分佈偏移會產生重建偏差。Decoder LoRA 補償了這個 **distribution mismatch** → 波形重建精度提高 → PESQ 上升。
+
+**但代價嚴重——Magnitude 與 Phase 的骨幹纏結**：
+
+WavTokenizer Decoder 的波形生成流程為：
+
+```
+ConvNeXt Backbone（共享參數 W）
+         │
+         ▼
+    shared features [B, 768, T/320]
+    ╱            ╲
+Magnitude branch    Phase branch
+  (sigmoid)         (sin/cos)
+    ╲            ╱
+      iSTFT(mag, phase) → waveform
+```
+
+Backbone 沒有「magnitude 專用神經元」和「phase 專用神經元」——它們**共享同一組參數 W**（12 層 ConvNeXtBlock）。任何對 W 的修改，**同時影響 magnitude 和 phase 的生成**。
+
+**MSE/Mel 梯度幾乎完全由 magnitude 主導**：
+
+$$\frac{\partial L_{total}}{\partial W} \approx \underbrace{\frac{\partial L}{\partial \text{mag}} \cdot \frac{\partial \text{mag}}{\partial W}}_{\text{大（magnitude 梯度主導）}} + \underbrace{\frac{\partial L}{\partial \text{phase}} \cdot \frac{\partial \text{phase}}{\partial W}}_{\text{小（MSE/Mel 對 phase 不直接敏感）}}$$
+
+- **MSE**：波形 = iSTFT(mag, phase)，magnitude 對波形振幅的貢獻遠大於相位
+- **Mel loss（佔 total 的 ~85%）**：比的是 log-magnitude spectrogram，**完全不含 phase 資訊**
+- **MR-STFT**：比的也是 magnitude spectrogram
+
+結果：backbone W 的更新方向 **幾乎完全由 magnitude 梯度決定** → phase 分支只是「被附帶修改」→ 原本 GAN 精心調好的 phase pattern 被覆蓋 → **機械音**。
+
+```
+GAN 訓練 Decoder 時（官方）：
+  Discriminator（84M）提供「自然度」梯度信號
+  → MPD 檢查週期結構 → 約束 phase 的諧波一致性
+  → MRD 檢查多解析度頻譜 → 約束 magnitude+phase 的整體自然度
+  → magnitude 和 phase 被**同時**、**平衡地**優化
+
+MSE/Mel 微調 Decoder 時（exp_0224b）：
+  無 Discriminator → 無 phase 自然度約束
+  → W 被 magnitude 梯度主導更新
+  → phase 生成能力被「附帶」破壞
+  → magnitude 改善（PESQ↑）但 phase 劣化 → 機械音
+```
+
+**Phase loss 能解決嗎？（exp_0225c 已驗證：不能）**
+
+exp_0225c 嘗試加入 phase loss，PESQ 反而從 1.731 降至 1.648，機械音仍在。原因：
+
+| Phase loss 的局限 | 說明 |
+|-------------------|------|
+| **Phase wrapping** | 相位值在 $[-\pi, \pi]$ 範圍存在不連續跳躍（$\pi$ 和 $-\pi$ 差 $2\pi$ 但實際接近），L1/L2 距離不可靠 |
+| **Point-wise ≠ Distribution-level** | Phase loss 是逐 time-frequency bin 的約束；GAN 提供的是**整體分佈級**約束（「整段波形聽起來自然嗎？」）|
+| **知識不對等** | GAN 的 phase 知識來自 84M Discriminator 在大規模資料上學到的「自然相位模式」；一個 phase angle L1 loss **無法編碼這種結構性知識** |
+| **骨幹仍共享** | 加了 phase loss 後，magnitude 梯度和 phase 梯度**在共享 backbone 上互相干擾**，反而造成兩者都退化 |
+
+**重新訓 GAN 能解決嗎？（不能）**
+
+GAN 對抗訓練需要 Generator 和 Discriminator 能力對等。本研究的 Decoder LoRA 僅 2.36M 參數，面對 84M 的 Discriminator 完全無力對抗（見 2.5 節）。
+
+**完整因果鏈**：
+
+```
+① 為什麼需要波形 loss？
+   → exp_0217 只能在 latent space 做 Feature MSE（@inference_mode 擋住梯度）
+   → 跳過 VQ + decode_continuous() 打通梯度路徑 → 波形 loss 可用
+
+② 波形 loss 更新 Decoder 時出了什麼問題？
+   → MSE/Mel 梯度由 magnitude 主導
+   → 共享 backbone 的 phase 生成能力被附帶破壞 → 機械音
+
+③ Phase loss 能修嗎？→ 不能（phase wrapping + point-wise ≠ distribution-level）
+④ 重新訓 GAN 嗎？  → 不能（LoRA 2.4M vs Disc 84M，能力不對等）
+
+⑤ 解法：不動 Decoder
+   波形 loss 仍然使用，但梯度只更新 Encoder LoRA
+   Decoder 凍結 → ∂Loss/∂W_decoder = 0 → phase generation 完整保留
+   享受波形 loss 的好處（直接優化最終品質），
+   躲過波形 loss 的壞處（破壞 decoder phase）
+```
+
+> **核心結論**：問題不在 loss 函數設計不夠好，而在 **Decoder backbone 的 magnitude/phase 纏結結構**使得任何非 GAN 的 loss 都無法平衡優化兩者。唯一安全的做法是凍結 Decoder。
+
+#### 6.3.2 為什麼 Encoder-only PESQ 微降？
+
+Student encoder 的輸出落在 teacher decoder 預期輸入分佈的**邊緣**（而非正中心）。凍結的 decoder 針對這些略微偏移的 latent 仍能正確解碼語音內容（STOI↑），但波形重建精度不如處理完全 in-distribution 的 teacher latent（PESQ 微降）。
+
+$$\text{PESQ 微降原因} = \underbrace{f_{dec}(z_{student})}_{\text{decoder 在邊緣分佈的輸出}} \neq \underbrace{f_{dec}(z_{teacher})}_{\text{decoder 在訓練分佈中心的輸出}}$$
+
+**但 STOI 大幅上升**說明：encoder 確實學會了從 noisy 中提取 clean 語音內容。PESQ 對波形逐點精度敏感（分佈偏移造成微小時域差異），但 STOI 衡量的是語音可懂度（語音內容正確）。
+
+#### 6.3.3 最終選擇 Encoder-only 的理由
+
+1. **聽感優先於分數**：PESQ 微降 0.09~0.14（人耳幾乎感知不到），但機械音在 Decoder LoRA 方案中**立刻可辨**
+2. **STOI 才是 LDV 核心指標**：LDV 語音最大問題是「聽不懂」。STOI +0.094~+0.101 代表可懂度從 ~53% → ~62%，有實質意義
+3. **保持 token 相容性**：不動 decoder → 推論時可接上 VQ 產生離散 token → 支援下游 LLM/ASR pipeline
+4. **E2E 不解決問題**：exp_0226（E2E LoRA）STOI 最高但仍有機械音 → 問題確定出在 decoder 被修改，不是 encoder 能力不足
+
+> **論文定位**：Encoder-only LoRA 是本研究的主推方案，Decoder LoRA 和 E2E LoRA 作為 ablation study，用於說明「為什麼不微調 decoder」。
+
+### 6.4 損失函數迭代歷程
+
+> ⚠️ 本節仍在實驗中，損失函數配置尚未最終確定。
+
+| 實驗 | 基礎 Loss | 新增 Loss | 設計動機 | 結果 |
+|------|----------|----------|---------|------|
+| exp_0224a | MSE+STFT+Mel | — | 基礎配置 | STOI +0.101 |
+| exp_0225a | MSE+STFT+Mel | 從頭訓練（非繼承 0217） | 測試是否需要 VQ 預訓練 | STOI +0.104（差異不大） |
+| exp_0226a | MSE+STFT+Mel | +Feature Alignment | 特徵空間直接對齊 student/teacher encoder 輸出 | STOI +0.100 |
+| exp_0226b | MSE+STFT+Mel+FA | +HF-Mel (bin 40+, ~1.6kHz) | 強調高頻 mel bin 重建 | STOI +0.084（反而下降）|
+| exp_0227 | MSE+STFT+Mel+FA | +Frozen MRD FM | 用預訓練 MRD 辨別器特徵圖做 Feature Matching | STOI +0.094, PESQ 最高 encoder-only |
+| exp_0228 | MSE+STFT+Mel+FA | +HuBERT FM | 用 HuBERT 特徵做語義層級對齊 | 🔄 訓練中 |
+| exp_0229b | LatentBWE | MSE+STFT+Mel | Latent 空間帶寬擴展 | BWE Δ 持續負（效果差）|
+| exp_0229c | LatentBWE v2 | +HF-emphasis STFT | 強調高頻 STFT 損失 | 🔄 待訓練 |
+
+**發現**：
+- 基礎 MSE+STFT+Mel 組合已經是有效的基線（exp_0224a STOI +0.101）
+- Feature Alignment 略提升 PESQ 但未顯著改善 STOI
+- HF-Mel 過度強調高頻反而傷害整體表現 → 高頻在 latent space 的修正可能比 loss 層面更有效
+- MRD Feature Matching（exp_0227）在不使用 GAN 的情況下是目前 encoder-only 中 PESQ 最高的（1.571）
+- ⏳ exp_0228（HuBERT FM）和 exp_0229c（Latent BWE + HF-emphasis）仍在探索中
+
+### 6.5 關鍵發現總結
+
+1. **VQ 量化瓶頸可控**：clean path VQ 損失 −0.132 PESQ；noisy 僅 −0.031 → VQ 不是主要瓶頸
+2. **跳過 VQ 的真正收益不在去量化，而在 loss 改良**：全路徑波形 loss 比 VQ 空間的 Feature MSE 有效得多
+3. **Distribution mismatch 是 encoder-only 的核心限制**：student encoder 輸出與 teacher decoder 預期分佈的偏移導致 PESQ 微降
+4. **微調 decoder 提升 PESQ 但引入機械音**：GAN 訓練建立的相位生成能力被非 GAN 的 LoRA 微調破壞
+5. **STOI 比 PESQ 更反映 LDV 增強效果**：所有 encoder-only 方案 STOI 從 0.527 提升至 0.610~0.631（+16~20%）
+6. **Encoder-only 是最佳實用方案**：無機械音 + 保留 token 相容性 + STOI 顯著提升
 
 ---
 
-## 六、論文架構建議
+## 七、論文章節結構
 
-### 6.1 章節結構
+> ✅ = 已有足夠材料，可直接撰寫
+> 🔄 = 架構確定但數據還在迭代（loss 配置待定）
+> ⏳ = 需待實驗完成
 
 ```
-第一章：緒論
+第一章：緒論                                                    ✅
   1.1 LDV 感測器語音的應用場景與挑戰
-  1.2 研究動機（跨材質、低 SNR、時序對齊）
+  1.2 研究動機（跨材質、低 SNR、帶寬擴展）
   1.3 研究貢獻
 
-第二章：相關研究
+第二章：相關研究                                                ✅
   2.1 語音增強方法演進（傳統 → DNN → Codec-based）
-  2.2 WavTokenizer 原理
+  2.2 WavTokenizer / Neural Audio Codec 原理
   2.3 LoRA 參數高效微調
-  2.4 LDV 語音資料集特性
+  2.4 LDV 語音感測技術與資料集
 
-第三章：系統設計
-  3.1 問題定義
-  3.2 整體架構（exp_0224b）
-  3.3 訓練流程（三階段）
-  3.4 損失函數設計
+第三章：系統設計                                                ✅
+  3.1 問題定義（LDV noisy → clean + tokenization）
+  3.2 Teacher-Student 知識蒸餾框架
+  3.3 Encoder-only LoRA 架構（主推方案）
+  3.4 VQ 跳過策略與推論時重新啟用
+  3.5 LoRA 注入位置與超參數設計
 
-第四章：實驗設置
-  4.1 資料集（LDV 錄音，不同材質）
-  4.2 評估指標（PESQ-NB, STOI）
-  4.3 消融實驗設計（2×2 矩陣）
+第四章：損失函數設計                                            🔄
+  4.1 基礎損失（MSE + MR-STFT + Mel）                          ✅
+  4.2 進階損失探索                                             🔄
+      - Feature Alignment (exp_0226a)
+      - MRD Feature Matching (exp_0227)
+      - HuBERT Feature Matching (exp_0228)                     🔄
+      - Latent BWE (exp_0229 系列)                              🔄
 
-第五章：實驗結果
-  5.1 各架構比較（消融實驗）
-  5.2 系統上下限分析
-  5.3 訓練曲線分析
-  5.4 跨材質泛化測試（未見過材質的 PESQ/STOI）
-  5.5 頻譜與波形對比
+第五章：實驗設置與結果                                          🔄
+  5.1 資料集描述（LDV 錄音，14 train / 3 val speakers）         ✅
+  5.2 評估指標（PESQ-NB, STOI）                                ✅
+  5.3 VQ 量化瓶頸分析                                          ✅
+  5.4 Encoder-only vs Decoder LoRA vs E2E 消融比較              ✅
+  5.5 損失函數消融實驗                                         🔄
+  5.6 PESQ / STOI 悖論分析（為何 PESQ↓ 但 STOI↑）             ✅
+  5.7 頻譜與波形對比圖                                         ⏳
+  5.8 跨材質泛化測試                                           ⏳
 
 第六章：結論與未來工作
-  6.1 結論
-  6.2 未來方向（端到端訓練、VQ 重新啟用優化、更大資料集）
+  6.1 結論                                                     🔄
+  6.2 未來方向                                                  ✅
+      - 更好的 loss 組合（HuBERT FM, Latent BWE）
+      - VQ 重新啟用優化
+      - 更大 LDV 資料集
+      - 主觀評估（MOS/ABX）
 ```
 
-### 6.2 待辦事項與材料盤點
+### 7.1 已確定 vs 待定清單
 
-> 截至 2026-02-24，exp_0224b 訓練至 ep97/300（33%）。
-
-#### 已有材料
-
-| 項目 | 狀態 | 位置 |
+| 類別 | 項目 | 狀態 |
 |------|------|------|
-| **訓練曲線圖** | ✅ 已有 | exp_0224/runs/ 下各 run 的 training_curves_epoch*.png |
-| **音檔樣本** | ✅ 已有 | exp_0224/runs/*/audio_samples/ 含 noisy/recon/clean 三組 .wav |
-| **PESQ/STOI 評估腳本** | ✅ 已有 | exp_0224/run_eval_0224b.py |
-| **PESQ/STOI 數值結果** | ✅ 已有 | exp_0217/FAIR_BASELINE_PESQ_STOI_n30.json, exp_0223/pesq_stoi_v2_n30.json 等 |
-| **消融實驗比較表** | ✅ 已有 | exp_0223/test/comparison_table.md |
-| **架構文字文件** | ✅ 已有 | exp_0224/ARCHITECTURE.md, THESIS_SUMMARY.md |
-
-#### 待完成事項
-
-| # | 項目 | 優先度 | 說明 |
-|---|------|--------|------|
-| 1 | **等待 exp_0224b 訓練完成** | 🔴 最高 | 目前 ep97/300，需等到 ep300 或收斂後取最佳 checkpoint |
-| 2 | **未見過材質泛化測試** | 🔴 最高 | 訓練完成後用未見過的材質（如：紙板、磁磚等）測試 PESQ/STOI，驗證跨材質泛化能力 |
-| 3 | **頻譜對比圖** | 🔴 高 | 目前**完全沒有**。需生成 noisy / recon / clean 的 mel spectrogram 並排比較圖（至少各材質一張） |
-| 4 | **正式資料集描述** | 🟡 中 | 散落在各處（data/README.md, try/QUICKSTART.md）但缺乏正式整理。需明確列出：材質種類與數量、語者（train 14人, val 4人）、每段時長、錄音參數、train/val/test 劃分 |
-| 5 | **完整系統架構圖（可編輯）** | 🟡 中 | 目前只有 ASCII 圖和舊版 .png。需用 draw.io 精繪含 Teacher/Student 對比、LoRA 位置標示的正式圖 |
-| 6 | **n≥30 正式 PESQ/STOI 評估** | 🟡 中 | 目前消融表的數字僅 n=3 val samples。論文需擴大到全部驗證集（n≥30）重新評估 |
-| 7 | **傳統方法 baseline 比較** | 🟡 中 | 實作 Wiener filter / spectral subtraction 並在相同資料上評測，作為對照組 |
-| 8 | **主觀評估（MOS / ABX）** | 🟢 低 | 不同材質各選一段，邀受試者評分。若時間不足可作為未來工作 |
-| 9 | **離散模式（VQ re-enable）驗證** | 🟢 低 | 訓練完成後測試模式 B（重新啟用 VQ），驗證離散 token 品質，證明 tokenization 能力保留 |
+| ✅ 已確定 | 整體架構（Encoder-only LoRA + Frozen Decoder） | 不會改變 |
+| ✅ 已確定 | 訓練策略（No-VQ, Teacher-Student, LoRA r=64） | 不會改變 |
+| ✅ 已確定 | Decoder LoRA / E2E 機械音問題 → ablation 論述 | 不會改變 |
+| ✅ 已確定 | VQ 瓶頸量化數據 | 不會改變 |
+| ✅ 已確定 | 公平基準（noisy_through_teacher）建立 | 不會改變 |
+| ✅ 已確定 | 資料集分割（14 train / 3 val speakers, 0 overlap） | 不會改變 |
+| 🔄 待定 | 最佳損失函數組合 | exp_0228, 0229c 結果待定 |
+| 🔄 待定 | 最終呈報的最佳 checkpoint | 取決於 loss 迭代結果 |
+| ⏳ 待做 | 頻譜對比圖（mel spectrogram） | 需最終模型確定後製作 |
+| ⏳ 待做 | n≥30 完整驗證集評估 | 需最終模型確定後重跑 |
+| ⏳ 待做 | 跨材質泛化測試 | 需最終模型確定後測試 |
+| ⏳ 待做 | VQ re-enable 驗證（token 品質） | 需最終模型確定後測試 |
 
 ---
 
-## 七、技術細節備查
+## 八、技術細節備查
 
-### 7.1 decode_continuous() 的設計
+### 8.1 decode_continuous() 的設計
 
 WavTokenizer 原始 `decode()` 使用 `@torch.inference_mode()` 裝飾器，無法計算梯度。exp_0224b 透過直接呼叫 backbone 和 head 繞過：
 
@@ -821,7 +1035,7 @@ def decode_continuous(self, features: torch.Tensor) -> torch.Tensor:
     return audio
 ```
 
-### 7.2 為什麼 encode_infer 回傳的是 VQ 後的特徵？
+### 8.2 為什麼 encode_infer 回傳的是 VQ 後的特徵？
 
 `encode_infer` → `feature_extractor.infer()` → `encodec.quantizer.infer()` → 回傳 `quantized`（VQ 後）
 
@@ -830,7 +1044,7 @@ def decode_continuous(self, features: torch.Tensor) -> torch.Tensor:
 raw_emb = teacher.feature_extractor.encodec.encoder(audio)  # [B, 512, T/320]
 ```
 
-### 7.3 PESQ 指標說明
+### 8.3 PESQ 指標說明
 
 - 使用 **PESQ-NB（窄頻，8kHz）**：先將 24kHz 音訊重採樣至 8kHz 再計算
 - PESQ(noisy) >> PESQ(recon) 屬**正常現象**：LDV noisy 與 clean 時序高度對齊，PESQ 對時序對齊敏感；重建音訊因 encoder 壓縮（320:1）導致輕微時序錯位，故 PESQ 較低
@@ -839,3 +1053,4 @@ raw_emb = teacher.feature_extractor.encodec.encoder(audio)  # [B, 512, T/320]
 ---
 
 *本文件由實驗過程自動統整，數字均來自實際評估結果（n=3 val samples）。正式論文建議以更大樣本（n=30 以上）重新評估。*
+*最後更新：2026-03-02，調整為 Encoder-only 主推架構，新增 VQ 瓶頸分析、Enc/Dec/E2E 比較、損失函數迭代歷程。*

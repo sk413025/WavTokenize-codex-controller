@@ -413,14 +413,28 @@ def coral_loss(
     if y.shape[0] != n:
         y = y[:n]
 
+    # 強制 fp32 避免 fp16 covariance matmul 溢出
+    x = x.float()
+    y = y.float()
+
+    # 限制特徵值範圍，防止極端 batch 產生 NaN covariance
+    x = x.clamp(-100.0, 100.0)
+    y = y.clamp(-100.0, 100.0)
+
     x = x - x.mean(dim=0, keepdim=True)
     y = y - y.mean(dim=0, keepdim=True)
 
-    eye = torch.eye(x.shape[1], device=x.device, dtype=x.dtype)
+    d = x.shape[1]
+    eye = torch.eye(d, device=x.device, dtype=torch.float32)
     cov_x = (x.t() @ x) / (n - 1) + eps * eye
     cov_y = (y.t() @ y) / (n - 1) + eps * eye
 
-    return ((cov_x - cov_y) ** 2).mean()
+    # 標準 CORAL 正規化：除以 4d² 使 loss 與 feature dim 無關
+    loss = ((cov_x - cov_y) ** 2).sum() / (4.0 * d * d)
+    # 最終安全檢查：若仍為 NaN 回傳 0
+    if torch.isnan(loss) or torch.isinf(loss):
+        return torch.zeros((), device=student_feat.device, dtype=student_feat.dtype)
+    return loss
 
 
 def mmd_rbf_loss(
