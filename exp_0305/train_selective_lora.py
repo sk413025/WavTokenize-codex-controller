@@ -976,11 +976,22 @@ def main():
     print(f"Val   batches/eval:  min({len(val_loader)}, 30)")
     print(f"Plan description: {PLANS[args.plan]['description']}\n")
 
-    # anchor 相關變數：新設計不使用 anchor loss（base weights 已是官方 WavTokenizer）
-    anchor_encoder = None
-    student_hooks = None
-    anchor_hooks = None
-    anchor_layer_ids = []
+    # ── Anchor 初始化（根據 PLANS 設定自動決定是否啟用）─────────────────────────
+    anchor_layer_ids = config['anchor_layer_ids']   # plan_b: [1,4,5,7,10,13,14,15,16,17]; 其他: []
+    anchor_encoder = student_hooks = anchor_hooks = None
+    if anchor_layer_ids:
+        print(f"[Anchor] 啟用 anchor 約束，錨定層 = {anchor_layer_ids}")
+        print(f"[Anchor] 錨定目標 = 原始 WavTokenizer teacher encoder（frozen）")
+        anchor_encoder = model.teacher.feature_extractor.encodec.encoder.eval()
+        for p in anchor_encoder.parameters():
+            p.requires_grad_(False)
+        student_enc  = model.student.feature_extractor.encodec.encoder
+        student_mods = build_conv18_modules(student_enc)
+        anchor_mods  = build_conv18_modules(anchor_encoder)
+        student_hooks = LayerHookBank(student_mods, anchor_layer_ids)
+        anchor_hooks  = LayerHookBank(anchor_mods,  anchor_layer_ids)
+    else:
+        print(f"[Anchor] plan={args.plan} 無 anchor 約束（純 LoRA 對照組）")
 
     # ── 訓練迴圈 ─────────────────────────────────────────────────
     for epoch in range(start_epoch + 1, epochs + 1):
