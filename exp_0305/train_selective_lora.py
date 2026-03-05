@@ -67,6 +67,8 @@ sys.path.insert(0, '/home/sbplab/ruizi/WavTokenize-self-supervised')
 from exp_1201.config import WAVTOK_CONFIG, WAVTOK_CKPT, TRAIN_CACHE, VAL_CACHE
 from exp_0305.models_selective_lora import TeacherStudentSelectiveLoRA, PLANS
 from exp_0216.data_augmented import AugmentedCurriculumDataset, collate_fn_curriculum
+from encoder.modules.conv import SConv1d
+from encoder.modules.seanet import SEANetResnetBlock
 
 # ── exp_0217 best ckpt (與 exp_0224a 相同起點) ─────────────────────────────
 EXP0217_BEST_CKPT = (
@@ -75,6 +77,88 @@ EXP0217_BEST_CKPT = (
 )
 
 SAMPLE_RATE = 24000
+
+
+# ============================================================
+# Anchor Regularization 基礎設施（用於 plan_b 穩定層約束）
+# ============================================================
+
+def build_conv18_modules(encoder: torch.nn.Module) -> dict:
+    """將 SEANet encoder 拆解為按纊號排列的16層 conv 模組的字典。
+
+    Args:
+        encoder: SEANet encoder 物件（.model 屬性為所有操作層的 list）。
+
+    Returns:
+        Dict[int, SConv1d]，鍵為 layer id 0..17。
+    """
+    modules: dict = {}
+    li = 0
+    for m in encoder.model:
+        if isinstance(m, SConv1d):
+            modules[li] = m; li += 1
+        elif isinstance(m, SEANetResnetBlock):
+            modules[li] = m.block[1]; li += 1
+            modules[li] = m.block[3]; li += 1
+            if isinstance(m.shortcut, SConv1d):
+                modules[li] = m.shortcut; li += 1
+    if len(modules) != 18:
+        raise RuntimeError(f"Expected 18 modules, got {len(modules)}")
+    return modules
+
+
+class LayerHookBank:
+    """對指定層的 forward hook，用於擷取中間特徵供 anchor loss 計算。
+
+    Args:
+        layer_modules: build_conv18_modules 回傳的 dict。
+        layer_ids: 要錨定的層編號列表。
+    """
+    def __init__(self, layer_modules: dict, layer_ids: list):
+        self.layer_ids = layer_ids
+        self.cache: dict = {}
+        self.handles = []
+        for li in layer_ids:
+            self.handles.append(layer_modules[li].register_forward_hook(self._make_hook(li)))
+
+    def _make_hook(self, li: int):
+        """建立特定層索引的 hook 函式。
+
+        Args:
+            li: 層索引。
+
+        Returns:
+            hook 函式。
+        """
+        def _hook(_m, _inp, out):
+            self.cache[li] = out[0] if isinstance(out, tuple) else out
+        return _hook
+
+    def clear(self):
+        """.清空已缓存的特徵。"""
+        self.cache.clear()
+
+    def close(self):
+        """移除所有 hook。"""
+        for h in self.handles: h.remove()
+        self.handles = []
+
+
+def compute_anchor_loss(student_cache: dict, anchor_cache: dict, layer_ids: list) -> torch.Tensor:
+    """計算層略性錨定 loss：將 student 中間層特徵拉向原始 WavTokenizer。
+
+    Args:
+        student_cache: 由 student hooks 擷取的特徵 dict。
+        anchor_cache: 由 teacher (anchor) hooks 擷取的特徵 dict。
+        layer_ids: 參與計算的層編號列表。
+
+    Returns:
+        各層 MSE 的平均値（pure torch.Tensor）。
+    """
+    total = sum(F.mse_loss(student_cache[li], anchor_cache[li].detach()) for li in layer_ids if li in student_cache and li in anchor_cache)
+    n = sum(1 for li in layer_ids if li in student_cache and li in anchor_cache)
+    device = next(iter(student_cache.values())).device if student_cache else torch.device('cpu')
+    return total / max(n, 1) if n > 0 else torch.tensor(0.0, device=device)
 
 
 # ============================================================
@@ -389,11 +473,15 @@ def train_epoch(
     mr_stft_fn: MultiResolutionSTFTLoss,
     mel_fn: MelReconstructionLoss,
     scaler: GradScaler = None,
+    anchor_encoder=None,
+    student_hooks: LayerHookBank = None,
+    anchor_hooks: LayerHookBank = None,
 ) -> Dict:
     """執行一個訓練 epoch。
 
     損失函數與 exp_0224a 一致：
         λ_wav * MSE + λ_stft * MR-STFT + λ_mel * Mel
+        [+ λ_anchor * Anchor]（如果 plan 有 anchor_layer_ids）
 
     Args:
         model: TeacherStudentSelectiveLoRA 模型
@@ -405,9 +493,12 @@ def train_epoch(
         mr_stft_fn: 多解析度 STFT 損失函數
         mel_fn: Mel 損失函數
         scaler: AMP GradScaler（可選）
+        anchor_encoder: frozen teacher encoder，不為 None 時啟用 anchor loss
+        student_hooks: LayerHookBank 掻取 student 中間層
+        anchor_hooks: LayerHookBank 掻取 anchor 中間層
 
     Returns:
-        包含 total_loss, wav_mse, stft_sc, stft_mag, mel_loss 的 metrics dict
+        包含 total_loss, wav_mse, stft_sc, stft_mag, mel_loss, anchor_loss 的 metrics dict
     """
     model.train()
     # Decoder（teacher backbone+head）保持 eval
@@ -417,9 +508,11 @@ def train_epoch(
     λ_wav = config['lambda_wav']
     λ_stft = config['lambda_stft']
     λ_mel = config['lambda_mel']
+    λ_anchor = config.get('lambda_anchor', 0.0)
+    anchor_layer_ids = config.get('anchor_layer_ids', [])
     accum = config['grad_accum']
 
-    metrics = dict(total_loss=0, wav_mse=0, stft_sc=0, stft_mag=0, mel_loss=0, nan_batches=0)
+    metrics = dict(total_loss=0, wav_mse=0, stft_sc=0, stft_mag=0, mel_loss=0, anchor_loss=0, nan_batches=0)
     n_batches = 0
     nan_count = 0
 
@@ -435,6 +528,13 @@ def train_epoch(
         if batch_idx % accum == 0:
             optimizer.zero_grad()
 
+        # 清除 hook cache（只有啟用 anchor 時才需要）
+        if anchor_encoder is not None:
+            if student_hooks: student_hooks.clear()
+            if anchor_hooks: anchor_hooks.clear()
+            with torch.no_grad():
+                _ = anchor_encoder(noisy)
+
         with autocast(enabled=config['use_amp']):
             out = model.forward_wav(clean, noisy)
             recon = out['recon_wav']
@@ -444,7 +544,13 @@ def train_epoch(
             wav_mse = F.mse_loss(recon_t, clean_t)
             sc, mag = mr_stft_fn(recon_t, clean_t)
             mel = mel_fn(recon_t, clean_t)
-            loss = (λ_wav * wav_mse + λ_stft * (sc + mag) + λ_mel * mel) / accum
+            # Anchor loss（只有 plan_b 且已設置 hooks 時有效）
+            anchor = (
+                compute_anchor_loss(student_hooks.cache, anchor_hooks.cache, anchor_layer_ids)
+                if anchor_encoder is not None and student_hooks and anchor_hooks
+                else torch.tensor(0.0, device=device)
+            )
+            loss = (λ_wav * wav_mse + λ_stft * (sc + mag) + λ_mel * mel + λ_anchor * anchor) / accum
 
         if torch.isnan(loss) or torch.isinf(loss):
             nan_count += 1
@@ -480,11 +586,12 @@ def train_epoch(
         metrics['stft_sc'] += sc.item()
         metrics['stft_mag'] += mag.item()
         metrics['mel_loss'] += mel.item()
+        metrics['anchor_loss'] += anchor.item()
         n_batches += 1
-        pbar.set_postfix(total=f"{lv:.3f}", wav=f"{wav_mse.item():.5f}", mel=f"{mel.item():.3f}")
+        pbar.set_postfix(total=f"{lv:.3f}", wav=f"{wav_mse.item():.5f}", anchor=f"{anchor.item():.5f}")
 
     if n_batches > 0:
-        for k in ['total_loss', 'wav_mse', 'stft_sc', 'stft_mag', 'mel_loss']:
+        for k in ['total_loss', 'wav_mse', 'stft_sc', 'stft_mag', 'mel_loss', 'anchor_loss']:
             metrics[k] /= n_batches
     return metrics
 
@@ -497,24 +604,32 @@ def evaluate(
     mr_stft_fn: MultiResolutionSTFTLoss,
     mel_fn: MelReconstructionLoss,
     max_batches: int = 30,
+    anchor_encoder=None,
+    student_hooks: LayerHookBank = None,
+    anchor_hooks: LayerHookBank = None,
+    anchor_layer_ids: list = None,
+    lambda_anchor: float = 0.0,
 ) -> Dict:
     """評估模型在 validation 集上的表現。
-
-    同時計算 noisy baseline 作為改善程度的參照。
 
     Args:
         model: TeacherStudentSelectiveLoRA 模型
         dataloader: 驗證資料載入器
         device: 計算裝置
-        mr_stft_fn: 多解析度 STFT 損失函數
-        mel_fn: Mel 損失函數
-        max_batches: 最多評估的批次數
+        mr_stft_fn: STFT 損失
+        mel_fn: Mel 損失
+        max_batches: 最多評估批次
+        anchor_encoder: frozen teacher encoder
+        student_hooks: student 中間層 hooks
+        anchor_hooks: anchor 中間層 hooks
+        anchor_layer_ids: 錨定層編號列表
+        lambda_anchor: anchor loss 權重
 
     Returns:
         包含各項指標的 dict
     """
     model.eval()
-    wav_list, noisy_list, sc_list, mel_list, noisy_sc_list = [], [], [], [], []
+    wav_list, noisy_list, sc_list, mel_list, noisy_sc_list, anchor_list = [], [], [], [], [], []
 
     for i, batch in enumerate(dataloader):
         if max_batches and i >= max_batches:
@@ -525,6 +640,11 @@ def evaluate(
             clean = clean.unsqueeze(1)
         if noisy.dim() == 2:
             noisy = noisy.unsqueeze(1)
+
+        if anchor_encoder is not None:
+            if student_hooks: student_hooks.clear()
+            if anchor_hooks: anchor_hooks.clear()
+            _ = anchor_encoder(noisy)
 
         out = model.forward_wav(clean, noisy)
         recon = out['recon_wav']
@@ -538,6 +658,9 @@ def evaluate(
         noisy_list.append(F.mse_loss(n, c).item())
         sc_n, _ = mr_stft_fn(n, c)
         noisy_sc_list.append(sc_n.item())
+        if anchor_encoder is not None and student_hooks and anchor_hooks and anchor_layer_ids:
+            anc = compute_anchor_loss(student_hooks.cache, anchor_hooks.cache, anchor_layer_ids)
+            anchor_list.append(anc.item())
 
     model.train()
     _m = lambda lst: float(np.mean(lst)) if lst else float('nan')
@@ -547,6 +670,7 @@ def evaluate(
         'val_stft_sc': _m(sc_list),
         'val_mel_loss': _m(mel_list),
         'val_noisy_stft_sc': _m(noisy_sc_list),
+        'val_anchor': _m(anchor_list) if anchor_list else float('nan'),
     }
 
 
@@ -702,6 +826,8 @@ def parse_args():
     p.add_argument('--lambda_wav', type=float, default=1.0)
     p.add_argument('--lambda_stft', type=float, default=1.0)
     p.add_argument('--lambda_mel', type=float, default=45.0)
+    p.add_argument('--lambda_anchor', type=float, default=None,
+                   help='Anchor loss 權重（None = 使用 PLANS 中設定的預設値）')
     p.add_argument('--no_amp', action='store_true')
     p.add_argument('--num_workers', type=int, default=2)
     p.add_argument('--seed', type=int, default=42)
@@ -764,6 +890,13 @@ def main():
         'plan_rank': PLANS[args.plan]['rank'],
         'plan_alpha': PLANS[args.plan]['alpha'],
         'plan_description': PLANS[args.plan]['description'],
+        # anchor 設定（只有 plan_b 有 anchor_layer_ids）
+        'anchor_layer_ids': PLANS[args.plan].get('anchor_layer_ids', []),
+        'lambda_anchor': (
+            args.lambda_anchor
+            if args.lambda_anchor is not None
+            else PLANS[args.plan].get('lambda_anchor', 0.0)
+        ),
         # baseline reference
         'baseline_exp': 'exp_0224a',
         'baseline_val_wav_mse_best': 0.0233,
@@ -803,7 +936,9 @@ def main():
     start_epoch = 0
     history = {k: [] for k in [
         'train_total_loss', 'train_wav_mse', 'train_stft_sc', 'train_stft_mag', 'train_mel_loss',
-        'val_wav_mse', 'val_noisy_mse', 'val_stft_sc', 'val_mel_loss', 'val_noisy_stft_sc', 'lr',
+        'train_anchor_loss',
+        'val_wav_mse', 'val_noisy_mse', 'val_stft_sc', 'val_mel_loss', 'val_noisy_stft_sc',
+        'val_anchor', 'lr',
     ]}
     best_val_mse = float('inf')
     best_val_total = float('inf')
@@ -865,6 +1000,9 @@ def main():
         t_metrics = train_epoch(
             model, train_loader, optimizer, device, epoch, config,
             mr_stft, mel_loss, scaler,
+            anchor_encoder=anchor_encoder,
+            student_hooks=student_hooks,
+            anchor_hooks=anchor_hooks,
         )
 
         if epoch > config['warmup_epochs']:
@@ -873,7 +1011,14 @@ def main():
         cur_lr = optimizer.param_groups[0]['lr']
 
         # Eval
-        v_metrics = evaluate(model, val_loader, device, mr_stft, mel_loss)
+        v_metrics = evaluate(
+            model, val_loader, device, mr_stft, mel_loss,
+            anchor_encoder=anchor_encoder,
+            student_hooks=student_hooks,
+            anchor_hooks=anchor_hooks,
+            anchor_layer_ids=anchor_layer_ids,
+            lambda_anchor=config['lambda_anchor'],
+        )
 
         # History
         history['train_total_loss'].append(t_metrics['total_loss'])
@@ -881,11 +1026,13 @@ def main():
         history['train_stft_sc'].append(t_metrics['stft_sc'])
         history['train_stft_mag'].append(t_metrics['stft_mag'])
         history['train_mel_loss'].append(t_metrics['mel_loss'])
+        history['train_anchor_loss'].append(t_metrics.get('anchor_loss', 0.0))
         history['val_wav_mse'].append(v_metrics['val_wav_mse'])
         history['val_noisy_mse'].append(v_metrics['val_noisy_mse'])
         history['val_stft_sc'].append(v_metrics['val_stft_sc'])
         history['val_mel_loss'].append(v_metrics['val_mel_loss'])
         history['val_noisy_stft_sc'].append(v_metrics['val_noisy_stft_sc'])
+        history['val_anchor'].append(v_metrics.get('val_anchor', float('nan')))
         history['lr'].append(cur_lr)
 
         with open(out_dir / 'history.json', 'w') as f:
@@ -896,6 +1043,7 @@ def main():
             f"train_total={t_metrics['total_loss']:.4f}  "
             f"val_mse={v_metrics['val_wav_mse']:.5f}  "
             f"(noisy={v_metrics['val_noisy_mse']:.5f})  "
+            f"anchor={t_metrics.get('anchor_loss',0.0):.5f}  "
             f"stft_sc={v_metrics['val_stft_sc']:.4f}  "
             f"lr={cur_lr:.2e}"
         )
@@ -933,6 +1081,9 @@ def main():
             save_audio_samples(model, val_loader, device, out_dir, epoch)
 
     # ── 訓練結束 ─────────────────────────────────────────────────
+    # 關閉 anchor hooks
+    if student_hooks: student_hooks.close()
+    if anchor_hooks: anchor_hooks.close()
     # 訓練結束後存最終 loss 圖
     plot_curves(history, out_dir, args.epochs if not is_smoke else epoch, args.plan)
     print(f"\n{'='*65}")

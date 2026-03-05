@@ -139,16 +139,20 @@ PLANS = {
         ),
         'n_layers': 6,
     },
-    # plan_b: adapt_top6 + 橋接層 L6/L12
+    # plan_b: 全 18 層 LoRA rank=32，對「穩定層」加 anchor 約束（取代凍結）
+    # anchor 目標 = 原始 WavTokenizer：确保穩定層不偏離官方樓型→保護 frozen decoder 解碼品質
+    # anchor 層 = [1,4,5,7,10,13,14,15,16,17]（exp_0304 content>0.93 AND noise<0.12）
     'plan_b': {
-        'layers': L0_STEM + L2_RB1C2 + L3_RB1SC + L6_RB2C2
-                  + L8_D2 + L9_RB3C1 + L11_RB3SC + L12_D3,
+        'layers': ALL_18_LAYERS,   # 全 18 層都有 LoRA adapter
         'rank': 32,
         'alpha': 64,
+        'anchor_layer_ids': [1, 4, 5, 7, 10, 13, 14, 15, 16, 17],
+        'lambda_anchor': 1.0,
         'description': (
-            'adapt_top8: plan_a + L6(temporal=0.330) + L12(Down3,bridge)'
+            'all_18_anchor: 全 18 層 LoRA rank=32，'
+            'anchor 約束穩定層 [1,4,5,7,10,13,14,15,16,17] 至原始 WavTokenizer（取代凍結）'
         ),
-        'n_layers': 8,
+        'n_layers': 18,
     },
     # plan_c: 全層作為等參數預算對照（rank 縮小使總參數量相當）
     'plan_c': {

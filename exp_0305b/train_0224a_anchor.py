@@ -222,6 +222,11 @@ def preset_to_layers(preset: str) -> List[int]:
         return [0, 1]
     if preset == "front_tail_lock":
         return [0, 1, 16, 17]
+    if preset == "stable_lock":
+        # exp_0304 分析中「穩定層」（content>0.93, noise<0.12）
+        # 正好是 exp_0305 plan_b 原本計畫凍結的那 10 層
+        # L1,L4,L5,L7,L10,L13,L14,L15,L16,L17
+        return [1, 4, 5, 7, 10, 13, 14, 15, 16, 17]
     raise ValueError(f"Unknown preset: {preset}")
 
 
@@ -549,7 +554,8 @@ def parse_args():
     p.add_argument(
         "--preset",
         default="tail_lock",
-        choices=["tail_lock", "front_lock", "front_tail_lock", "custom"],
+        choices=["tail_lock", "front_lock", "front_tail_lock", "stable_lock", "custom"],
+        # stable_lock: 錨定 exp_0304 分析中的 10 個穩定層（即 plan_b 原本凍結的層）
     )
     p.add_argument("--anchor_layers", default="16,17",
                    help="Comma-separated conv18 layer ids; only used when preset=custom.")
