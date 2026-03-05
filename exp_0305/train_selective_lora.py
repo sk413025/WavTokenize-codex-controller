@@ -626,6 +626,53 @@ def plot_curves(history: dict, output_dir: Path, epoch: int, plan: str):
     print(f"  圖表儲存：{fname.name}")
 
 
+@torch.no_grad()
+def save_audio_samples(
+    model: torch.nn.Module,
+    val_loader: DataLoader,
+    device: torch.device,
+    output_dir: Path,
+    epoch: int,
+    n_samples: int = 4,
+    sample_rate: int = 24000,
+):
+    """存儲 val 音檔樣本：noisy / clean / recon 各一份以便聽感評估。
+
+    Args:
+        model: 當前模型。
+        val_loader: 驗證 DataLoader。
+        device: 運算裝置。
+        output_dir: 輸出目錄。
+        epoch: 當前 epoch 編號（用於檔名）。
+        n_samples: 存儲筆數。
+        sample_rate: 音訊取樣率。
+    """
+    audio_dir = output_dir / 'audio_samples' / f'epoch{epoch:03d}'
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    model.eval()
+    saved = 0
+    for batch in val_loader:
+        noisy = batch['noisy_audio'].to(device)
+        clean = batch['clean_audio'].to(device)
+        if noisy.dim() == 2:
+            noisy = noisy.unsqueeze(1)
+        if clean.dim() == 2:
+            clean = clean.unsqueeze(1)
+        out = model.forward_wav(clean, noisy)
+        recon = out['recon_wav']
+        for i in range(min(noisy.shape[0], n_samples - saved)):
+            torchaudio.save(str(audio_dir / f'sample{saved+i:02d}_noisy.wav'), noisy[i].cpu(), sample_rate)
+            torchaudio.save(str(audio_dir / f'sample{saved+i:02d}_clean.wav'), clean[i].cpu(), sample_rate)
+            r = recon[i].cpu()
+            if r.dim() == 1:
+                r = r.unsqueeze(0)
+            torchaudio.save(str(audio_dir / f'sample{saved+i:02d}_recon.wav'), r, sample_rate)
+        saved += min(noisy.shape[0], n_samples - saved)
+        if saved >= n_samples:
+            break
+    print(f'  [音檔] 已存儲 {saved} 筆 val 音檔至 {audio_dir}')
+
+
 # ============================================================
 # Main
 # ============================================================
@@ -881,7 +928,13 @@ def main():
         if epoch % 25 == 0 or (is_smoke and epoch == epochs):
             plot_curves(history, out_dir, epoch, args.plan)
 
+        # Audio 樣本：每 10 epoch 或 smoke 模式結束時
+        if epoch % 10 == 0 or (is_smoke and epoch == epochs):
+            save_audio_samples(model, val_loader, device, out_dir, epoch)
+
     # ── 訓練結束 ─────────────────────────────────────────────────
+    # 訓練結束後存最終 loss 圖
+    plot_curves(history, out_dir, args.epochs if not is_smoke else epoch, args.plan)
     print(f"\n{'='*65}")
     print(f"  exp_0305 / {args.plan} 訓練完成")
     print(f"  Best val_wav_mse: {best_val_mse:.5f}")

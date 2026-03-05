@@ -3,17 +3,20 @@
 exp_0305b: 0224a-baseline + Layer Anchor Regularization
 
 目標:
-1) 以 exp_0224a best_model.pt 為初始化基線
-2) 在續訓時對指定層加入「不偏離 0224a」約束
+1) 以 exp_0224a best_model.pt 為初始化基線（warm start，繼承降噪已學的能力）
+2) 在續訓時對指定層加入「不偏離原始 WavTokenizer」約束
+   → anchor 目標 = model.teacher（原始 pretrained encoder，完全 frozen）
+   → 確保 student encoder 輸出空間不偏離太遠，保護 frozen decoder 正常解碼清晰語音
 3) 比較不同錨定層策略:
-   - tail_lock: 錨定 L16, L17
-   - front_lock: 錨定 L0, L1
+   - tail_lock: 錨定 L16, L17（靠近 decoder 介面）
+   - front_lock: 錨定 L0, L1（靠近輸入，保護基礎特徵）
+   - front_tail_lock: 錨定 L0, L1, L16, L17（雙端錨定）
 
 Loss:
     L_total = L_wav + L_stft + L_mel + lambda_anchor * L_anchor
 
 其中:
-    L_anchor = mean_i (w_i * MSE(h_i_student, h_i_anchor))
+    L_anchor = mean_i( w_i * MSE(h_i_student, h_i_original_wavtokenizer) )
 """
 
 import argparse
@@ -30,9 +33,13 @@ from typing import Dict, List, Tuple
 import numpy as np
 import torch
 import torch.nn.functional as F
+import torchaudio
 from torch.amp import autocast, GradScaler
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, '/home/sbplab/ruizi/WavTokenizer-main')
@@ -213,6 +220,8 @@ def preset_to_layers(preset: str) -> List[int]:
         return [16, 17]
     if preset == "front_lock":
         return [0, 1]
+    if preset == "front_tail_lock":
+        return [0, 1, 16, 17]
     raise ValueError(f"Unknown preset: {preset}")
 
 
@@ -405,6 +414,111 @@ def evaluate(
     return {k: float(np.mean(v)) if v else float("nan") for k, v in vals.items()}
 
 
+def plot_curves(history: dict, output_dir: Path, epoch: int, preset: str):
+    """繪製訓練曲線並存檔，包含 loss、anchor loss、MSE improvement。
+
+    Args:
+        history: 訓練歷史字典，含各 metric 的 list。
+        output_dir: 輸出目錄路徑。
+        epoch: 當前 epoch 編號（用於檔名）。
+        preset: anchor 策略名稱（用於標題）。
+    """
+    date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ep = list(range(1, len(history.get('train_total_loss', [])) + 1))
+    if not ep:
+        return
+
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+    fig.suptitle(f'exp_0305b [{preset}] Training Curves — Epoch {epoch}', fontsize=13)
+
+    def _plot(ax, keys, title, log=False):
+        for key, label, color in keys:
+            vals = history.get(key, [])
+            if vals:
+                ax.plot(ep[:len(vals)], vals, color=color, label=label, alpha=0.85)
+        ax.set_title(title); ax.set_xlabel('Epoch'); ax.legend(fontsize=8)
+        if log:
+            ax.set_yscale('log')
+        ax.grid(True, alpha=0.3)
+
+    _plot(axes[0, 0], [('train_total_loss', 'Train total', 'steelblue')], 'Total Loss (train)', log=True)
+    _plot(axes[0, 1], [('train_wav_mse', 'Train MSE', 'blue'), ('val_wav_mse', 'Val MSE', 'red'), ('val_noisy_mse', 'Noisy MSE', 'orange')], 'Wav MSE')
+    _plot(axes[0, 2], [('train_anchor', 'Train anchor', 'purple'), ('val_anchor', 'Val anchor', 'violet')], 'Anchor Loss')
+    _plot(axes[1, 0], [('lr', 'LR', 'gray')], 'Learning Rate', log=True)
+
+    # MSE improvement ratio
+    ax = axes[1, 1]
+    val_mse = history.get('val_wav_mse', [])
+    noisy_mse = history.get('val_noisy_mse', [])
+    n_pts = min(len(val_mse), len(noisy_mse))
+    if n_pts > 0:
+        impr = [(noisy_mse[i] - val_mse[i]) / (noisy_mse[i] + 1e-9) for i in range(n_pts)]
+        ax.plot(range(1, n_pts + 1), impr, 'g-', label='MSE improvement', alpha=0.85)
+        ax.axhline(y=0, color='gray', linestyle='--', alpha=0.5)
+        ax.set_title('Val MSE Improvement Ratio'); ax.set_xlabel('Epoch'); ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+
+    # Anchor baseline reference
+    ax = axes[1, 2]
+    ax.text(0.5, 0.5,
+            f'Anchor target: original WavTokenizer\n(NOT exp_0224a)\n\npreset: {preset}\n\nbaseline val_mse: 0.0233',
+            transform=ax.transAxes, ha='center', va='center', fontsize=11,
+            bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8))
+    ax.axis('off')
+
+    plt.tight_layout()
+    fname = output_dir / f'exp0305b_{preset}_epoch{epoch:03d}_{date_str}_plot_curves.png'
+    plt.savefig(fname, dpi=100, bbox_inches='tight')
+    plt.close(fig)
+    print(f'  [Plot] 已儲存 loss 曲線圖: {fname.name}')
+
+
+@torch.no_grad()
+def save_audio_samples(
+    model: TeacherStudentNoVQ,
+    val_loader: DataLoader,
+    device: torch.device,
+    output_dir: Path,
+    epoch: int,
+    n_samples: int = 4,
+    sample_rate: int = SAMPLE_RATE,
+):
+    """存儲 val 音檔樣本：noisy / clean / recon 各一份，方便聽感評估。
+
+    Args:
+        model: 當前 student-teacher 模型。
+        val_loader: 驗證 DataLoader。
+        device: 運算裝置。
+        output_dir: 輸出目錄。
+        epoch: 當前 epoch 編號（用於檔名）。
+        n_samples: 儲存幾筆樣本。
+        sample_rate: 音訊取樣率。
+    """
+    audio_dir = output_dir / 'audio_samples' / f'epoch{epoch:03d}'
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    model.eval()
+    saved = 0
+    for batch in val_loader:
+        noisy = batch['noisy_audio'].to(device)
+        clean = batch['clean_audio'].to(device)
+        if noisy.dim() == 2:
+            noisy = noisy.unsqueeze(1)
+        if clean.dim() == 2:
+            clean = clean.unsqueeze(1)
+        out = model.forward_wav(clean, noisy)
+        recon = out['recon_wav']
+        for i in range(min(noisy.shape[0], n_samples - saved)):
+            torchaudio.save(str(audio_dir / f'sample{saved+i:02d}_noisy.wav'), noisy[i].cpu(), sample_rate)
+            torchaudio.save(str(audio_dir / f'sample{saved+i:02d}_clean.wav'), clean[i].cpu(), sample_rate)
+            r = recon[i].cpu()
+            if r.dim() == 1:
+                r = r.unsqueeze(0)
+            torchaudio.save(str(audio_dir / f'sample{saved+i:02d}_recon.wav'), r, sample_rate)
+        saved += min(noisy.shape[0], n_samples - saved)
+        if saved >= n_samples:
+            break
+    print(f'  [Audio] 已儲存 {saved} 筆 val 音檔至 {audio_dir}')
+
+
 def parse_args():
     p = argparse.ArgumentParser(description="exp_0305b: 0224a baseline + layer anchor")
     p.add_argument("--mode", default="smoke", choices=["smoke", "epoch"])
@@ -432,7 +546,11 @@ def parse_args():
                    help="Anchor regularization weight.")
 
     # Anchor setting
-    p.add_argument("--preset", default="tail_lock", choices=["tail_lock", "front_lock", "custom"])
+    p.add_argument(
+        "--preset",
+        default="tail_lock",
+        choices=["tail_lock", "front_lock", "front_tail_lock", "custom"],
+    )
     p.add_argument("--anchor_layers", default="16,17",
                    help="Comma-separated conv18 layer ids; only used when preset=custom.")
     p.add_argument("--anchor_weights", default="",
@@ -442,7 +560,8 @@ def parse_args():
     p.add_argument("--lora_alpha", type=int, default=128)
     p.add_argument("--baseline_ckpt", type=str, default=str(EXP0224A_BEST))
     p.add_argument("--eval_max_batches", type=int, default=30)
-    p.add_argument("--save_every", type=int, default=10)
+    p.add_argument("--save_every", type=int, default=10,
+                   help="每隔多少 epoch 存儲 checkpoint 和音檔")
     return p.parse_args()
 
 
@@ -510,21 +629,14 @@ def main():
     # Load 0224a baseline weights
     load_0224a_weights(model, Path(args.baseline_ckpt))
 
-    # Build a separate frozen 0224a anchor encoder.
-    # NOTE: deepcopy() fails on weight_norm tensors in this codebase,
-    # so we instantiate a second model and load the same checkpoint.
-    anchor_model = TeacherStudentNoVQ(
-        wavtok_config=WAVTOK_CONFIG,
-        wavtok_ckpt=WAVTOK_CKPT,
-        lora_rank=args.lora_rank,
-        lora_alpha=args.lora_alpha,
-        intermediate_indices=[3, 4, 6],
-        device=str(device),
-    ).to(device)
-    load_0224a_weights(anchor_model, Path(args.baseline_ckpt))
-    anchor_encoder = anchor_model.student.feature_extractor.encodec.encoder.eval()
+    # Anchor encoder = 原始 WavTokenizer teacher encoder（已 frozen）
+    # 目的：約束 student encoder 不偏離官方預訓練權重 → 保護 frozen decoder 解碼出清晰語音
+    # teacher 在 TeacherStudentNoVQ.__init__ 中已整體 frozen，直接複用即可
+    anchor_encoder = model.teacher.feature_extractor.encodec.encoder.eval()
+    # 雙重確認無梯度
     for p in anchor_encoder.parameters():
         p.requires_grad_(False)
+    print("[Anchor] 錨定對象：原始 WavTokenizer teacher encoder（非 exp_0224a LoRA 版本）")
 
     student_enc = model.student.feature_extractor.encodec.encoder
     student_modules = build_conv18_modules(student_enc)
@@ -612,8 +724,18 @@ def main():
         with open(out_dir / "history.json", "w") as f:
             json.dump(history, f, indent=2, ensure_ascii=False)
 
+        # Loss 曲線圖：每 25 epoch 或 smoke 模式結束時
+        if ep % 25 == 0 or (smoke and ep == args.epochs):
+            plot_curves(history, out_dir, ep, args.preset)
+
+        # 音檔樣本：每 10 epoch 或 smoke 模式結束時
+        if ep % args.save_every == 0 or (smoke and ep == args.epochs):
+            save_audio_samples(model, val_loader, device, out_dir, ep)
+
     student_hooks.close()
     anchor_hooks.close()
+    # 訓練結束後存最終 loss 圖
+    plot_curves(history, out_dir, args.epochs, args.preset)
     print(f"Training complete. Best val_wav_mse={best_val:.6f}")
     print(f"Output: {out_dir}")
 
