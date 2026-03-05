@@ -111,18 +111,18 @@ def plot_curves(tail_dir: Path, front_dir: Path, out_png: Path):
     fig, axes = plt.subplots(2, 1, figsize=(11, 8), sharex=False)
 
     axes[0].plot(t_ep, tail_hist["val_wav_mse"], "o-", label="tail_lock val_wav_mse")
-    axes[0].plot(f_ep, front_hist["val_wav_mse"], "s-", label="front_lock val_wav_mse")
+    axes[0].plot(f_ep, front_hist["val_wav_mse"], "s-", label="front_tail_lock val_wav_mse")
     axes[0].plot(t_ep, tail_hist["val_noisy_mse"], "--", alpha=0.7, label="tail_lock noisy baseline")
-    axes[0].plot(f_ep, front_hist["val_noisy_mse"], "--", alpha=0.7, label="front_lock noisy baseline")
+    axes[0].plot(f_ep, front_hist["val_noisy_mse"], "--", alpha=0.7, label="front_tail_lock noisy baseline")
     axes[0].set_title("Val MSE Comparison")
     axes[0].set_xlabel("Epoch")
     axes[0].set_ylabel("MSE")
     axes[0].legend()
 
     axes[1].plot(t_ep, tail_hist["val_anchor"], "o-", label="tail_lock val_anchor")
-    axes[1].plot(f_ep, front_hist["val_anchor"], "s-", label="front_lock val_anchor")
+    axes[1].plot(f_ep, front_hist["val_anchor"], "s-", label="front_tail_lock val_anchor")
     axes[1].plot(t_ep, tail_hist["train_anchor"], "--", alpha=0.8, label="tail_lock train_anchor")
-    axes[1].plot(f_ep, front_hist["train_anchor"], "--", alpha=0.8, label="front_lock train_anchor")
+    axes[1].plot(f_ep, front_hist["train_anchor"], "--", alpha=0.8, label="front_tail_lock train_anchor")
     axes[1].set_title("Anchor Loss Comparison")
     axes[1].set_xlabel("Epoch")
     axes[1].set_ylabel("Anchor MSE")
@@ -175,7 +175,7 @@ def save_milestone_table(
             fa = float(front_hist["val_anchor"][i])
             t_imp = (tn - tw) / (tn + 1e-9) * 100.0
             f_imp = (fn - fw) / (fn + 1e-9) * 100.0
-            winner = "tail_lock_L16L17" if tw < fw else "front_lock_L0L1"
+            winner = "tail_lock_L16L17" if tw < fw else "front_tail_lock_L0L1L16L17"
             w.writerow({
                 "epoch": ep,
                 "tail_val_wav_mse": tw,
@@ -207,7 +207,7 @@ def print_console(rows: List[RunSummary]):
 
 
 def main():
-    p = argparse.ArgumentParser(description="Compare exp_0305b tail_lock vs front_lock runs")
+    p = argparse.ArgumentParser(description="Compare exp_0305b tail_lock vs front_tail_lock runs")
     p.add_argument("--tail_dir", required=True, type=Path)
     p.add_argument("--front_dir", required=True, type=Path)
     p.add_argument("--output_dir", required=True, type=Path)
@@ -218,7 +218,7 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     tail = build_summary("tail_lock_L16L17", args.tail_dir)
-    front = build_summary("front_lock_L0L1", args.front_dir)
+    front = build_summary("front_tail_lock_L0L1L16L17", args.front_dir)
     rows = [tail, front]
 
     save_table(rows, args.output_dir / "comparison_summary.csv")

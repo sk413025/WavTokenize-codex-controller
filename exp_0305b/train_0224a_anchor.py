@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-exp_0305b: 0224a-baseline + Layer Anchor Regularization
+exp_0305b: 官方 WavTokenizer 起點 + Layer Anchor Regularization
 
 目標:
-1) 以 exp_0224a best_model.pt 為初始化基線（warm start，繼承降噪已學的能力）
-2) 在續訓時對指定層加入「不偏離原始 WavTokenizer」約束
+1) 從官方 WavTokenizer 預訓練權重初始化（不載入 exp_0224a/0217 先驗）
+2) 訓練時對指定層加入「不偏離原始 WavTokenizer」約束
    → anchor 目標 = model.teacher（原始 pretrained encoder，完全 frozen）
    → 確保 student encoder 輸出空間不偏離太遠，保護 frozen decoder 正常解碼清晰語音
 3) 比較不同錨定層策略:
@@ -388,7 +388,12 @@ def evaluate(
         "val_stft_sc": [],
         "val_mel": [],
         "val_anchor": [],
+        "val_total_loss": [],
     }
+    lambda_wav = cfg["lambda_wav"]
+    lambda_stft = cfg["lambda_stft"]
+    lambda_mel = cfg["lambda_mel"]
+    lambda_anchor = cfg["lambda_anchor"]
     for i, batch in enumerate(loader):
         if max_batches and i >= max_batches:
             break
@@ -409,12 +414,23 @@ def evaluate(
         c = clean[..., :T]
         n = noisy[..., :T]
 
-        vals["val_wav_mse"].append(F.mse_loss(r, c).item())
+        wav_mse = F.mse_loss(r, c).item()
+        vals["val_wav_mse"].append(wav_mse)
         vals["val_noisy_mse"].append(F.mse_loss(n, c).item())
-        sc, _ = mr_stft(r, c)
-        vals["val_stft_sc"].append(sc.item())
-        vals["val_mel"].append(mel_fn(r, c).item())
-        vals["val_anchor"].append(compute_anchor_loss(student_hooks.cache, anchor_hooks.cache, layer_weights).item())
+        sc, mag = mr_stft(r, c)
+        sc_val = sc.item()
+        mag_val = mag.item()
+        vals["val_stft_sc"].append(sc_val)
+        mel_val = mel_fn(r, c).item()
+        vals["val_mel"].append(mel_val)
+        anchor_val = compute_anchor_loss(student_hooks.cache, anchor_hooks.cache, layer_weights).item()
+        vals["val_anchor"].append(anchor_val)
+        vals["val_total_loss"].append(
+            lambda_wav * wav_mse
+            + lambda_stft * (sc_val + mag_val)
+            + lambda_mel * mel_val
+            + lambda_anchor * anchor_val
+        )
 
     return {k: float(np.mean(v)) if v else float("nan") for k, v in vals.items()}
 
@@ -446,7 +462,7 @@ def plot_curves(history: dict, output_dir: Path, epoch: int, preset: str):
             ax.set_yscale('log')
         ax.grid(True, alpha=0.3)
 
-    _plot(axes[0, 0], [('train_total_loss', 'Train total', 'steelblue')], 'Total Loss (train)', log=True)
+    _plot(axes[0, 0], [('train_total_loss', 'Train total', 'steelblue'), ('val_total_loss', 'Val total', 'tomato')], 'Total Loss (train / val)', log=True)
     _plot(axes[0, 1], [('train_wav_mse', 'Train MSE', 'blue'), ('val_wav_mse', 'Val MSE', 'red'), ('val_noisy_mse', 'Noisy MSE', 'orange')], 'Wav MSE')
     _plot(axes[0, 2], [('train_anchor', 'Train anchor', 'purple'), ('val_anchor', 'Val anchor', 'violet')], 'Anchor Loss')
     _plot(axes[1, 0], [('lr', 'LR', 'gray')], 'Learning Rate', log=True)
@@ -607,11 +623,11 @@ def main():
         json.dump(cfg, f, indent=2, ensure_ascii=False)
 
     print("=" * 70)
-    print("exp_0305b: 0224a baseline + layer anchor regularization")
+    print("exp_0305b: 官方 WavTokenizer 起點 + layer anchor regularization")
     print(f"mode={args.mode}, epochs={args.epochs}, device={device}")
     print(f"preset={args.preset}, anchor_layers={layer_ids}, anchor_weights={layer_weights}")
     print(f"lambda_anchor={args.lambda_anchor}")
-    print(f"baseline_ckpt={args.baseline_ckpt}")
+    print(f"encoder_init: 官方 WavTokenizer 預訓練權重（NO 0224a/0217 先驗）")
     print(f"output={out_dir}")
     print("=" * 70)
 
@@ -622,7 +638,7 @@ def main():
         smoke=smoke,
     )
 
-    # Model (same as exp_0224a)
+    # Model：從官方 WavTokenizer 權重初始化，不載入任何 exp_0224a/0217 先驗
     model = TeacherStudentNoVQ(
         wavtok_config=WAVTOK_CONFIG,
         wavtok_ckpt=WAVTOK_CKPT,
@@ -631,9 +647,7 @@ def main():
         intermediate_indices=[3, 4, 6],
         device=str(device),
     ).to(device)
-
-    # Load 0224a baseline weights
-    load_0224a_weights(model, Path(args.baseline_ckpt))
+    print("Student encoder: 官方 WavTokenizer 預訓練權重（NO 0224a/0217 先驗）")
 
     # Anchor encoder = 原始 WavTokenizer teacher encoder（已 frozen）
     # 目的：約束 student encoder 不偏離官方預訓練權重 → 保護 frozen decoder 解碼出清晰語音
@@ -670,7 +684,7 @@ def main():
 
     history = {
         "train_total_loss": [], "train_wav_mse": [], "train_anchor": [],
-        "val_wav_mse": [], "val_noisy_mse": [], "val_anchor": [], "lr": []
+        "val_total_loss": [], "val_wav_mse": [], "val_noisy_mse": [], "val_anchor": [], "lr": []
     }
     best_val = float("inf")
 
@@ -691,6 +705,7 @@ def main():
         history["train_total_loss"].append(tr["total_loss"])
         history["train_wav_mse"].append(tr["wav_mse"])
         history["train_anchor"].append(tr["anchor_loss"])
+        history["val_total_loss"].append(va["val_total_loss"])
         history["val_wav_mse"].append(va["val_wav_mse"])
         history["val_noisy_mse"].append(va["val_noisy_mse"])
         history["val_anchor"].append(va["val_anchor"])

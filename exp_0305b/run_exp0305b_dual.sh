@@ -21,9 +21,9 @@ WARMUP_EPOCHS="${WARMUP_EPOCHS:-5}"
 NUM_WORKERS="${NUM_WORKERS:-2}"
 
 # Anchor strengths
-# Your first design: tail constraint uses lower penalty to keep output close to 0224a.
-TAIL_LAMBDA="${TAIL_LAMBDA:-1.0}"   # L16/L17
-FRONT_LAMBDA="${FRONT_LAMBDA:-3.0}" # L0/L1
+# A: constrain tail (L16/L17), B: constrain front+tail (L0/L1/L16/L17)
+TAIL_LAMBDA="${TAIL_LAMBDA:-1.0}"   # Experiment A
+FRONT_LAMBDA="${FRONT_LAMBDA:-3.0}" # Experiment B
 NO_AMP="${NO_AMP:-0}"               # 1 => pass --no_amp
 COMPARE_EVERY="${COMPARE_EVERY:-50}" # comparison milestone interval (epochs)
 
@@ -33,7 +33,7 @@ echo "RUN_ROOT=${RUN_ROOT}"
 echo "PYTHON_BIN=${PYTHON_BIN}"
 echo "DEVICE=${DEVICE} MODE=${MODE} EPOCHS=${EPOCHS}"
 echo "TAIL_LAMBDA=${TAIL_LAMBDA} (L16,L17)"
-echo "FRONT_LAMBDA=${FRONT_LAMBDA} (L0,L1)"
+echo "FRONT_LAMBDA=${FRONT_LAMBDA} (L0,L1,L16,L17)"
 echo "COMPARE_EVERY=${COMPARE_EVERY}"
 echo "=============================================================="
 
@@ -59,17 +59,17 @@ echo "[1/2] tail_lock (L16/L17)"
   --lambda_anchor "${TAIL_LAMBDA}" \
   --output_dir "${RUN_ROOT}/tail_lock_L16L17"
 
-echo "[2/2] front_lock (L0/L1)"
+echo "[2/2] front_tail_lock (L0/L1/L16/L17)"
 "${PYTHON_BIN}" exp_0305b/train_0224a_anchor.py \
   "${COMMON_ARGS[@]}" \
-  --preset front_lock \
+  --preset front_tail_lock \
   --lambda_anchor "${FRONT_LAMBDA}" \
-  --output_dir "${RUN_ROOT}/front_lock_L0L1"
+  --output_dir "${RUN_ROOT}/front_tail_lock_L0L1L16L17"
 
 echo "[3/3] compare"
 "${PYTHON_BIN}" exp_0305b/compare_exp0305b_dual.py \
   --tail_dir "${RUN_ROOT}/tail_lock_L16L17" \
-  --front_dir "${RUN_ROOT}/front_lock_L0L1" \
+  --front_dir "${RUN_ROOT}/front_tail_lock_L0L1L16L17" \
   --output_dir "${RUN_ROOT}/comparison" \
   --milestone_interval "${COMPARE_EVERY}"
 
