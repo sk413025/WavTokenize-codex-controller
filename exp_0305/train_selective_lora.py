@@ -915,22 +915,9 @@ def main():
         device=str(device),
     )
 
-    # ── 載入 exp_0217 checkpoint（與 exp_0224a 相同起點）──────────
-    if EXP0217_BEST_CKPT.exists():
-        print(f"Loading encoder checkpoint from exp_0217: {EXP0217_BEST_CKPT}")
-        ckpt = torch.load(EXP0217_BEST_CKPT, map_location='cpu')
-        state = ckpt.get('model_state_dict', ckpt)
-        # 只載入 encoder 相關權重
-        enc_prefix = 'student.base_model.model.feature_extractor.encodec.encoder.'
-        enc_state = {
-            k.replace('student.', 'base_model.model.', 1) if k.startswith('student.') else k: v
-            for k, v in state.items()
-            if 'encoder' in k and 'lora' not in k.lower()
-        }
-        missing, unexpected = model.student.load_state_dict(enc_state, strict=False)
-        print(f"  載入成功 — missing: {len(missing)}, unexpected: {len(unexpected)}")
-    else:
-        print(f"⚠ exp_0217 ckpt 不存在，使用原始 WavTokenizer 初始化")
+    # Student encoder 使用官方 WavTokenizer 預訓練權重（TeacherStudentSelectiveLoRA.__init__ 已完成）
+    # 不載入任何 exp_0217/0224a 先驗，確保 base weights 不偏離官方清晰音質空間
+    print("Student encoder: 使用官方 WavTokenizer 預訓練權重（NO exp_0217/0224a 先驗）")
 
     # ── Resume ───────────────────────────────────────────────────
     start_epoch = 0
@@ -988,6 +975,12 @@ def main():
     print(f"\nTrain batches/epoch: {len(train_loader)}")
     print(f"Val   batches/eval:  min({len(val_loader)}, 30)")
     print(f"Plan description: {PLANS[args.plan]['description']}\n")
+
+    # anchor 相關變數：新設計不使用 anchor loss（base weights 已是官方 WavTokenizer）
+    anchor_encoder = None
+    student_hooks = None
+    anchor_hooks = None
+    anchor_layer_ids = []
 
     # ── 訓練迴圈 ─────────────────────────────────────────────────
     for epoch in range(start_epoch + 1, epochs + 1):
