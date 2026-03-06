@@ -32,6 +32,8 @@
 | exp_0228_fm (EncOnly+FeatAlign+MRD-FM+HuBERT, ep77) | 1.5495 | 0.6183 | -0.1270 | +0.0917 |
 | exp_0229b (LatentBWE on enc_0227, ep140) | 1.5415 | 0.6274 | -0.1350 | +0.1008 |
 | exp_0229c (LatentBWE-v2+HF-emph on enc_0227, ep87) | 1.6086 | 0.6230 | -0.0679 | +0.0964 |
+| exp_0305b_A_tail_lock (anchor tail L16/L17) | 1.5517 | 0.5816 | -0.1248 | +0.0550 |
+| exp_0305b_B_front_tail_lock (anchor front+tail L0/L1/L16/L17) | 1.4601 | 0.5722 | -0.2164 | +0.0456 |
 
 ## Per-Sample 明細
 
@@ -189,6 +191,20 @@
 | 2 | 1.7212 | 2.5907 | 0.5935 | 0.5984 |
 | 3 | 1.6164 | 2.4520 | 0.6221 | 0.6314 |
 
+### exp_0305b_A_tail_lock
+| Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
+|--------|-----------|-----------|-----------|-----------|
+| 1 | 1.4785 | 2.3642 | 0.6278 | 0.6682 |
+| 2 | 1.6990 | 2.5906 | 0.5280 | 0.5983 |
+| 3 | 1.4775 | 2.4521 | 0.5889 | 0.6315 |
+
+### exp_0305b_B_front_tail_lock
+| Sample | PESQ recon | PESQ noisy | STOI recon | STOI noisy |
+|--------|-----------|-----------|-----------|-----------|
+| 1 | 1.4762 | 2.3642 | 0.6116 | 0.6682 |
+| 2 | 1.4460 | 2.5906 | 0.5059 | 0.5983 |
+| 3 | 1.4582 | 2.4521 | 0.5991 | 0.6315 |
+
 ## 音檔說明
 
 各子目錄包含 3 組音檔（sampleNN_noisy / clean / recon）：
@@ -209,3 +225,5 @@
 - **exp_0228_fm**（+HuBERT）：在 0227 基礎上加入 frozen HuBERT 語音學特徵監督（layers 6-8）
 - **exp_0229b**（LatentBWE）：凍結 enc_0227，在 latent 域插入可訓練 LatentBWE（~0.5M params）
 - **exp_0229c**（LatentBWE-v2+HF-emph）：擴大模型容量（hidden 128→256, kernel 3→5, blocks 6→8, ~2.8M），加入 HF-emphasis STFT Loss（4kHz cutoff, 5× 加重）
+- **exp_0305b_A_tail_lock**：Anchor regularization 僅鎖定尾端層（L16/L17）
+- **exp_0305b_B_front_tail_lock**：Anchor regularization 同時鎖定前後端層（L0/L1/L16/L17）

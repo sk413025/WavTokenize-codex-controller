@@ -226,6 +226,8 @@ def rebuild_comparison_table(all_results):
         'exp_0228_fm',
         'exp_0229b',
         'exp_0229c',
+        'exp_0305b_A_tail_lock',
+        'exp_0305b_B_front_tail_lock',
     ]
 
     LABELS = {
@@ -245,6 +247,8 @@ def rebuild_comparison_table(all_results):
         'exp_0228_fm': 'exp_0228_fm (EncOnly+FeatAlign+MRD-FM+HuBERT, ep77)',
         'exp_0229b': 'exp_0229b (LatentBWE on enc_0227, ep140)',
         'exp_0229c': 'exp_0229c (LatentBWE-v2+HF-emph on enc_0227, ep87)',
+        'exp_0305b_A_tail_lock': 'exp_0305b_A_tail_lock (anchor tail L16/L17)',
+        'exp_0305b_B_front_tail_lock': 'exp_0305b_B_front_tail_lock (anchor front+tail L0/L1/L16/L17)',
     }
 
     for key in ORDER:
@@ -301,6 +305,8 @@ def rebuild_comparison_table(all_results):
     lines.append("- **exp_0228_fm**（+HuBERT）：在 0227 基礎上加入 frozen HuBERT 語音學特徵監督（layers 6-8）")
     lines.append("- **exp_0229b**（LatentBWE）：凍結 enc_0227，在 latent 域插入可訓練 LatentBWE（~0.5M params）")
     lines.append("- **exp_0229c**（LatentBWE-v2+HF-emph）：擴大模型容量（hidden 128→256, kernel 3→5, blocks 6→8, ~2.8M），加入 HF-emphasis STFT Loss（4kHz cutoff, 5× 加重）")
+    lines.append("- **exp_0305b_A_tail_lock**：Anchor regularization 僅鎖定尾端層（L16/L17）")
+    lines.append("- **exp_0305b_B_front_tail_lock**：Anchor regularization 同時鎖定前後端層（L0/L1/L16/L17）")
 
     return "\n".join(lines)
 
