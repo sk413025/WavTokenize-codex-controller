@@ -164,6 +164,26 @@ PLANS = {
         ),
         'n_layers': 18,
     },
+    # plan_d: 全 18 層 LoRA rank=32，穩定 10 層加 anchor 約束 + 3-phase LR + dynamic lambda
+    # 差異於 plan_b：使用 3-phase LR 與動態 lambda（繼承自 exp_0305c 改良）
+    # 8 層噪音敏感層（L0,L2,L3,L6,L8,L9,L11,L12）自由訓練（無 anchor）
+    # 10 層穩定層（L1,L4,L5,L7,L10,L13,L14,L15,L16,L17）加 anchor 約束至官方 WavTokenizer
+    'plan_d': {
+        'layers': ALL_18_LAYERS,   # 全 18 層都有 LoRA rank=32
+        'rank': 32,
+        'alpha': 64,
+        'anchor_layer_ids': [1, 4, 5, 7, 10, 13, 14, 15, 16, 17],
+        'lambda_anchor': 0.5,      # 初始值，動態調整由訓練腳本 get_lambda_anchor() 控制
+        'use_dynamic_lambda': True,
+        'use_3phase_lr': True,
+        'description': (
+            'plan_d: 全 18 層 LoRA rank=32，'
+            '8 層噪音敏感層(L0,L2,L3,L6,L8,L9,L11,L12)自由訓練，'
+            '10 層穩定層(L1,L4,L5,L7,L10,L13,L14,L15,L16,L17) anchor 約束至官方 WavTokenizer，'
+            '3-phase LR + dynamic lambda_anchor(ep1-50=0.5, ep51-150=1.5, ep151+=3.0)'
+        ),
+        'n_layers': 18,
+    },
 }
 
 

@@ -798,6 +798,33 @@ def save_audio_samples(
 
 
 # ============================================================
+# 3-phase LR + dynamic lambda（plan_d 專用，繼承自 exp_0305c）
+# ============================================================
+
+def make_lr_lambda_3phase(warmup_epochs: int, constant_until: int, total_epochs: int,
+                          min_lr: float, max_lr: float):
+    """三段式 LR schedule: warmup → constant → cosine decay"""
+    def lr_lambda(ep):
+        if ep < warmup_epochs:
+            return (ep + 1) / max(1, warmup_epochs)
+        if ep < constant_until:
+            return 1.0
+        progress = (ep - constant_until) / max(1, total_epochs - constant_until)
+        return max(min_lr / max_lr, 0.5 * (1 + math.cos(math.pi * progress)))
+    return lr_lambda
+
+
+def get_dynamic_lambda_anchor(epoch: int) -> float:
+    """動態 lambda_anchor: ep1-50=0.5, ep51-150=1.5, ep151+=3.0"""
+    if epoch <= 50:
+        return 0.5
+    elif epoch <= 150:
+        return 1.5
+    else:
+        return 3.0
+
+
+# ============================================================
 # Main
 # ============================================================
 
@@ -809,7 +836,7 @@ def parse_args():
     """
     p = argparse.ArgumentParser(description='exp_0305 Selective LoRA')
     p.add_argument('--plan', type=str, default='plan_b',
-                   choices=['plan_a', 'plan_b', 'plan_c'],
+                   choices=['plan_a', 'plan_b', 'plan_c', 'plan_d'],
                    help='LoRA 層選擇方案 (see models_selective_lora.py)')
     p.add_argument('--mode', type=str, default='epoch',
                    choices=['smoke', 'epoch'])
@@ -947,11 +974,23 @@ def main():
     optimizer = torch.optim.AdamW(
         trainable_params, lr=config['learning_rate'], weight_decay=config['weight_decay'],
     )
-    # cosine annealing with warmup
-    total_steps = epochs - config['warmup_epochs']
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=max(total_steps, 1), eta_min=config['min_lr'],
-    )
+    # plan_d: 3-phase LR（warmup 10ep → const until ep150 → cosine to ep300）
+    # 其他 plan: cosine annealing with warmup（原邏輯）
+    use_3phase = PLANS[args.plan].get('use_3phase_lr', False)
+    if use_3phase:
+        lr_lambda = make_lr_lambda_3phase(
+            warmup_epochs=10,
+            constant_until=150,
+            total_epochs=epochs,
+            min_lr=config['min_lr'],
+            max_lr=config['learning_rate'],
+        )
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+    else:
+        total_steps = epochs - config['warmup_epochs']
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=max(total_steps, 1), eta_min=config['min_lr'],
+        )
     scaler = GradScaler() if config['use_amp'] else None
 
     # ── Data loaders ─────────────────────────────────────────────
@@ -995,11 +1034,16 @@ def main():
 
     # ── 訓練迴圈 ─────────────────────────────────────────────────
     for epoch in range(start_epoch + 1, epochs + 1):
-        # Warmup LR
-        if epoch <= config['warmup_epochs']:
+        # plan_d: 3-phase LR 由 LambdaLR 統一管理，不需手動 warmup
+        # 其他 plan: 手動 warmup
+        if not use_3phase and epoch <= config['warmup_epochs']:
             warmup_factor = epoch / config['warmup_epochs']
             for pg in optimizer.param_groups:
                 pg['lr'] = config['learning_rate'] * warmup_factor
+
+        # plan_d: dynamic lambda_anchor
+        if PLANS[args.plan].get('use_dynamic_lambda', False):
+            config['lambda_anchor'] = get_dynamic_lambda_anchor(epoch)
 
         t_metrics = train_epoch(
             model, train_loader, optimizer, device, epoch, config,
@@ -1009,7 +1053,7 @@ def main():
             anchor_hooks=anchor_hooks,
         )
 
-        if epoch > config['warmup_epochs']:
+        if use_3phase or epoch > config['warmup_epochs']:
             scheduler.step()
 
         cur_lr = optimizer.param_groups[0]['lr']
@@ -1042,12 +1086,13 @@ def main():
         with open(out_dir / 'history.json', 'w') as f:
             json.dump(history, f, indent=2)
 
+        lam_str = f"  λ={config['lambda_anchor']:.1f}" if config.get('lambda_anchor', 0.0) > 0 else ""
         print(
             f"[Epoch {epoch:3d}]  "
             f"train_total={t_metrics['total_loss']:.4f}  "
             f"val_mse={v_metrics['val_wav_mse']:.5f}  "
             f"(noisy={v_metrics['val_noisy_mse']:.5f})  "
-            f"anchor={t_metrics.get('anchor_loss',0.0):.5f}  "
+            f"anchor={t_metrics.get('anchor_loss',0.0):.5f}{lam_str}  "
             f"stft_sc={v_metrics['val_stft_sc']:.4f}  "
             f"lr={cur_lr:.2e}"
         )
@@ -1066,7 +1111,7 @@ def main():
             print(f"  ✓ best_model.pt 更新 (val_mse={best_val_mse:.5f})")
 
         # Checkpoint
-        if epoch % 10 == 0 or is_smoke:
+        if epoch % 25 == 0 or is_smoke:
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
@@ -1080,8 +1125,8 @@ def main():
         if epoch % 25 == 0 or (is_smoke and epoch == epochs):
             plot_curves(history, out_dir, epoch, args.plan)
 
-        # Audio 樣本：每 10 epoch 或 smoke 模式結束時
-        if epoch % 10 == 0 or (is_smoke and epoch == epochs):
+        # Audio 樣本：每 25 epoch 或 smoke 模式結束時
+        if epoch % 25 == 0 or (is_smoke and epoch == epochs):
             save_audio_samples(model, val_loader, device, out_dir, epoch)
 
     # ── 訓練結束 ─────────────────────────────────────────────────
