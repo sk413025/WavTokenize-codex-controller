@@ -1,3 +1,19 @@
+# Codex-First Fork Notice
+
+This fork is operated as a Codex-native, Markdown-first research repo.
+
+Start here for repo operations:
+- `AGENTS.md`
+- `docs/project_goal.md`
+- `docs/experiment_policy.md`
+- `docs/research_loop.md`
+- `docs/official_run_playbook.md`
+
+The upstream WavTokenizer README below is preserved as model and background context.
+It is not the primary operating guide for this fork.
+
+---
+
 # WavTokenizer
 SOTA Discrete Codec Models With Forty Tokens Per Second for Audio Language Modeling 
 

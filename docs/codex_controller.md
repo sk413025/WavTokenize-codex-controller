@@ -2,80 +2,46 @@
 
 Start in `AGENTS.md`.
 
-This document is implementation detail for `codex_controller`. It is not the repo policy source of truth.
+This document is an appendix for the thin runtime.
+Read it only when you need to validate a manifest, execute a run, monitor a run, resume a run, or inspect persisted run state.
 
 ## What `codex_controller` Is
-- The lifecycle layer for manifests, adapters, run state, and packet-oriented orchestration
-- A bridge from Codex-native planning into durable controller artifacts
-- Not a replacement for the Codex-started session, native roles, or repo-local skills
+- a small execution helper for official manifests and adapters
+- a run ledger for logs, stage state, monitor output, and basic analysis
+- a persistence layer after the Codex session has already decided what to do
 
-## Official Runtime Shape
-Official runs still follow:
-- `plan`
-- `prepare`
-- `execute`
-- `monitor`
-- `analyze`
-- `diagnose`
-- `patch`
-- `propose_next`
-- `queue_next`
+## What `codex_controller` Is Not
+- not the primary control surface
+- not the place to learn the research loop
+- not a planner, promotion engine, or review system
 
-Packet-oriented controller commands:
-- `prepare-run`
-- `emit-packets`
-- `ingest-agent-result`
-- `advance-run`
-- `finalize-run`
+## When To Use It
+Use `codex_controller` only after `AGENTS.md`, repo docs, and the relevant skills have already established the next step.
+Typical cases:
+- validate a manifest
+- execute `preflight`, `smoke`, `short`, or `full`
+- monitor an active run
+- resume a failed or interrupted run
+- inspect persisted run state
 
-Current CLI bridge:
+## Runtime Contract
+Each run should keep a minimal durable record:
+- `manifest.snapshot.json`
+- `state.json`
+- per-stage logs
+- `events.jsonl`
+- `monitor_report.json`
+- `metrics.json`
+- `analysis.json`
+- `diagnosis.json`
+
+## Command Reference
 ```bash
 python -m codex_controller validate <manifest>
 python -m codex_controller describe <manifest>
 python -m codex_controller run <manifest>
 python -m codex_controller run <manifest> --dry-run
 python -m codex_controller resume controller_runs/<run_id>
+python -m codex_controller monitor-run controller_runs/<run_id> --print-report
 python -m codex_controller status controller_runs/<run_id>
 ```
-
-## Role And State Notes
-- `default` remains the only official queue owner
-- `agents/registry.json` is controller metadata and must map onto native Codex roles
-- `controller_runs/<run_id>/` is the durable record for run state, events, handoffs, analysis, diagnosis, and follow-up artifacts
-
-## Thin Runtime Contract
-The public run contract is intentionally small:
-- `state.json`
-- `analysis.json`
-- `diagnosis.json`
-- `patch_request.json`
-- `next_manifest.json`
-- `controller_actions.jsonl`
-- `agent_packets/`
-- `agent_results/`
-
-Supporting records remain available for debugging and lineage:
-- `events.jsonl`
-- `decision_log.jsonl`
-- `agent_handoffs.jsonl`
-- `manifest.snapshot.json`
-- per-stage logs
-
-`dispatch_plan.json` may exist as internal debug output. It is not a starting point for repo operation.
-
-## Skills
-Use repo-local skills first.
-
-Core five:
-- `controller-decomposition`
-- `dispatch-handoff`
-- `stage-monitoring`
-- `run-diagnosis`
-- `followup-generation`
-
-Secondary:
-- `manifest-authoring`
-- `legacy-adapter-onboarding`
-- `experiment-promotion`
-
-For the official Codex-started flow, see `docs/golden_session.md`.

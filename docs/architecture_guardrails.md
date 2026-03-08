@@ -20,6 +20,7 @@ This layer tells Codex how to work in this project.
 - repo `AGENTS.md`
 - `.codex/config.toml`
 - `.agents/skills/*`
+- Markdown workflow notes and checklists
 
 Use this layer for workflow rules, decomposition patterns, preflight rules, diagnosis patterns, and review checklists.
 
@@ -38,6 +39,7 @@ Allowed additions:
 - project-specific manifests and adapters
 - project-specific preflight and diagnosis entrypoints
 - project-specific skills
+- Markdown instructions that help Codex operate the repo without new runtime code
 - thin run ledger and analysis artifacts
 - experiment-family migration logic
 
@@ -61,6 +63,22 @@ For any new controller or agent-native feature, answer:
 
 If the answer is weak, the change should not become new runtime code.
 
+## Markdown-First Policy
+Prefer repo-local Markdown plus skills over Python wherever possible.
+
+Use Markdown for:
+- workflow rules
+- review checklists
+- decomposition guidance
+- migration playbooks
+- experiment operating notes
+
+Only add Python when Markdown, `AGENTS.md`, and skills are not enough for Codex to operate the project correctly.
+
+If Python is still required, it should either:
+- support a project-specific experiment path, or
+- support a repo-local skill and be documented by that skill
+
 ## Preferred Escalation Path
 When Codex needs more structure, escalate in this order:
 1. tighten `AGENTS.md`
@@ -69,3 +87,9 @@ When Codex needs more structure, escalate in this order:
 4. add the smallest possible thin-runtime change
 
 This order is the main defense against overengineering.
+
+## Native Review
+All code changes must go through Codex native review in the Review pane or with `/review`.
+
+This repo adds only a project-specific checklist through `codex-native-review`.
+It must not add a second review platform, a review ledger, or a mechanical review gate that duplicates Codex native review.

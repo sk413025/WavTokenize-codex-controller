@@ -3,12 +3,11 @@
 This is the official Codex-started path.
 
 1. Start in `AGENTS.md`.
-2. Keep one Codex-started session as the golden session for planning, delegation, integration, and final queue decisions.
-3. Use the core five repo-local skills first:
-   `controller-decomposition`, `dispatch-handoff`, `stage-monitoring`, `run-diagnosis`, `followup-generation`.
-4. Before expanding controller or agent-native architecture, run `codex-native-review`.
-5. Use `python -m codex_controller ...` and the packet commands to persist controller state, not to replace the golden session.
-6. Let bounded roles return results through packets and handoffs.
-7. Let `default` finalize the run and any official queue mutation.
+2. Read `docs/project_goal.md`, `docs/experiment_policy.md`, and `docs/research_loop.md`.
+3. Use repo-local skills as Markdown playbooks, with `official-run-ladder` as the default entry for a real official run.
+4. Use native multi-agent collaboration to decompose, inspect, monitor, and review the work.
+5. Use `python -m codex_controller ...` only when a manifest needs validation, execution, monitoring, resume, or status inspection.
+6. Review results in the same Codex session using native review and the repo checklist.
+7. Keep final interpretation, promotion decisions, and follow-up choices with `Codex(default)`.
 
-In short: `AGENTS.md` starts the work, the Codex session stays authoritative, and `codex_controller` records and advances the lifecycle.
+In short: `AGENTS.md` starts the work, docs and skills explain the workflow, native Codex handles orchestration, and `codex_controller` only records project-specific run facts.

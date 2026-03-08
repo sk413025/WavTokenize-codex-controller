@@ -19,21 +19,29 @@ Workflow:
    - `repo_specific_gap`
    - `minimal_added_surface`
    - `what_not_to_build`
-4. Reject the change if it mainly recreates native planning, routing, approval, queueing, or monitoring.
-5. Prefer the smallest acceptable layer:
+4. Add two required outcome fields:
+   - `core_goal_alignment`
+   - `decision`
+5. Reject the change if it mainly recreates native planning, routing, approval, queueing, or monitoring.
+6. Prefer the smallest acceptable layer:
    - `AGENTS.md`
    - skill
+   - Markdown checklist or workflow note
    - manifest or adapter
    - thin runtime code
-6. End with one of these outcomes:
+7. End with one of these outcomes:
    - `policy_only`
    - `skill_only`
    - `manifest_or_adapter_only`
    - `thin_runtime_change_allowed`
    - `reject_as_overengineering`
+8. After any code change, apply this checklist during Codex native review in the Review pane or with `/review`.
 
 Checks:
 - `Codex(default)` stays the top-level controller.
 - The repo start path still begins with `AGENTS.md`.
 - The proposal does not create another agent platform inside the repo.
 - The added surface is project-specific and minimal.
+- The change still serves the research goal instead of adding generic infrastructure.
+- If code was added, it is either project-specific experiment code or clearly in support of a repo-local skill with matching Markdown documentation.
+- If Markdown plus a skill would have been enough, reject the code change as overengineering.
