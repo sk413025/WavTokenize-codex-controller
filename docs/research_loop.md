@@ -6,15 +6,16 @@ This is the project-specific loop that Codex should follow using native multi-ag
 
 ## Default Loop
 1. Read `docs/project_goal.md` and the relevant official manifest.
-2. Use `experiment-decomposition` to split the work.
-3. Use `official-run-ladder` when the next step is a real official ladder run.
-4. Use native `explorer` work to inspect prior runs, artifacts, and family notes.
-5. Decide whether the next step is `preflight`, `smoke`, `short`, or `full`.
-6. Execute the selected manifest through `codex_controller`.
-7. Use `stage-monitoring` if the run is active.
-8. Use `run-diagnosis` and `result-comparison` after the run.
-9. If a follow-up is needed, use `followup-generation` to draft a bounded next step.
-10. Final decisions stay with `Codex(default)`.
+2. Read `docs/worktree_policy.md`.
+3. Use `experiment-decomposition` to classify the task and split the work.
+4. Use `official-run-ladder` when the next step is a real official ladder run in the stable line.
+5. Use native `explorer` work to inspect prior runs, artifacts, and family notes.
+6. Decide whether the next step is `preflight`, `smoke`, `short`, or `full`.
+7. Execute the selected manifest through `codex_controller`.
+8. Use `stage-monitoring` if the run is active.
+9. Use `run-diagnosis` and `result-comparison` after the run.
+10. If a follow-up is needed, use `followup-generation` to draft a bounded next step.
+11. Final decisions stay with `Codex(default)`.
 
 ## Allowed Follow-Up Scope
 Follow-up proposals should stay within project-specific changes such as:

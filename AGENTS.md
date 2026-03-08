@@ -7,8 +7,9 @@ Start here first:
 - read `docs/project_goal.md`
 - read `docs/experiment_policy.md`
 - read `docs/research_loop.md`
-- for a real official run, use `official-run-ladder`
+- read `docs/worktree_policy.md`
 - read `docs/next_experiment.md` for the currently preferred official run
+- for a real official run, use `official-run-ladder`
 - treat `docs/codex_controller.md` as implementation notes only
 
 Higher-priority system, developer, and user instructions still apply.
@@ -113,6 +114,7 @@ Official work starts from these layers:
 - `docs/project_goal.md`
 - `docs/experiment_policy.md`
 - `docs/research_loop.md`
+- `docs/worktree_policy.md`
 - `.agents/skills/`
 - `experiments/manifests/*.json`
 - `experiments/adapters/*.json`
@@ -182,6 +184,13 @@ Codex may directly modify:
 - explicitly onboarded experiment families referenced by official manifests or adapter contracts
 
 Codex should not mutate unrelated legacy experiment families unless a manifest or diagnosis path explicitly points to them.
+
+## Worktree Policy
+- `codex-first-controller` is the stable official control-surface worktree.
+- A new hypothesis should default to a new branch and a new worktree.
+- If the task changes experiment behavior rather than just executing the current official ladder, open a hypothesis worktree first.
+- If unsure whether the work is a new hypothesis or only an execution of the current line, treat it as a new hypothesis and isolate it.
+- Follow `docs/worktree_policy.md` for the exact contract, naming rules, and merge-back criteria.
 
 ## Legacy Migration Policy
 A legacy experiment family becomes official only after it has:
