@@ -1,6 +1,8 @@
 {
   "schema_version": 1,
   "families": {
+    "material-generalization": null,
+    "anchor-then-material": null,
     "hubert-then-distalign": null
   }
 }

@@ -1,7 +1,18 @@
 {
   "schema_version": 1,
   "families": {
-    "anchor-then-material": [],
+    "anchor-then-material": [
+      {
+        "run_id": "exp0305c_chain_preflight_live",
+        "failure_reason": "Stage preflight_anchor_then_material failed with return code 2. See /home/sbplab/ruizi/WavTokenize-codex-controller/controller_runs/exp0305c_chain_preflight_live/preflight_anchor_then_material.log",
+        "summary": "Run failed during execution: Stage preflight_anchor_then_material failed with return code 2. See /home/sbplab/ruizi/WavTokenize-codex-controller/controller_runs/exp0305c_chain_preflight_live/preflight_anchor_then_material.log",
+        "suggested_changes": [
+          "bind the existing cache assets from WavTokenize-feature-analysis",
+          "wait for both sequential GPUs to have enough free memory",
+          "accept fallback to pretrained weights if the exp_0227 checkpoint is missing"
+        ]
+      }
+    ],
     "material-generalization": [
       {
         "run_id": "packet_failure_smoke",
@@ -19,6 +30,16 @@
         "suggested_changes": [
           "use controller stage dependencies instead of process-name matching",
           "keep watcher scripts as historical references only"
+        ]
+      },
+      {
+        "run_id": "exp0228_preflight_live",
+        "failure_reason": "Stage preflight_hubert_distalign failed with return code 2. See /home/sbplab/ruizi/WavTokenize-codex-controller/controller_runs/exp0228_preflight_live/preflight_hubert_distalign.log",
+        "summary": "Run failed during execution: Stage preflight_hubert_distalign failed with return code 2. See /home/sbplab/ruizi/WavTokenize-codex-controller/controller_runs/exp0228_preflight_live/preflight_hubert_distalign.log",
+        "suggested_changes": [
+          "bind the existing cache assets from WavTokenize-feature-analysis",
+          "wait for more free GPU memory before launching smoke or short runs",
+          "accept fallback to pretrained weights if the exp_0225 checkpoint is missing"
         ]
       }
     ]

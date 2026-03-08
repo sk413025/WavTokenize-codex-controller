@@ -16,7 +16,7 @@
   },
   "artifacts": {
     "notes": [
-      "Preflight writes a JSON report into the controller run directory.",
+      "Preflight writes a JSON report into the run directory.",
       "A missing exp_0227 encoder checkpoint is treated as fallback, not as a blocker."
     ]
   },

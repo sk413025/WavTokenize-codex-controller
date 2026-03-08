@@ -2,17 +2,13 @@
   "schema_version": 1,
   "experiment_id": "exp0304_material_generalization_smoke",
   "family": "material-generalization",
-  "objective": "Run the first controller-managed smoke gate for exp_0304 after preflight passes.",
+  "objective": "Run the first official smoke gate for exp_0304 after preflight passes.",
   "hypothesis": "A preflight-backed smoke run can validate data loading, model construction, and basic artifact emission before any longer material generalization run.",
   "baseline_refs": [
     "exp0304_material_generalization_preflight",
     "exp0304_material_generalization"
   ],
   "run_root": "controller_runs",
-  "autonomy": {
-    "mode": "closed_loop",
-    "authority_source": "AGENTS.md"
-  },
   "default_env": {
     "PYTHONPATH": "."
   },
@@ -28,33 +24,6 @@
     },
     "required_files": [],
     "result_classification_on_pass": "candidate"
-  },
-  "failure_policy": {
-    "on_stage_failure": "diagnose_and_patch"
-  },
-  "diagnosis_policy": {
-    "mode": "on_failure_or_unmet"
-  },
-  "patch_policy": {
-    "mode": "proposal_only",
-    "allowed_paths": [
-      "exp_0304/",
-      "experiments/manifests/",
-      "experiments/adapters/",
-      "knowledge/"
-    ],
-    "auto_apply": true
-  },
-  "next_step_policy": {
-    "on_success": "advance_to_short_run",
-    "on_failure": "diagnose_and_patch",
-    "on_unmet_criteria": "analyze_and_iterate",
-    "auto_generate_manifest": false,
-    "auto_queue": false
-  },
-  "promotion_policy": {
-    "mode": "manual_review",
-    "auto_promote_on_pass": false
   },
   "supersedes": null,
   "stages": [
@@ -84,7 +53,7 @@
       "name": "train_material_gen_smoke",
       "adapter": "python_script",
       "adapter_id": "exp0304_train_material_gen",
-      "description": "Run the first smoke gate for exp_0304 with external cache bindings and controller-owned output paths.",
+      "description": "Run the first smoke gate for exp_0304 with external cache bindings and run-local output paths.",
       "after": [
         "preflight_material_gen"
       ],

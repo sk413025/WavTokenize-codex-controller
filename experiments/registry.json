@@ -8,42 +8,123 @@
       "manifest": "experiments/manifests/exp0304_material_generalization_preflight.json",
       "status": "official",
       "family": "material-generalization",
-      "adapter_ids": ["exp0304_preflight_material_gen"]
+      "adapter_ids": [
+        "exp0304_preflight_material_gen"
+      ]
     },
     {
       "experiment_id": "exp0304_material_generalization_smoke",
       "manifest": "experiments/manifests/exp0304_material_generalization_smoke.json",
       "status": "official",
       "family": "material-generalization",
-      "adapter_ids": ["exp0304_preflight_material_gen", "exp0304_train_material_gen"]
+      "adapter_ids": [
+        "exp0304_preflight_material_gen",
+        "exp0304_train_material_gen"
+      ]
     },
     {
       "experiment_id": "exp0304_material_generalization_short",
       "manifest": "experiments/manifests/exp0304_material_generalization_short.json",
       "status": "official",
       "family": "material-generalization",
-      "adapter_ids": ["exp0304_preflight_material_gen", "exp0304_train_material_gen"]
+      "adapter_ids": [
+        "exp0304_preflight_material_gen",
+        "exp0304_train_material_gen"
+      ]
     },
     {
       "experiment_id": "exp0304_material_generalization",
       "manifest": "experiments/manifests/exp0304_material_generalization.json",
       "status": "official",
       "family": "material-generalization",
-      "adapter_ids": ["exp0304_preflight_material_gen", "exp0304_train_material_gen"]
+      "adapter_ids": [
+        "exp0304_preflight_material_gen",
+        "exp0304_train_material_gen"
+      ]
+    },
+    {
+      "experiment_id": "exp0305c_to_exp0304_preflight",
+      "manifest": "experiments/manifests/exp0305c_to_exp0304_preflight.json",
+      "status": "official",
+      "family": "anchor-then-material",
+      "adapter_ids": [
+        "exp0305c_preflight_anchor_then_material"
+      ]
+    },
+    {
+      "experiment_id": "exp0305c_to_exp0304_smoke",
+      "manifest": "experiments/manifests/exp0305c_to_exp0304_smoke.json",
+      "status": "official",
+      "family": "anchor-then-material",
+      "adapter_ids": [
+        "exp0305c_preflight_anchor_then_material",
+        "exp0305c_train_expc",
+        "exp0304_train_material_gen"
+      ]
+    },
+    {
+      "experiment_id": "exp0305c_to_exp0304_short",
+      "manifest": "experiments/manifests/exp0305c_to_exp0304_short.json",
+      "status": "official",
+      "family": "anchor-then-material",
+      "adapter_ids": [
+        "exp0305c_preflight_anchor_then_material",
+        "exp0305c_train_expc",
+        "exp0304_train_material_gen"
+      ]
     },
     {
       "experiment_id": "exp0305c_to_exp0304_controller",
       "manifest": "experiments/manifests/exp0305c_to_exp0304_controller.json",
       "status": "official",
       "family": "anchor-then-material",
-      "adapter_ids": ["exp0305c_train_expc", "exp0304_train_material_gen"]
+      "adapter_ids": [
+        "exp0305c_preflight_anchor_then_material",
+        "exp0305c_train_expc",
+        "exp0304_train_material_gen"
+      ]
+    },
+    {
+      "experiment_id": "exp0228_hubert_then_distalign_preflight",
+      "manifest": "experiments/manifests/exp0228_hubert_then_distalign_preflight.json",
+      "status": "official",
+      "family": "hubert-then-distalign",
+      "adapter_ids": [
+        "exp0228_preflight_hubert_distalign"
+      ]
+    },
+    {
+      "experiment_id": "exp0228_hubert_then_distalign_smoke",
+      "manifest": "experiments/manifests/exp0228_hubert_then_distalign_smoke.json",
+      "status": "official",
+      "family": "hubert-then-distalign",
+      "adapter_ids": [
+        "exp0228_preflight_hubert_distalign",
+        "exp0228_train_enc_hubert_fm",
+        "exp0228_train_enc_hubert_fm_distalign"
+      ]
+    },
+    {
+      "experiment_id": "exp0228_hubert_then_distalign_short",
+      "manifest": "experiments/manifests/exp0228_hubert_then_distalign_short.json",
+      "status": "official",
+      "family": "hubert-then-distalign",
+      "adapter_ids": [
+        "exp0228_preflight_hubert_distalign",
+        "exp0228_train_enc_hubert_fm",
+        "exp0228_train_enc_hubert_fm_distalign"
+      ]
     },
     {
       "experiment_id": "exp0228_hubert_then_distalign",
       "manifest": "experiments/manifests/exp0228_hubert_then_distalign.json",
       "status": "official",
       "family": "hubert-then-distalign",
-      "adapter_ids": ["exp0228_train_enc_hubert_fm", "exp0228_train_enc_hubert_fm_distalign"]
+      "adapter_ids": [
+        "exp0228_preflight_hubert_distalign",
+        "exp0228_train_enc_hubert_fm",
+        "exp0228_train_enc_hubert_fm_distalign"
+      ]
     }
   ],
   "legacy_families": [

@@ -12,7 +12,7 @@
   "artifacts": {
     "notes": [
       "Material generalization outputs are produced in exp_0304-managed directories.",
-      "Controller-owned logs remain under controller_runs/<run_id>/"
+      "Run logs remain under controller_runs/<run_id>/"
     ]
   },
   "known_failures": [

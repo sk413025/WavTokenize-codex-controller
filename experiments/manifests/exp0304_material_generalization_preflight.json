@@ -8,10 +8,6 @@
     "exp0304_material_generalization"
   ],
   "run_root": "controller_runs",
-  "autonomy": {
-    "mode": "closed_loop",
-    "authority_source": "AGENTS.md"
-  },
   "default_env": {
     "PYTHONPATH": "."
   },
@@ -24,33 +20,6 @@
     },
     "required_files": [],
     "result_classification_on_pass": "candidate"
-  },
-  "failure_policy": {
-    "on_stage_failure": "diagnose_and_patch"
-  },
-  "diagnosis_policy": {
-    "mode": "on_failure_or_unmet"
-  },
-  "patch_policy": {
-    "mode": "proposal_only",
-    "allowed_paths": [
-      "exp_0304/",
-      "experiments/manifests/",
-      "experiments/adapters/",
-      "knowledge/"
-    ],
-    "auto_apply": true
-  },
-  "next_step_policy": {
-    "on_success": "advance_to_smoke_gate",
-    "on_failure": "bind_missing_assets",
-    "on_unmet_criteria": "analyze_and_iterate",
-    "auto_generate_manifest": false,
-    "auto_queue": false
-  },
-  "promotion_policy": {
-    "mode": "manual_review",
-    "auto_promote_on_pass": false
   },
   "supersedes": null,
   "stages": [

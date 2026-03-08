@@ -13,66 +13,124 @@
     "stages"
   ],
   "properties": {
-    "schema_version": {"type": "integer", "const": 1},
-    "experiment_id": {"type": "string", "minLength": 1},
-    "family": {"type": "string", "minLength": 1},
-    "objective": {"type": "string", "minLength": 1},
-    "hypothesis": {"type": "string", "minLength": 1},
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "experiment_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "family": {
+      "type": "string",
+      "minLength": 1
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hypothesis": {
+      "type": "string",
+      "minLength": 1
+    },
     "baseline_refs": {
       "type": "array",
-      "items": {"type": "string"}
-    },
-    "run_root": {"type": "string"},
-    "autonomy": {
-      "type": "object",
-      "properties": {
-        "mode": {"type": "string"},
-        "authority_source": {"type": "string"}
+      "items": {
+        "type": "string"
       }
+    },
+    "run_root": {
+      "type": "string"
     },
     "default_env": {
       "type": "object",
-      "additionalProperties": {"type": "string"}
+      "additionalProperties": {
+        "type": "string"
+      }
     },
-    "resources": {"type": "object"},
-    "acceptance_criteria": {"type": "object"},
-    "failure_policy": {"type": "object"},
-    "diagnosis_policy": {"type": "object"},
-    "patch_policy": {"type": "object"},
-    "next_step_policy": {"type": "object"},
-    "promotion_policy": {"type": "object"},
-    "supersedes": {"type": ["string", "null"]},
+    "resources": {
+      "type": "object"
+    },
+    "acceptance_criteria": {
+      "type": "object"
+    },
+    "supersedes": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "stages": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["name", "adapter"],
+        "required": [
+          "name",
+          "adapter"
+        ],
         "properties": {
-          "name": {"type": "string", "minLength": 1},
-          "adapter": {"type": "string", "enum": ["python_script", "shell"]},
-          "adapter_id": {"type": "string"},
-          "description": {"type": "string"},
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "adapter": {
+            "type": "string",
+            "enum": [
+              "python_script",
+              "shell"
+            ]
+          },
+          "adapter_id": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
           "after": {
             "type": "array",
-            "items": {"type": "string"},
+            "items": {
+              "type": "string"
+            },
             "uniqueItems": true
           },
-          "cwd": {"type": "string"},
-          "entrypoint": {"type": "string"},
-          "python": {"type": "string"},
+          "cwd": {
+            "type": "string"
+          },
+          "entrypoint": {
+            "type": "string"
+          },
+          "python": {
+            "type": "string"
+          },
           "args": {
             "type": "array",
-            "items": {"type": ["string", "number", "boolean"]}
+            "items": {
+              "type": [
+                "string",
+                "number",
+                "boolean"
+              ]
+            }
           },
-          "command": {"type": "string"},
+          "command": {
+            "type": "string"
+          },
           "env": {
             "type": "object",
-            "additionalProperties": {"type": "string"}
+            "additionalProperties": {
+              "type": "string"
+            }
           },
-          "resources": {"type": "object"},
-          "artifacts": {"type": "object"},
-          "completion": {"type": "object"}
+          "resources": {
+            "type": "object"
+          },
+          "artifacts": {
+            "type": "object"
+          },
+          "completion": {
+            "type": "object"
+          }
         }
       }
     }

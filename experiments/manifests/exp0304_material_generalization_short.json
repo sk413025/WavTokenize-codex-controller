@@ -3,16 +3,12 @@
   "experiment_id": "exp0304_material_generalization_short",
   "family": "material-generalization",
   "objective": "Run the first short real launch for exp_0304 after the smoke gate passes.",
-  "hypothesis": "A controller-managed short run is enough to verify real epoch-mode execution, artifact generation, and monitorability before a full 300-epoch launch.",
+  "hypothesis": "A official short run is enough to verify real epoch-mode execution, artifact generation, and monitorability before a full 300-epoch launch.",
   "baseline_refs": [
     "exp0304_material_generalization_smoke",
     "exp0304_material_generalization"
   ],
   "run_root": "controller_runs",
-  "autonomy": {
-    "mode": "closed_loop",
-    "authority_source": "AGENTS.md"
-  },
   "default_env": {
     "PYTHONPATH": "."
   },
@@ -28,33 +24,6 @@
     },
     "required_files": [],
     "result_classification_on_pass": "candidate"
-  },
-  "failure_policy": {
-    "on_stage_failure": "diagnose_and_patch"
-  },
-  "diagnosis_policy": {
-    "mode": "on_failure_or_unmet"
-  },
-  "patch_policy": {
-    "mode": "proposal_only",
-    "allowed_paths": [
-      "exp_0304/",
-      "experiments/manifests/",
-      "experiments/adapters/",
-      "knowledge/"
-    ],
-    "auto_apply": true
-  },
-  "next_step_policy": {
-    "on_success": "advance_to_full_run",
-    "on_failure": "diagnose_and_patch",
-    "on_unmet_criteria": "analyze_and_iterate",
-    "auto_generate_manifest": false,
-    "auto_queue": false
-  },
-  "promotion_policy": {
-    "mode": "manual_review",
-    "auto_promote_on_pass": false
   },
   "supersedes": null,
   "stages": [
@@ -84,7 +53,7 @@
       "name": "train_material_gen_short",
       "adapter": "python_script",
       "adapter_id": "exp0304_train_material_gen",
-      "description": "Run the first short real launch for exp_0304 with controller-owned output paths.",
+      "description": "Run the first short real launch for exp_0304 with run-local output paths.",
       "after": [
         "preflight_material_gen"
       ],

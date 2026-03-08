@@ -1,10 +1,14 @@
 # Knowledge Layer
 
-This directory is the durable memory of the Codex controller.
+Start in `AGENTS.md`.
 
-- `experiments/index.json`: normalized findings by experiment family
-- `failures/index.json`: recurring failure signatures and suggested fixes
-- `policies/controller_defaults.json`: controller policy defaults
-- `best_runs.json`: promoted best-known runs by family
+This directory stores durable project-specific memory.
 
-Controller runs may snapshot and update these files under policy, but volatile run state stays in `controller_runs/`.
+Keep here only facts that are useful across runs:
+- `experiments/index.json`: family summaries and latest run references
+- `failures/index.json`: recurring operational failures and suggested fixes
+- `best_runs.json`: manually reviewed best-known runs by family
+- `policies/controller_defaults.json`: minimal runtime defaults only
+
+Do not treat `knowledge/` as a second controller policy engine.
+High-level research goals and workflow rules belong in Markdown docs.
