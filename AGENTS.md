@@ -8,6 +8,7 @@ Start here first:
 - read `docs/experiment_policy.md`
 - read `docs/research_loop.md`
 - for a real official run, use `official-run-ladder`
+- read `docs/next_experiment.md` for the currently preferred official run
 - treat `docs/codex_controller.md` as implementation notes only
 
 Higher-priority system, developer, and user instructions still apply.
