@@ -1,16 +1,6 @@
 {
   "schema_version": 1,
-  "autonomy_mode": "closed_loop",
-  "authority_source": "AGENTS.md",
-  "native_harness_required": true,
-  "planning_mode": "parallel_first",
-  "prefer_repo_local_skills": true,
-  "auto_generate_next_manifest": true,
-  "auto_queue_followup": true,
-  "default_result_classification_on_pass": "candidate",
-  "default_failure_action": "diagnose_and_patch",
-  "default_unmet_action": "analyze_and_iterate",
-  "default_success_action": "compare_against_baseline",
-  "auto_patch_apply": true,
-  "auto_run_dispatch": true
+  "summary": "Minimal runtime defaults only. High-level workflow policy lives in AGENTS.md and docs.",
+  "default_run_root": "controller_runs",
+  "default_monitor_stall_seconds": 1800
 }

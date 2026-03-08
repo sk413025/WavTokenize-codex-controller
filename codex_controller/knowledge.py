@@ -31,19 +31,26 @@ def update_knowledge(repo_root: Path, state: Dict[str, Any], analysis: Dict[str,
     family = manifest["family"]
     experiments_path = repo_root / KNOWLEDGE_PATHS["experiments"]
     failures_path = repo_root / KNOWLEDGE_PATHS["failures"]
-    best_runs_path = repo_root / KNOWLEDGE_PATHS["best_runs"]
 
     experiments = _read_json(experiments_path)
     failures = _read_json(failures_path)
-    best_runs = _read_json(best_runs_path)
 
     experiments.setdefault("families", {}).setdefault(
         family,
-        {"summary": manifest["objective"], "latest_run_id": None, "latest_result_classification": None, "baseline_run_id": None, "notes": []},
+        {
+            "summary": manifest["objective"],
+            "latest_run_id": None,
+            "latest_result_classification": None,
+            "baseline_run_id": None,
+            "notes": [],
+            "paused": False,
+            "last_next_action": None,
+        },
     )
     family_entry = experiments["families"][family]
     family_entry["latest_run_id"] = state["run_id"]
     family_entry["latest_result_classification"] = analysis["result_classification"]
+    family_entry["last_next_action"] = analysis.get("next_action")
     note = analysis.get("summary")
     if note and note not in family_entry["notes"]:
         family_entry["notes"].append(note)
@@ -59,19 +66,8 @@ def update_knowledge(repo_root: Path, state: Dict[str, Any], analysis: Dict[str,
             }
         )
 
-    promote = manifest.get("promotion_policy", {}).get("auto_promote_on_pass", False)
-    if promote and analysis["result_classification"] in {"candidate", "promoted"}:
-        best_runs.setdefault("families", {})[family] = {
-            "run_id": state["run_id"],
-            "classification": analysis["result_classification"],
-            "summary": analysis.get("summary"),
-            "experiment_id": state["experiment_id"],
-        }
-        family_entry["baseline_run_id"] = state["run_id"]
-
     _write_json(experiments_path, experiments)
     _write_json(failures_path, failures)
-    _write_json(best_runs_path, best_runs)
 
 
 def _read_json(path: Path) -> Dict[str, Any]:

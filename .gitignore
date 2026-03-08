@@ -206,7 +206,6 @@ exp_*/test/results/
 # IDE / tool settings
 .claude/
 .obsidian/
-
 # PDF binaries
 *.pdf
 

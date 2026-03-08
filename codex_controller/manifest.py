@@ -106,7 +106,6 @@ def describe_manifest(manifest: Dict[str, Any]) -> str:
         f"objective: {manifest['objective']}",
         f"hypothesis: {manifest['hypothesis']}",
         f"run_root: {manifest.get('run_root', 'controller_runs')}",
-        f"autonomy: {manifest.get('autonomy', {}).get('mode', 'unspecified')}",
         "stages:",
     ]
     for stage in manifest["stages"]:
