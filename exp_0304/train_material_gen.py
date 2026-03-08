@@ -59,9 +59,9 @@ from tqdm import tqdm
 from torch.cuda.amp import autocast, GradScaler
 from torch.utils.data import DataLoader, Subset
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, '/home/sbplab/ruizi/WavTokenizer-main')
-sys.path.insert(0, '/home/sbplab/ruizi/WavTokenize-self-supervised')
 
 from exp_1201.config import WAVTOK_CONFIG, WAVTOK_CKPT, TRAIN_CACHE, VAL_CACHE
 from exp_0224.models_no_vq import TeacherStudentNoVQ
@@ -729,6 +729,10 @@ def main():
     parser.add_argument('--output_dir', type=str, default=None)
     parser.add_argument('--encoder_ckpt', type=str, default=EXP0227_BEST_CKPT,
                         help='Encoder LoRA init checkpoint')
+    parser.add_argument('--train_cache', type=str, default=str(TRAIN_CACHE),
+                        help='Training cache path')
+    parser.add_argument('--val_cache', type=str, default=str(VAL_CACHE),
+                        help='Validation cache path')
 
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--batch_size', type=int, default=8)
@@ -816,6 +820,8 @@ def main():
     config['output_dir'] = str(exp_dir)
     config['experiment'] = 'exp_0304_material_generalization'
     config['encoder_init'] = f'exp_0227 best: {args.encoder_ckpt}'
+    config['train_cache'] = args.train_cache
+    config['val_cache'] = args.val_cache
     config['method'] = 'Random FreqResponse + Spectral Normalization (Method 1+2)'
 
     with open(exp_dir / 'config.json', 'w') as f:
@@ -838,6 +844,8 @@ def main():
           f"spec_norm_p={args.spectral_norm_prob}, "
           f"lp_p={args.random_lowpass_prob}, "
           f"reso_p={args.resonance_prob}")
+    print(f"Train cache: {args.train_cache}")
+    print(f"Val cache: {args.val_cache}")
     print(f"Output: {exp_dir}")
     if log_path:
         print(f"Log: {log_path}")
@@ -848,9 +856,11 @@ def main():
 
     # ==== Data ====
     print("\nLoading data (with material augmentation)...")
+    train_cache = Path(args.train_cache)
+    val_cache = Path(args.val_cache)
     if args.mode == 'smoke':
         full_ds = MaterialAugDataset(
-            VAL_CACHE, augment=True,
+            val_cache, augment=True,
             freq_response_prob=args.freq_response_prob,
             freq_response_n_bands=(args.freq_response_n_bands_min, args.freq_response_n_bands_max),
             freq_response_gain_db=args.freq_response_gain_db,
@@ -870,7 +880,7 @@ def main():
             num_workers=0, collate_fn=collate_fn_curriculum,
         )
         val_ds = MaterialAugDataset(
-            VAL_CACHE, augment=False,
+            val_cache, augment=False,
             filter_clean_to_clean=True, compute_snr=False,
         )
         val_smoke = Subset(val_ds, smoke_indices)
@@ -881,7 +891,7 @@ def main():
         print(f"Smoke test: {len(smoke_ds)} samples")
     else:
         train_loader, val_loader = create_material_aug_dataloaders(
-            TRAIN_CACHE, VAL_CACHE,
+            train_cache, val_cache,
             batch_size=args.batch_size,
             sample_rate=SAMPLE_RATE,
             snr_remix_prob=args.snr_remix_prob,

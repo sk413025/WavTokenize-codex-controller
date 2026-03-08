@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "experiment_id": "exp0305c_to_exp0304_controller",
+  "family": "anchor-then-material",
+  "objective": "Replace the legacy exp_0305c wait-and-launch chain with a Codex-controlled closed-loop pipeline that runs exp_0305c and then exp_0304.",
+  "hypothesis": "A manifest-driven sequential pipeline can safely supersede the legacy shell watcher and provide enough structured state for Codex to diagnose, patch, and propose the next iteration autonomously.",
+  "baseline_refs": [
+    "exp0304_material_generalization"
+  ],
+  "run_root": "controller_runs",
+  "autonomy": {
+    "mode": "closed_loop",
+    "authority_source": "AGENTS.md"
+  },
+  "default_env": {
+    "PYTHONPATH": "."
+  },
+  "resources": {
+    "primary_gpu": "cuda:0",
+    "secondary_gpu": "cuda:1"
+  },
+  "acceptance_criteria": {
+    "required_stage_status": {
+      "train_expc": "completed",
+      "train_material_gen": "completed"
+    },
+    "required_files": [],
+    "result_classification_on_pass": "candidate"
+  },
+  "failure_policy": {
+    "on_stage_failure": "diagnose_and_patch",
+    "on_dependency_failure": "stop_and_diagnose"
+  },
+  "diagnosis_policy": {
+    "mode": "on_failure_or_unmet"
+  },
+  "patch_policy": {
+    "mode": "proposal_only",
+    "allowed_paths": [
+      "exp_0305c/",
+      "exp_0304/",
+      "experiments/manifests/",
+      "experiments/adapters/"
+    ],
+    "auto_apply": true
+  },
+  "next_step_policy": {
+    "on_success": "compare_against_baseline",
+    "on_failure": "diagnose_and_patch",
+    "on_unmet_criteria": "analyze_and_iterate",
+    "auto_generate_manifest": true,
+    "auto_queue": true
+  },
+  "promotion_policy": {
+    "mode": "manual_review",
+    "auto_promote_on_pass": false
+  },
+  "supersedes": "exp_0305c/wait_and_launch_exp0304.sh",
+  "stages": [
+    {
+      "name": "train_expc",
+      "adapter": "python_script",
+      "adapter_id": "exp0305c_train_expc",
+      "description": "Run exp_0305c anchor training as the first stage of the official controller pipeline.",
+      "entrypoint": "exp_0305c/train_expc.py",
+      "args": [
+        "--epochs",
+        "300",
+        "--device",
+        "cuda:0"
+      ],
+      "resources": {
+        "gpu": "cuda:0"
+      }
+    },
+    {
+      "name": "train_material_gen",
+      "adapter": "python_script",
+      "adapter_id": "exp0304_train_material_gen",
+      "description": "Run exp_0304 material generalization after exp_0305c completes successfully.",
+      "after": [
+        "train_expc"
+      ],
+      "entrypoint": "exp_0304/train_material_gen.py",
+      "args": [
+        "--mode",
+        "epoch",
+        "--epochs",
+        "300",
+        "--device",
+        "cuda:1",
+        "--batch_size",
+        "8",
+        "--grad_accum",
+        "2",
+        "--num_workers",
+        "2"
+      ],
+      "resources": {
+        "gpu": "cuda:1"
+      }
+    }
+  ]
+}

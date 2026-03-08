@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "adapter_id": "exp0228_train_enc_hubert_fm",
+  "status": "official",
+  "adapter": "python_script",
+  "entrypoint": "exp_0228/train_enc_hubert_fm.py",
+  "cwd": ".",
+  "completion": {
+    "stdout_contains": ["Training complete"],
+    "file_exists": []
+  },
+  "artifacts": {
+    "run_dir_pattern": "exp_0228/runs/enc_hubert_fm_<mode>_<timestamp>",
+    "expected_files": [
+      "config.json",
+      "history.json",
+      "train.log",
+      "best_model.pt",
+      "best_model_val_total.pt"
+    ],
+    "notes": [
+      "Base exp_0228 HuBERT+MRD feature-loss training stage.",
+      "The script creates its own run directory under exp_0228/runs unless --output_dir is provided."
+    ]
+  },
+  "known_failures": [
+    {
+      "match": "encoder ckpt not found",
+      "summary": "The encoder initialization checkpoint was not found.",
+      "suggested_changes": [
+        "verify --encoder_ckpt path or keep the pretrained WavTokenizer-only start intentionally",
+        "check whether exp_0225 artifacts exist in the current worktree"
+      ]
+    },
+    {
+      "match": "return code",
+      "summary": "The base HuBERT feature-loss stage exited non-zero.",
+      "suggested_changes": [
+        "inspect the stage log for dataset, checkpoint, or dependency failures",
+        "verify CUDA device and HuggingFace model availability"
+      ]
+    }
+  ]
+}

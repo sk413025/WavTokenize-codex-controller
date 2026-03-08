@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "authority_source": "AGENTS.md",
+  "adapter_index": "experiments/adapters/index.json",
+  "supported_manifests": [
+    {
+      "experiment_id": "exp0305c_to_exp0304_controller",
+      "manifest": "experiments/manifests/exp0305c_to_exp0304_controller.json",
+      "status": "official",
+      "family": "anchor-then-material",
+      "adapter_ids": ["exp0305c_train_expc", "exp0304_train_material_gen"]
+    },
+    {
+      "experiment_id": "exp0228_hubert_then_distalign",
+      "manifest": "experiments/manifests/exp0228_hubert_then_distalign.json",
+      "status": "official",
+      "family": "hubert-then-distalign",
+      "adapter_ids": ["exp0228_train_enc_hubert_fm", "exp0228_train_enc_hubert_fm_distalign"]
+    }
+  ],
+  "legacy_families": [
+    "exp_0106",
+    "exp_0112",
+    "exp_0113",
+    "exp_0121_token_guided",
+    "exp_0217",
+    "exp_0223",
+    "exp_0224",
+    "exp_0225",
+    "exp_0226",
+    "exp_0227",
+    "exp_0229b",
+    "exp_0229c",
+    "exp_0305",
+    "exp_0305b"
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "experiment_id": "exp0228_hubert_then_distalign",
+  "family": "hubert-then-distalign",
+  "objective": "Replace the legacy exp_0228 wait-then-start distalign watcher with a Codex-controlled sequential pipeline that runs the HuBERT feature-loss stage and then the distalign stage.",
+  "hypothesis": "A manifest-driven base-then-distalign pipeline can safely supersede the legacy watcher script, preserve the intended training order, and expose enough structured state for Codex to diagnose failures and compare future follow-up runs.",
+  "baseline_refs": [
+    "exp_0227 encoder-only MRD FM baseline",
+    "exp_0228/wait_then_start_distalign.sh"
+  ],
+  "run_root": "controller_runs",
+  "autonomy": {
+    "mode": "closed_loop",
+    "authority_source": "AGENTS.md"
+  },
+  "default_env": {
+    "PYTHONPATH": "."
+  },
+  "resources": {
+    "primary_gpu": "cuda:0",
+    "sequential_gpu": "cuda:0"
+  },
+  "acceptance_criteria": {
+    "required_stage_status": {
+      "train_enc_hubert_fm": "completed",
+      "train_enc_hubert_fm_distalign": "completed"
+    },
+    "required_files": [],
+    "result_classification_on_pass": "candidate"
+  },
+  "failure_policy": {
+    "on_stage_failure": "diagnose_and_patch",
+    "on_dependency_failure": "stop_and_diagnose"
+  },
+  "diagnosis_policy": {
+    "mode": "on_failure_or_unmet"
+  },
+  "patch_policy": {
+    "mode": "proposal_only",
+    "allowed_paths": [
+      "exp_0228/",
+      "experiments/manifests/",
+      "experiments/adapters/",
+      "knowledge/"
+    ],
+    "auto_apply": true
+  },
+  "next_step_policy": {
+    "on_success": "compare_against_baseline",
+    "on_failure": "diagnose_and_patch",
+    "on_unmet_criteria": "analyze_and_iterate",
+    "auto_generate_manifest": true,
+    "auto_queue": true
+  },
+  "promotion_policy": {
+    "mode": "manual_review",
+    "auto_promote_on_pass": false
+  },
+  "supersedes": "exp_0228/wait_then_start_distalign.sh",
+  "stages": [
+    {
+      "name": "train_enc_hubert_fm",
+      "adapter": "python_script",
+      "adapter_id": "exp0228_train_enc_hubert_fm",
+      "description": "Run the base exp_0228 HuBERT feature-loss training stage.",
+      "entrypoint": "exp_0228/train_enc_hubert_fm.py",
+      "args": [
+        "--mode",
+        "epoch",
+        "--epochs",
+        "300",
+        "--device",
+        "cuda:0",
+        "--batch_size",
+        "8",
+        "--grad_accum",
+        "2"
+      ],
+      "resources": {
+        "gpu": "cuda:0"
+      }
+    },
+    {
+      "name": "train_enc_hubert_fm_distalign",
+      "adapter": "python_script",
+      "adapter_id": "exp0228_train_enc_hubert_fm_distalign",
+      "description": "Run the follow-up distalign stage after the base HuBERT feature-loss stage completes.",
+      "after": [
+        "train_enc_hubert_fm"
+      ],
+      "entrypoint": "exp_0228/train_enc_hubert_fm_distalign.py",
+      "args": [
+        "--mode",
+        "epoch",
+        "--epochs",
+        "300",
+        "--device",
+        "cuda:0",
+        "--batch_size",
+        "8",
+        "--grad_accum",
+        "2",
+        "--align_type",
+        "coral",
+        "--lambda_dist",
+        "0.2"
+      ],
+      "resources": {
+        "gpu": "cuda:0"
+      }
+    }
+  ]
+}

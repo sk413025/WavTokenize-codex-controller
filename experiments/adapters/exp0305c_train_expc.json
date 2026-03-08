@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "adapter_id": "exp0305c_train_expc",
+  "status": "official",
+  "adapter": "python_script",
+  "entrypoint": "exp_0305c/train_expc.py",
+  "cwd": ".",
+  "completion": {
+    "stdout_contains": ["Training complete"],
+    "file_exists": []
+  },
+  "artifacts": {
+    "notes": [
+      "Primary training outputs are emitted by exp_0305c under its experiment-specific output directory."
+    ]
+  },
+  "known_failures": [
+    {
+      "match": "return code",
+      "summary": "Training stage exited non-zero.",
+      "suggested_changes": [
+        "inspect train_expc.log",
+        "verify GPU/device arguments",
+        "check dataset and checkpoint paths"
+      ]
+    }
+  ]
+}

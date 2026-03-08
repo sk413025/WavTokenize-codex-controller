@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "adapter_id": "exp0228_train_enc_hubert_fm_distalign",
+  "status": "official",
+  "adapter": "python_script",
+  "entrypoint": "exp_0228/train_enc_hubert_fm_distalign.py",
+  "cwd": ".",
+  "completion": {
+    "stdout_contains": ["Training complete"],
+    "file_exists": []
+  },
+  "artifacts": {
+    "run_dir_pattern": "exp_0228/runs/enc_hubert_fm_dist_<mode>_<timestamp>",
+    "expected_files": [
+      "config.json",
+      "history.json",
+      "train.log",
+      "best_model.pt",
+      "best_model_val_total.pt"
+    ],
+    "notes": [
+      "Follow-up distalign stage for exp_0228 after the base HuBERT feature-loss training completes.",
+      "The script creates its own run directory under exp_0228/runs unless --output_dir is provided."
+    ]
+  },
+  "known_failures": [
+    {
+      "match": "encoder ckpt not found",
+      "summary": "The distalign stage could not find its encoder initialization checkpoint.",
+      "suggested_changes": [
+        "verify --encoder_ckpt path before real execution",
+        "promote the prior base-stage best_model_val_total.pt into the stage input contract if needed"
+      ]
+    },
+    {
+      "match": "return code",
+      "summary": "The distalign stage exited non-zero.",
+      "suggested_changes": [
+        "inspect the stage log for distribution-alignment configuration or dependency failures",
+        "verify align_type, CUDA device, and frozen supervisor dependencies"
+      ]
+    }
+  ]
+}

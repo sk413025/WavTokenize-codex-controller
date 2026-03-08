@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "experiment_id": "exp0304_material_generalization",
+  "family": "material-generalization",
+  "objective": "Run exp_0304 material generalization training under Codex control and capture a closed-loop decision record.",
+  "hypothesis": "The exp_0304 material generalization recipe can be executed reproducibly from this worktree without shell-based orchestration and should become the baseline official material-generalization pipeline.",
+  "baseline_refs": [],
+  "run_root": "controller_runs",
+  "autonomy": {
+    "mode": "closed_loop",
+    "authority_source": "AGENTS.md"
+  },
+  "default_env": {
+    "PYTHONPATH": "."
+  },
+  "resources": {
+    "gpu": "cuda:1",
+    "batch_size": 8,
+    "num_workers": 2
+  },
+  "acceptance_criteria": {
+    "required_stage_status": {
+      "train_material_gen": "completed"
+    },
+    "required_files": [],
+    "result_classification_on_pass": "candidate"
+  },
+  "failure_policy": {
+    "on_stage_failure": "diagnose_and_patch"
+  },
+  "diagnosis_policy": {
+    "mode": "on_failure_or_unmet"
+  },
+  "patch_policy": {
+    "mode": "proposal_only",
+    "allowed_paths": [
+      "exp_0304/",
+      "experiments/manifests/",
+      "experiments/adapters/"
+    ],
+    "auto_apply": true
+  },
+  "next_step_policy": {
+    "on_success": "compare_against_baseline",
+    "on_failure": "diagnose_and_patch",
+    "on_unmet_criteria": "analyze_and_iterate",
+    "auto_generate_manifest": true,
+    "auto_queue": true
+  },
+  "promotion_policy": {
+    "mode": "manual_review",
+    "auto_promote_on_pass": false
+  },
+  "supersedes": null,
+  "stages": [
+    {
+      "name": "train_material_gen",
+      "adapter": "python_script",
+      "adapter_id": "exp0304_train_material_gen",
+      "description": "Run exp_0304 material generalization training with controller-managed logs and decision state.",
+      "entrypoint": "exp_0304/train_material_gen.py",
+      "args": [
+        "--mode",
+        "epoch",
+        "--epochs",
+        "300",
+        "--device",
+        "cuda:1",
+        "--batch_size",
+        "8",
+        "--grad_accum",
+        "2",
+        "--num_workers",
+        "2"
+      ],
+      "resources": {
+        "gpu": "cuda:1"
+      }
+    }
+  ]
+}

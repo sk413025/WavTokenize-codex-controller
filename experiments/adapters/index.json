@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "adapters": [
+    {
+      "adapter_id": "exp0305c_train_expc",
+      "path": "experiments/adapters/exp0305c_train_expc.json",
+      "status": "official",
+      "family": "anchor-then-material"
+    },
+    {
+      "adapter_id": "exp0304_train_material_gen",
+      "path": "experiments/adapters/exp0304_train_material_gen.json",
+      "status": "official",
+      "family": "anchor-then-material"
+    },
+    {
+      "adapter_id": "exp0228_train_enc_hubert_fm",
+      "path": "experiments/adapters/exp0228_train_enc_hubert_fm.json",
+      "status": "official",
+      "family": "hubert-then-distalign"
+    },
+    {
+      "adapter_id": "exp0228_train_enc_hubert_fm_distalign",
+      "path": "experiments/adapters/exp0228_train_enc_hubert_fm_distalign.json",
+      "status": "official",
+      "family": "hubert-then-distalign"
+    },
+    {
+      "adapter_id": "exp0228_wait_distalign_legacy",
+      "path": "experiments/adapters/exp0228_wait_distalign_legacy.json",
+      "status": "legacy",
+      "family": "hubert-then-distalign"
+    }
+  ]
+}

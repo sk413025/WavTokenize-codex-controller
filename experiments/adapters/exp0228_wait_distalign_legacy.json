@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "adapter_id": "exp0228_wait_distalign_legacy",
+  "status": "legacy",
+  "adapter": "shell",
+  "command": "bash exp_0228/wait_then_start_distalign.sh",
+  "cwd": ".",
+  "completion": {
+    "stdout_contains": ["started distalign pid="],
+    "file_exists": []
+  },
+  "artifacts": {
+    "notes": [
+      "Historical watcher-heavy reference retained for onboarding analysis only.",
+      "Official exp_0228 orchestration should use controller stage dependencies instead of pgrep, lock files, or polling loops."
+    ]
+  },
+  "known_failures": [
+    {
+      "match": "pgrep",
+      "summary": "Legacy wait loop depends on process-name matching and implicit runtime state.",
+      "suggested_changes": [
+        "replace process polling with controller stage dependencies",
+        "move completion detection into manifest policy",
+        "treat this adapter as historical reference only"
+      ]
+    }
+  ]
+}

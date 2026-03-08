@@ -58,9 +58,9 @@ from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, '/home/sbplab/ruizi/WavTokenizer-main')
-sys.path.insert(0, '/home/sbplab/ruizi/WavTokenize-self-supervised')
 
 from exp_1201.config import WAVTOK_CONFIG, WAVTOK_CKPT, TRAIN_CACHE, VAL_CACHE
 from exp_0216.data_augmented import AugmentedCurriculumDataset, collate_fn_curriculum
