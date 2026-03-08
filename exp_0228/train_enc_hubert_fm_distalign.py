@@ -1113,6 +1113,9 @@ def main():
     parser.add_argument('--grad_clip', type=float, default=1.0)
     parser.add_argument('--use_amp', action='store_true', default=True)
     parser.add_argument('--device', type=str, default='cuda:1')
+    parser.add_argument('--train_cache', type=str, default=str(TRAIN_CACHE))
+    parser.add_argument('--val_cache', type=str, default=str(VAL_CACHE))
+    parser.add_argument('--num_workers', type=int, default=2)
 
     parser.add_argument('--lora_rank', type=int, default=64)
     parser.add_argument('--lora_alpha', type=int, default=128)
@@ -1216,7 +1219,7 @@ def main():
     print("\nLoading data...")
     if args.mode == 'smoke':
         full_ds = AugmentedCurriculumDataset(
-            VAL_CACHE, augment=False, filter_clean_to_clean=True, compute_snr=False,
+            args.val_cache, augment=False, filter_clean_to_clean=True, compute_snr=False,
         )
         smoke_ds = torch.utils.data.Subset(full_ds, list(range(min(20, len(full_ds)))))
         train_loader = DataLoader(smoke_ds, batch_size=args.batch_size, shuffle=True,
@@ -1226,7 +1229,7 @@ def main():
         print(f"Smoke test: {len(smoke_ds)} samples")
     else:
         train_loader = make_train_loader(
-            TRAIN_CACHE, batch_size=args.batch_size, num_workers=2,
+            args.train_cache, batch_size=args.batch_size, num_workers=args.num_workers,
             snr_remix_prob=args.snr_remix_prob,
             snr_remix_range=(args.snr_remix_min, args.snr_remix_max),
             random_gain_prob=args.random_gain_prob, random_gain_db=args.random_gain_db,
@@ -1235,7 +1238,7 @@ def main():
             time_stretch_prob=args.time_stretch_prob,
             time_stretch_range=(args.time_stretch_min, args.time_stretch_max),
         )
-        val_loader = make_val_loader(VAL_CACHE, batch_size=4, num_workers=2)
+        val_loader = make_val_loader(args.val_cache, batch_size=4, num_workers=args.num_workers)
         print(f"Train: {len(train_loader.dataset)} | Val: {len(val_loader.dataset)}")
 
     print("\nBuilding TeacherStudentNoVQ (encoder-only trainable)...")

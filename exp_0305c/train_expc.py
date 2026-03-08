@@ -134,9 +134,9 @@ def cuda_preinit(device: torch.device, retries: int = 10, sleep_s: float = 2.0):
     raise RuntimeError(f'Cannot initialize {device}')
 
 
-def make_loaders(batch_size: int, num_workers: int, smoke: bool):
+def make_loaders(batch_size: int, num_workers: int, smoke: bool, train_cache: str, val_cache: str):
     if smoke:
-        ds = AugmentedCurriculumDataset(TRAIN_CACHE)
+        ds = AugmentedCurriculumDataset(train_cache)
         sub = torch.utils.data.Subset(ds, range(min(40, len(ds))))
         train_loader = DataLoader(sub, batch_size=batch_size, shuffle=True,
                                   num_workers=0, collate_fn=collate_fn_curriculum)
@@ -144,8 +144,8 @@ def make_loaders(batch_size: int, num_workers: int, smoke: bool):
                                 num_workers=0, collate_fn=collate_fn_curriculum)
         return train_loader, val_loader
 
-    train_ds = AugmentedCurriculumDataset(TRAIN_CACHE)
-    val_ds = AugmentedCurriculumDataset(VAL_CACHE, augment=False)
+    train_ds = AugmentedCurriculumDataset(train_cache)
+    val_ds = AugmentedCurriculumDataset(val_cache, augment=False)
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
                               num_workers=num_workers, collate_fn=collate_fn_curriculum)
     val_loader = DataLoader(val_ds, batch_size=4, shuffle=False,
@@ -433,6 +433,8 @@ def parse_args():
     p.add_argument('--no_amp', dest='use_amp', action='store_false')
     p.set_defaults(use_amp=True)
     p.add_argument('--num_workers', type=int, default=2)
+    p.add_argument('--train_cache', default=str(TRAIN_CACHE))
+    p.add_argument('--val_cache', default=str(VAL_CACHE))
     p.add_argument('--lambda_wav', type=float, default=1.0)
     p.add_argument('--lambda_stft', type=float, default=1.0)
     p.add_argument('--lambda_mel', type=float, default=45.0)
@@ -490,6 +492,8 @@ def main():
         batch_size=(4 if smoke else args.batch_size),
         num_workers=(0 if smoke else args.num_workers),
         smoke=smoke,
+        train_cache=args.train_cache,
+        val_cache=args.val_cache,
     )
 
     # Model：官方 WavTokenizer 起點
