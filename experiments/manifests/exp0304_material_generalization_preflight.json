@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "experiment_id": "exp0304_material_generalization_preflight",
+  "family": "material-generalization",
+  "objective": "Verify that exp_0304 can bind external assets, probe GPU headroom, and decide whether the next action is a smoke gate or a real run.",
+  "hypothesis": "The local machine can reuse existing caches from WavTokenize-feature-analysis and should classify exp_0304 as ready_for_smoke or ready_for_real_run without editing tracked repo state.",
+  "baseline_refs": [
+    "exp0304_material_generalization"
+  ],
+  "run_root": "controller_runs",
+  "autonomy": {
+    "mode": "closed_loop",
+    "authority_source": "AGENTS.md"
+  },
+  "default_env": {
+    "PYTHONPATH": "."
+  },
+  "resources": {
+    "gpu": "cuda:1"
+  },
+  "acceptance_criteria": {
+    "required_stage_status": {
+      "preflight_material_gen": "completed"
+    },
+    "required_files": [],
+    "result_classification_on_pass": "candidate"
+  },
+  "failure_policy": {
+    "on_stage_failure": "diagnose_and_patch"
+  },
+  "diagnosis_policy": {
+    "mode": "on_failure_or_unmet"
+  },
+  "patch_policy": {
+    "mode": "proposal_only",
+    "allowed_paths": [
+      "exp_0304/",
+      "experiments/manifests/",
+      "experiments/adapters/",
+      "knowledge/"
+    ],
+    "auto_apply": true
+  },
+  "next_step_policy": {
+    "on_success": "advance_to_smoke_gate",
+    "on_failure": "bind_missing_assets",
+    "on_unmet_criteria": "analyze_and_iterate",
+    "auto_generate_manifest": false,
+    "auto_queue": false
+  },
+  "promotion_policy": {
+    "mode": "manual_review",
+    "auto_promote_on_pass": false
+  },
+  "supersedes": null,
+  "stages": [
+    {
+      "name": "preflight_material_gen",
+      "adapter": "python_script",
+      "adapter_id": "exp0304_preflight_material_gen",
+      "description": "Check external assets, optional encoder checkpoint fallback, and GPU readiness before any material generalization training launch.",
+      "entrypoint": "exp_0304/preflight_material_gen.py",
+      "args": [
+        "--gpu",
+        "cuda:1",
+        "--train_cache",
+        "/home/sbplab/ruizi/WavTokenize-feature-analysis/data/train_cache_filtered.pt",
+        "--val_cache",
+        "/home/sbplab/ruizi/WavTokenize-feature-analysis/data/val_cache_filtered.pt",
+        "--encoder_ckpt",
+        "exp_0227/runs/enc_mrd_fm_epoch_20260227_024953/best_model_val_total.pt",
+        "--report_path",
+        "{run_dir}/preflight_report.json"
+      ],
+      "resources": {
+        "gpu": "cuda:1"
+      }
+    }
+  ]
+}

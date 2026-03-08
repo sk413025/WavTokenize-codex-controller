@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "adapter_id": "exp0304_preflight_material_gen",
+  "status": "official",
+  "adapter": "python_script",
+  "entrypoint": "exp_0304/preflight_material_gen.py",
+  "cwd": ".",
+  "completion": {
+    "stdout_contains": [
+      "PREFLIGHT STATUS: ready_for_smoke",
+      "PREFLIGHT STATUS: ready_for_real_run"
+    ],
+    "file_exists": [
+      "{run_dir}/preflight_report.json"
+    ]
+  },
+  "artifacts": {
+    "notes": [
+      "Preflight writes a JSON report into the controller run directory.",
+      "A missing exp_0227 encoder checkpoint is treated as fallback, not as a blocker."
+    ]
+  },
+  "known_failures": [
+    {
+      "match": "PREFLIGHT STATUS: blocked",
+      "summary": "Preflight blocked due to missing assets or insufficient GPU headroom.",
+      "suggested_changes": [
+        "bind the existing cache assets from WavTokenize-feature-analysis",
+        "wait for more free GPU memory before launching smoke or short runs",
+        "accept fallback to pretrained weights if the exp_0227 checkpoint is missing"
+      ]
+    }
+  ]
+}

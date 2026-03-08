@@ -1,10 +1,13 @@
 {
   "schema_version": 1,
-  "experiment_id": "exp0304_material_generalization",
+  "experiment_id": "exp0304_material_generalization_short",
   "family": "material-generalization",
-  "objective": "Run exp_0304 material generalization training under Codex control and capture a closed-loop decision record.",
-  "hypothesis": "The exp_0304 material generalization recipe can be executed reproducibly from this worktree without shell-based orchestration and should become the baseline official material-generalization pipeline.",
-  "baseline_refs": [],
+  "objective": "Run the first short real launch for exp_0304 after the smoke gate passes.",
+  "hypothesis": "A controller-managed short run is enough to verify real epoch-mode execution, artifact generation, and monitorability before a full 300-epoch launch.",
+  "baseline_refs": [
+    "exp0304_material_generalization_smoke",
+    "exp0304_material_generalization"
+  ],
   "run_root": "controller_runs",
   "autonomy": {
     "mode": "closed_loop",
@@ -15,13 +18,13 @@
   },
   "resources": {
     "gpu": "cuda:1",
-    "batch_size": 8,
-    "num_workers": 2
+    "batch_size": 2,
+    "num_workers": 0
   },
   "acceptance_criteria": {
     "required_stage_status": {
       "preflight_material_gen": "completed",
-      "train_material_gen": "completed"
+      "train_material_gen_short": "completed"
     },
     "required_files": [],
     "result_classification_on_pass": "candidate"
@@ -37,16 +40,17 @@
     "allowed_paths": [
       "exp_0304/",
       "experiments/manifests/",
-      "experiments/adapters/"
+      "experiments/adapters/",
+      "knowledge/"
     ],
     "auto_apply": true
   },
   "next_step_policy": {
-    "on_success": "compare_against_baseline",
+    "on_success": "advance_to_full_run",
     "on_failure": "diagnose_and_patch",
     "on_unmet_criteria": "analyze_and_iterate",
-    "auto_generate_manifest": true,
-    "auto_queue": true
+    "auto_generate_manifest": false,
+    "auto_queue": false
   },
   "promotion_policy": {
     "mode": "manual_review",
@@ -58,7 +62,7 @@
       "name": "preflight_material_gen",
       "adapter": "python_script",
       "adapter_id": "exp0304_preflight_material_gen",
-      "description": "Check external assets, optional encoder checkpoint fallback, and GPU readiness before the full exp_0304 launch.",
+      "description": "Verify exp_0304 is ready for the first short real run.",
       "entrypoint": "exp_0304/preflight_material_gen.py",
       "args": [
         "--gpu",
@@ -77,10 +81,10 @@
       }
     },
     {
-      "name": "train_material_gen",
+      "name": "train_material_gen_short",
       "adapter": "python_script",
       "adapter_id": "exp0304_train_material_gen",
-      "description": "Run exp_0304 material generalization training with controller-managed logs and decision state.",
+      "description": "Run the first short real launch for exp_0304 with controller-owned output paths.",
       "after": [
         "preflight_material_gen"
       ],
@@ -89,15 +93,21 @@
         "--mode",
         "epoch",
         "--epochs",
-        "300",
+        "10",
         "--device",
         "cuda:1",
         "--batch_size",
-        "8",
+        "2",
         "--grad_accum",
-        "2",
+        "1",
         "--num_workers",
-        "2",
+        "0",
+        "--eval_max_batches",
+        "5",
+        "--save_checkpoint_every",
+        "5",
+        "--save_audio_interval",
+        "999",
         "--train_cache",
         "/home/sbplab/ruizi/WavTokenize-feature-analysis/data/train_cache_filtered.pt",
         "--val_cache",
@@ -105,7 +115,7 @@
         "--encoder_ckpt",
         "exp_0227/runs/enc_mrd_fm_epoch_20260227_024953/best_model_val_total.pt",
         "--output_dir",
-        "{run_dir}/exp_0304_epoch"
+        "{run_dir}/exp_0304_short"
       ],
       "resources": {
         "gpu": "cuda:1"

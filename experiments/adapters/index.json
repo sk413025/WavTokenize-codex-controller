@@ -8,10 +8,16 @@
       "family": "anchor-then-material"
     },
     {
+      "adapter_id": "exp0304_preflight_material_gen",
+      "path": "experiments/adapters/exp0304_preflight_material_gen.json",
+      "status": "official",
+      "family": "material-generalization"
+    },
+    {
       "adapter_id": "exp0304_train_material_gen",
       "path": "experiments/adapters/exp0304_train_material_gen.json",
       "status": "official",
-      "family": "anchor-then-material"
+      "family": "material-generalization"
     },
     {
       "adapter_id": "exp0228_train_enc_hubert_fm",
