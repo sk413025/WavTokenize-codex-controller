@@ -53,6 +53,7 @@ done/exp/data/
 logs/
 wandb/
 runs/
+controller_runs/
 *.txt.log
 
 # 實驗結果中的即時日志（保留分析產物 CSV/PNG）

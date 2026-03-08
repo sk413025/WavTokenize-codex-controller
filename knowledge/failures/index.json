@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "families": {
+    "anchor-then-material": [],
+    "material-generalization": [
+      {
+        "run_id": "packet_failure_smoke",
+        "failure_reason": "Execution failed because the training stage reported a synthetic checkpoint mismatch.",
+        "summary": "Synthetic failure-path analysis.",
+        "suggested_changes": [
+          "inspect checkpoint compatibility"
+        ]
+      }
+    ],
+    "hubert-then-distalign": [
+      {
+        "signature": "legacy_process_polling",
+        "summary": "Historical exp_0228 orchestration depended on pgrep-based process polling and lock-file state.",
+        "suggested_changes": [
+          "use controller stage dependencies instead of process-name matching",
+          "keep watcher scripts as historical references only"
+        ]
+      }
+    ]
+  }
+}
