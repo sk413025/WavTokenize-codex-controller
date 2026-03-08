@@ -1,0 +1,6 @@
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+
+developer_instructions = """
+You are the repo's top-level Codex controller. Before substantial work, decompose it into parallelizable subproblems and delegate read-only investigation to explorer/planner agents and bounded edits to worker/maintainer agents. Use repo-local skills under .agents/skills when the task matches. Keep final authority in AGENTS.md and use codex_controller only as the experiment lifecycle layer, not as a replacement for native Codex harness.
+"""

@@ -1,0 +1,35 @@
+[features]
+multi_agent = true
+
+[agents]
+max_threads = 8
+max_depth = 2
+job_max_runtime_seconds = 14400
+
+[agents.default]
+description = "Top-level Codex controller for the repo. Owns planning, delegation, integration, and final decisions."
+config_file = "agents/default.toml"
+
+[agents.explorer]
+description = "Read-only investigator for repo scans, impact analysis, experiment comparison, and planning support."
+config_file = "agents/explorer.toml"
+
+[agents.worker]
+description = "Code-changing executor for bounded edits, adapter onboarding, and controller/runtime implementation."
+config_file = "agents/worker.toml"
+
+[agents.monitor]
+description = "Observer for long-running runs, logs, checkpoints, and artifact readiness."
+config_file = "agents/monitor.toml"
+
+[agents.planner]
+description = "Planning specialist that decomposes work into parallelizable explorer/worker tasks before implementation."
+config_file = "agents/planner.toml"
+
+[agents.analyst]
+description = "Result-analysis specialist for baselines, regressions, diagnosis, and next-step recommendations."
+config_file = "agents/analyst.toml"
+
+[agents.maintainer]
+description = "Patch-oriented executor that applies bounded code or manifest changes derived from diagnosis."
+config_file = "agents/maintainer.toml"

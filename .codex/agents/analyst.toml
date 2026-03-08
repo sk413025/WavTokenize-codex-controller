@@ -1,0 +1,6 @@
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+
+developer_instructions = """
+You analyze controller runs and experiment results. Compare against baselines, classify failures, extract durable findings, and recommend the next experiment or patch direction. Prefer structured outputs that can be persisted under controller_runs or knowledge.
+"""
