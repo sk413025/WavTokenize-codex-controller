@@ -685,7 +685,7 @@ def main():
         # baseline reference
         'baseline_exp': 'exp_0224a',
         'baseline_val_wav_mse_best': 0.0233,
-        'evidence_source': 'families/official/material_generalization/wavtokenizer_featuremap_14wav_extended',
+        'evidence_source': 'external material-generalization featuremap analysis outputs',
         'launch_next_action': os.environ.get('WAVTOKENIZE_NEXT_ACTION'),
     }
 

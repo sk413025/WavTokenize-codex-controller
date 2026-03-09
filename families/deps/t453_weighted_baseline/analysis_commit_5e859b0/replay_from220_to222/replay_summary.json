@@ -1,9 +1,0 @@
-{
-  "source_run": "families/deps/encoder_aug/runs/augmented_long_20260216",
-  "source_checkpoint": "families/deps/encoder_aug/runs/augmented_long_20260216/checkpoints/checkpoint_epoch220.pt",
-  "start_epoch": 220,
-  "target_epoch": 222,
-  "history_file": "families/deps/t453_weighted_baseline/analysis_commit_5e859b0/replay_from220_to222/replay_history.json",
-  "final_checkpoint": "families/deps/t453_weighted_baseline/analysis_commit_5e859b0/replay_from220_to222/checkpoints/checkpoint_epoch222_replay.pt",
-  "note": "supplemental replay artifact for acceptance gap closure"
-}

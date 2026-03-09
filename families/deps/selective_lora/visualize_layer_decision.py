@@ -448,7 +448,7 @@ def main():
     # 同時輸出文字摘要
     summary = {
         'generated_by': f'families/deps/selective_lora/visualize_layer_decision.py ({date_str})',
-        'evidence_source': 'families/official/material_generalization/wavtokenizer_featuremap_14wav_extended/conv18_14wav_role_metrics.csv',
+        'evidence_source': 'external material-generalization conv18 role metrics csv',
         'decision_criteria': {
             'lora': 'noise_sensitivity > 0.10  OR  temporal_detail > 0.15',
             'freeze': 'content_shared > 0.93  AND  noise_sensitivity < 0.10',
