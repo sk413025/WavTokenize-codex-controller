@@ -56,7 +56,7 @@ import numpy as np
 import scipy.io.wavfile as wavfile
 from pathlib import Path
 from datetime import datetime
-from typing import Any, Dict, List, Tuple
+from typing import Dict, List, Tuple
 from tqdm import tqdm
 from torch.cuda.amp import autocast, GradScaler
 from torch.utils.data import DataLoader
@@ -69,6 +69,11 @@ sys.path.insert(0, '/home/sbplab/ruizi/WavTokenize-self-supervised')
 from exp_1201.config import WAVTOK_CONFIG, WAVTOK_CKPT, TRAIN_CACHE, VAL_CACHE
 from exp_0305.models_selective_lora import TeacherStudentSelectiveLoRA, PLANS
 from exp_0216.data_augmented import AugmentedCurriculumDataset, collate_fn_curriculum
+from utils.hypothesis_reporting import (
+    has_usable_artifacts,
+    write_hypothesis_analysis,
+    write_hypothesis_monitor_report,
+)
 from encoder.modules.conv import SConv1d
 from encoder.modules.seanet import SEANetResnetBlock
 
@@ -385,156 +390,11 @@ def setup_logging(output_dir: Path) -> Path:
     return log_path
 
 
-def write_json(path: Path, payload: Dict[str, Any]) -> None:
+def write_json(path: Path, payload: Dict) -> None:
     """以 UTF-8 寫入 JSON。"""
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
         f.write('\n')
-
-
-def latest_match(pattern: str, out_dir: Path) -> Path | None:
-    """回傳符合 pattern 的最新檔案。"""
-    matches = sorted(out_dir.glob(pattern))
-    return matches[-1] if matches else None
-
-
-def hypothesis_transition(overall_state: str) -> Tuple[str, str]:
-    """Hypothesis run 的 transition class 與 next owner。"""
-    if overall_state == 'completed':
-        return 'run_completed', 'default'
-    if overall_state == 'interrupted_but_usable':
-        return 'run_interrupted_but_usable', 'default'
-    if overall_state == 'failed':
-        return 'run_needs_decision', 'default'
-    return 'run_in_progress', 'default'
-
-
-def has_usable_artifacts(out_dir: Path) -> bool:
-    """判斷 run-local 目錄是否已經有可用的中途產物。"""
-    history_path = out_dir / 'history.json'
-    history_has_val = False
-    if history_path.exists():
-        try:
-            with open(history_path, 'r', encoding='utf-8') as f:
-                history = json.load(f)
-            history_has_val = bool(history.get('val_wav_mse'))
-        except Exception:
-            history_has_val = False
-    return (
-        history_has_val
-        or (out_dir / 'best_model.pt').exists()
-        or latest_match('checkpoint_epoch*.pt', out_dir) is not None
-    )
-
-
-def write_hypothesis_monitor_report(
-    out_dir: Path,
-    config: Dict[str, Any],
-    *,
-    overall_state: str,
-    summary: str,
-    completed_epochs: int,
-    target_epochs: int,
-    last_completed_epoch: int,
-    best_val_mse: float,
-    last_train_metrics: Dict[str, float] | None,
-    last_val_metrics: Dict[str, float] | None,
-    run_started_at: str,
-    termination_reason: str | None = None,
-) -> None:
-    """寫入 hypothesis run-local monitor report。"""
-    transition_class, next_owner = hypothesis_transition(overall_state)
-    latest_ckpt = latest_match('checkpoint_epoch*.pt', out_dir)
-    latest_plot = latest_match('curves_epoch*.png', out_dir)
-    best_model_path = out_dir / 'best_model.pt'
-    payload = {
-        'status': 'generated',
-        'generated_at': datetime.now().isoformat(),
-        'run_dir': str(out_dir.resolve()),
-        'run_started_at': run_started_at,
-        'experiment': config['experiment'],
-        'plan': config['plan'],
-        'mode': config['mode'],
-        'device': config.get('device'),
-        'autonomy_window': config.get('autonomy_window', 'single-step'),
-        'declared_next_action': config.get('launch_next_action'),
-        'overall_state': overall_state,
-        'transition_class': transition_class,
-        'next_owner': next_owner,
-        'summary': summary,
-        'termination_reason': termination_reason,
-        'completed_epochs': completed_epochs,
-        'target_epochs': target_epochs,
-        'last_completed_epoch': last_completed_epoch,
-        'history_path': str((out_dir / 'history.json').resolve()),
-        'log_path': str((out_dir / 'train.log').resolve()),
-        'artifacts': {
-            'config_json': str((out_dir / 'config.json').resolve()),
-            'history_json_exists': (out_dir / 'history.json').exists(),
-            'best_model_path': str(best_model_path.resolve()) if best_model_path.exists() else None,
-            'latest_checkpoint_path': str(latest_ckpt.resolve()) if latest_ckpt else None,
-            'latest_plot_path': str(latest_plot.resolve()) if latest_plot else None,
-        },
-        'latest_metrics': {
-            'train': last_train_metrics,
-            'val': last_val_metrics,
-            'best_val_wav_mse': None if math.isinf(best_val_mse) else best_val_mse,
-        },
-    }
-    write_json(out_dir / 'monitor_report.json', payload)
-
-
-def write_hypothesis_analysis(
-    out_dir: Path,
-    config: Dict[str, Any],
-    *,
-    result_classification: str,
-    summary: str,
-    completed_epochs: int,
-    target_epochs: int,
-    best_val_mse: float,
-    last_val_metrics: Dict[str, float] | None,
-    termination_reason: str | None,
-) -> None:
-    """寫入 hypothesis run-local analysis。"""
-    next_action = 'use_run_diagnosis'
-    if result_classification == 'clean_success':
-        next_action = config.get('launch_next_action') or 'review_results_in_codex_session'
-    elif result_classification == 'interrupted_but_usable':
-        next_action = 'review_partial_results_in_codex_session'
-
-    baseline_val = config['baseline_val_wav_mse_best']
-    best_value = None if math.isinf(best_val_mse) else best_val_mse
-    baseline_delta = None if best_value is None else best_value - baseline_val
-    noisy_val = last_val_metrics.get('val_noisy_mse') if last_val_metrics else None
-    latest_val = last_val_metrics.get('val_wav_mse') if last_val_metrics else None
-    payload = {
-        'status': 'generated',
-        'generated_at': datetime.now().isoformat(),
-        'run_dir': str(out_dir.resolve()),
-        'experiment_id': config['experiment'],
-        'plan': config['plan'],
-        'result_classification': result_classification,
-        'summary': summary,
-        'completed_epochs': completed_epochs,
-        'target_epochs': target_epochs,
-        'best_val_wav_mse': best_value,
-        'latest_val_wav_mse': latest_val,
-        'termination_reason': termination_reason,
-        'baseline_comparison': {
-            'baseline_exp': config['baseline_exp'],
-            'baseline_val_wav_mse_best': baseline_val,
-            'delta_vs_baseline': baseline_delta,
-            'beats_baseline': bool(best_value is not None and best_value < baseline_val),
-        },
-        'improves_over_noisy': (
-            None if latest_val is None or noisy_val is None else latest_val < noisy_val
-        ),
-        'autonomy_window': config.get('autonomy_window', 'single-step'),
-        'declared_next_action': config.get('launch_next_action'),
-        'next_action': next_action,
-    }
-    write_json(out_dir / 'analysis.json', payload)
 
 
 def set_seed(seed: int = 42):
@@ -1083,7 +943,6 @@ def main():
         'baseline_exp': 'exp_0224a',
         'baseline_val_wav_mse_best': 0.0233,
         'evidence_source': 'exp_0304/wavtokenizer_featuremap_14wav_extended',
-        'autonomy_window': os.environ.get('WAVTOKENIZE_AUTONOMY_WINDOW', 'single-step'),
         'launch_next_action': os.environ.get('WAVTOKENIZE_NEXT_ACTION'),
     }
 
