@@ -17,6 +17,16 @@ This is the project-specific loop that Codex should follow using native multi-ag
 10. If a follow-up is needed, use `followup-generation` to draft a bounded next step.
 11. Final decisions stay with `Codex(default)`.
 
+## Long-Running Hypothesis Work
+- For a new hypothesis, keep experiment edits in the hypothesis worktree and keep control ownership with the same `Codex(default)` session.
+- Use native roles to split observation from decision-making:
+  - `monitor` or `stage-monitoring` for active run facts
+  - `run-diagnosis` for stalled, failed, or weak runs
+  - `result-comparison` for cross-run evidence review
+  - `native-handoff` when a bounded role needs a clean evidence or edit handoff
+- Bounded shell sequencing is acceptable for a single task when the next steps are already decided and no reusable control surface is created.
+- If active monitoring, sequencing, or diagnosis starts to feel reusable across tasks, capture it in docs or skills rather than in runtime code.
+
 ## Allowed Follow-Up Scope
 Follow-up proposals should stay within project-specific changes such as:
 - manifest parameter changes

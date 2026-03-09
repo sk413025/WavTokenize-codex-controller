@@ -10,4 +10,10 @@ This is the official Codex-started path.
 6. Review results in the same Codex session using native review and the repo checklist.
 7. Keep final interpretation, promotion decisions, and follow-up choices with `Codex(default)`.
 
+Suggested lifecycle-to-skill mapping:
+- `plan` / `prepare`: `experiment-decomposition`
+- `execute` / active `monitor`: `official-run-ladder` or bounded shell execution plus `stage-monitoring`
+- `analyze` / `diagnose`: `result-comparison` and `run-diagnosis`
+- `propose_next`: `followup-generation`
+
 In short: `AGENTS.md` starts the work, docs and skills explain the workflow, native Codex handles orchestration, and `codex_controller` only records project-specific run facts.

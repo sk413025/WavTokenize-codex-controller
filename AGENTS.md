@@ -65,6 +65,16 @@ Use native Codex roles first:
 - `analyst`: result comparison and diagnosis
 - `maintainer`: bounded diagnosis-driven fixes
 
+`Codex(default)` keeps decision ownership. Native roles may gather evidence, implement bounded changes, or monitor active work, but they do not take over promotion, stop/go, or follow-up decisions.
+
+## Source Of Truth
+For active work, treat facts in this precedence order:
+- live process state and GPU/process evidence
+- durable run artifacts such as logs, checkpoints, `history.json`, `state.json`, or `monitor_report.json`
+- completed sub-agent reports or prior Markdown summaries
+
+Completed sub-agent reports are advisory once a run continues after the report was produced. If evidence conflicts, refresh the live facts first and keep the final interpretation with `Codex(default)`.
+
 ## Do Not Rebuild Native Capabilities
 Do not implement repo-local replacements for capabilities that Codex already provides natively:
 - top-level planning
@@ -87,6 +97,15 @@ Code additions must meet at least one of these conditions:
 - they are directly required for a project-specific experiment pipeline
 - they are directly required to support a repo-local skill and are described by that skill's `SKILL.md`
 - they provide thin durable experiment state that cannot be replaced by policy, docs, skills, or Markdown guidance
+
+## Bounded Sequencing Boundary
+Bounded shell sequencing inside a single Codex task is allowed when it:
+- stays owned by the same `Codex(default)` session
+- only executes already-decided steps for the current task
+- does not create a reusable repo-side queue, scheduler, approval layer, or role router
+- does not replace native handoff, monitoring, diagnosis, or promotion decisions
+
+If a sequencing pattern starts to look reusable across tasks or sessions, keep it in Markdown guidance or a skill first; do not grow it into runtime control logic.
 
 ## Core Skills First
 Use repo-local skills under `.agents/skills/` for repeated workflows.
