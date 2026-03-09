@@ -5,6 +5,8 @@
 #
 # 用法：
 #   nohup bash families/deps/enc_mrd_fm/watch_and_launch_0227.sh > /tmp/watch_0227.log 2>&1 &
+#
+# 注意：啟動腳本已移到 quarantine/python/，此 watcher 僅保留歷史追溯用途。
 
 set -euo pipefail
 
@@ -70,7 +72,7 @@ fi
 echo "[0227 watcher] Encoder ckpt: $ENCODER_CKPT"
 
 nohup "$CONDA_PYTHON" \
-    "$BASE/families/deps/enc_mrd_fm/train_enc_mrd_fm.py" \
+    "$BASE/quarantine/python/families/deps/enc_mrd_fm/train_enc_mrd_fm.py" \
     --mode epoch \
     --epochs 300 \
     --device "$DEVICE" \

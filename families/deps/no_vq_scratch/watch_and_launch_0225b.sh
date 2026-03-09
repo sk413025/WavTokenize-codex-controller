@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # watch_and_launch_0225b.sh
-# 監控 exp_0225a（train_no_vq_scratch.py），結束後自動啟動 exp_0225b（Decoder LoRA）
+# 監控 exp_0225a（quarantine/python/.../train_no_vq_scratch.py），結束後自動啟動 exp_0225b（Decoder LoRA）
 #
 # 用法：bash families/deps/no_vq_scratch/watch_and_launch_0225b.sh
 # 或背景執行：nohup bash families/deps/no_vq_scratch/watch_and_launch_0225b.sh > /tmp/watch_0225b.log 2>&1 &
@@ -81,7 +81,7 @@ echo ""
 # 啟動 exp_0225b
 # -------------------------------------------------------
 nohup "$CONDA_PYTHON" \
-    "$BASE/families/deps/no_vq_scratch/train_no_vq_scratch_decoder_lora.py" \
+    "$BASE/quarantine/python/families/deps/no_vq_scratch/train_no_vq_scratch_decoder_lora.py" \
     --mode epoch \
     --epochs 300 \
     --device "$DEVICE" \

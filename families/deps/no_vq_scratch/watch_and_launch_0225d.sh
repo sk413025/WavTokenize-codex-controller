@@ -5,6 +5,8 @@
 # 用法：
 #   bash families/deps/no_vq_scratch/watch_and_launch_0225d.sh
 #   或背景執行：nohup bash families/deps/no_vq_scratch/watch_and_launch_0225d.sh > /tmp/watch_0225d.log 2>&1 &
+#
+# 注意：啟動腳本已移到 quarantine/python/，此 watcher 僅保留歷史追溯用途。
 
 set -euo pipefail
 
@@ -92,7 +94,7 @@ echo "[0225d watcher] Encoder ckpt: $ENCODER_CKPT"
 # 啟動 exp_0225d
 # -------------------------------------------------------
 nohup "$CONDA_PYTHON" \
-    "$BASE/families/deps/no_vq_scratch/train_no_vq_scratch_decoder_lora_fm.py" \
+    "$BASE/quarantine/python/families/deps/no_vq_scratch/train_no_vq_scratch_decoder_lora_fm.py" \
     --mode epoch \
     --epochs 300 \
     --device "$DEVICE" \

@@ -284,11 +284,11 @@ init ckpt:   exp_0224a best_model.pt（encoder 部分）
 
 ```
 Step 1: exp_0224a（Encoder LoRA 訓練）
-    python families/deps/no_vq_core/train_no_vq.py --mode epoch --epochs 300 --device cuda:0
+    python quarantine/python/families/deps/no_vq_core/train_no_vq.py --mode epoch --epochs 300 --device cuda:0
     → 產出 best_model.pt（encoder LoRA 參數）
 
 Step 2: exp_0224b（Decoder LoRA 訓練，依賴 Step 1）
-    python families/deps/no_vq_core/train_no_vq_decoder_lora.py \
+    python quarantine/python/families/deps/no_vq_core/train_no_vq_decoder_lora.py \
         --mode epoch --epochs 300 --device cuda:1 \
         --encoder_ckpt families/deps/no_vq_core/runs/no_vq_epoch_YYYYMMDD_HHMMSS/best_model.pt
 ```
@@ -414,8 +414,10 @@ families/deps/no_vq_core/
 ├── ARCHITECTURE.md           ← 本文件
 ├── models_no_vq.py           ← exp_0224a 模型（TeacherStudentNoVQ）
 ├── models_no_vq_decoder_lora.py  ← exp_0224b 模型（TeacherStudentNoVQDecoderLoRA）
-├── train_no_vq.py            ← exp_0224a 訓練腳本 (854 lines)
-├── train_no_vq_decoder_lora.py  ← exp_0224b 訓練腳本 (819 lines)
+├── quarantine/python/families/deps/no_vq_core/train_no_vq.py
+│                           ← exp_0224a 歷史訓練腳本 (854 lines)
+├── quarantine/python/families/deps/no_vq_core/train_no_vq_decoder_lora.py
+│                           ← exp_0224b 歷史訓練腳本 (819 lines)
 └── runs/
     └── no_vq_epoch_20260223_055458/  ← exp_0224a 訓練產出
         ├── config.json           ← 超參數快照
@@ -436,7 +438,7 @@ families/deps/no_vq_core/
 conda activate test
 
 # Step 1: exp_0224a — Encoder LoRA + No-VQ
-python families/deps/no_vq_core/train_no_vq.py \
+python quarantine/python/families/deps/no_vq_core/train_no_vq.py \
     --mode epoch \
     --epochs 300 \
     --device cuda:0 \
@@ -451,7 +453,7 @@ python families/deps/no_vq_core/train_no_vq.py \
     --lr 1e-4
 
 # Step 2: exp_0224b — Decoder LoRA + No-VQ（需先完成 Step 1）
-python families/deps/no_vq_core/train_no_vq_decoder_lora.py \
+python quarantine/python/families/deps/no_vq_core/train_no_vq_decoder_lora.py \
     --mode epoch \
     --epochs 300 \
     --device cuda:1 \

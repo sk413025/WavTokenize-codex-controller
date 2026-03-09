@@ -4,6 +4,8 @@
 #
 # 用法：
 #   nohup bash families/deps/feat_align/watch_and_launch_0226a.sh > /tmp/watch_0226a.log 2>&1 &
+#
+# 注意：啟動腳本已移到 quarantine/python/，此 watcher 僅保留歷史追溯用途。
 
 set -euo pipefail
 
@@ -76,7 +78,7 @@ fi
 echo "[0226a watcher] Encoder ckpt: $ENCODER_CKPT"
 
 nohup "$CONDA_PYTHON" \
-    "$BASE/families/deps/feat_align/train_enc_feat_align.py" \
+    "$BASE/quarantine/python/families/deps/feat_align/train_enc_feat_align.py" \
     --mode epoch \
     --epochs 300 \
     --device "$DEVICE" \

@@ -75,7 +75,8 @@ t453_ramp_epochs: 150  # 線性從 min_weight → 1.0 的 epoch 數
 families/deps/t453_weighted_baseline/
 ├── README.md                    # 本文件
 ├── data_t453_weighted.py        # T453WeightedSampler + create_t453_weighted_dataloaders
-└── train_t453_weighted.py       # 訓練腳本（待實作）
+└── quarantine/python/families/deps/t453_weighted_baseline/train_t453_weighted.py
+                               # 歷史訓練腳本（已移出 active surface）
 ```
 
 ---

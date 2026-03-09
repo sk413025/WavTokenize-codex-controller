@@ -311,12 +311,14 @@ families/eval/decoder_lora_eval/
 │   ├── get_decoder_lora_state_dict()  # 提取 LoRA 參數
 │   └── load_encoder_vq_checkpoint()   # 載入 exp_0217 weights
 │
-├── train_decoder_lora.py         # v1 訓練腳本（MSE-only, 已停止）
+├── quarantine/python/families/eval/decoder_lora_eval/train_decoder_lora.py
+│                                # v1 歷史訓練腳本（MSE-only, 已停止）
 │   ├── train_epoch()             # wav MSE 訓練循環
 │   ├── evaluate_decoder()        # val MSE 評估
 │   └── _save_audio_samples()     # 定期儲存 noisy/clean/recon wav
 │
-├── train_decoder_lora_v2.py      # v2 訓練腳本（MR-STFT + Mel）
+├── quarantine/python/families/eval/decoder_lora_eval/train_decoder_lora_v2.py
+│                                # v2 歷史訓練腳本（MR-STFT + Mel）
 │   ├── STFTLoss                  # 單一解析度 STFT (SC + LogMag)
 │   ├── MultiResolutionSTFTLoss   # 3 解析度 MR-STFT
 │   ├── MelReconstructionLoss     # log-Mel L1
@@ -324,7 +326,7 @@ families/eval/decoder_lora_eval/
 │   ├── evaluate_decoder_v2()     # 多指標評估
 │   └── _save_audio_samples()     # 音檔儲存
 │
-├── monitor_v1_launch_v2.sh       # v1→v2 自動監控腳本
+├── monitor_v1_launch_v2.sh       # v1→v2 歷史自動監控腳本（指向 quarantine path）
 │
 └── runs/
     ├── decoder_lora_epoch_20260223_010247/   # v1 run（已停止）

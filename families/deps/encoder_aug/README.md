@@ -57,7 +57,8 @@ Plan Ori 和 V2 兩個實驗都在 epoch ~70 開始 overfitting，best val MSE �
 families/deps/encoder_aug/
 ├── README.md                    # 本文件
 ├── data_augmented.py            # AugmentedCurriculumDataset
-├── train_augmented.py           # 訓練腳本
+├── quarantine/python/families/deps/encoder_aug/train_augmented.py
+│                              # 歷史訓練腳本（已移出 active surface）
 └── runs/                        # 實驗輸出
     ├── augmented_step_*/        # Short-run 結果
     └── augmented_epoch_*/       # Long-run 結果
@@ -68,16 +69,18 @@ families/deps/encoder_aug/
 ## 執行方式
 
 ```bash
+# 歷史腳本已移到 quarantine/python；以下命令只供追溯
+
 # Smoke test (10 steps)
 conda activate test
-python families/deps/encoder_aug/train_augmented.py --mode step --steps 10 \
+python quarantine/python/families/deps/encoder_aug/train_augmented.py --mode step --steps 10 \
     --batch_size 4 --grad_accum 1 --eval_interval 10
 
 # Short-run (1000 steps)
-python families/deps/encoder_aug/train_augmented.py --mode step --steps 1000
+python quarantine/python/families/deps/encoder_aug/train_augmented.py --mode step --steps 1000
 
 # Long-run (300 epochs)
-python families/deps/encoder_aug/train_augmented.py --mode epoch --epochs 300 \
+python quarantine/python/families/deps/encoder_aug/train_augmented.py --mode epoch --epochs 300 \
     --batch_size 8 --grad_accum 2 --save_audio_interval 50
 ```
 

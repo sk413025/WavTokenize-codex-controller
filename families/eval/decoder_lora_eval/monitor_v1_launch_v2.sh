@@ -4,7 +4,7 @@
 # 
 # v1 process PID: 2150799
 # v1 run dir: families/eval/decoder_lora_eval/runs/decoder_lora_epoch_20260223_010247/
-# v2 script: families/eval/decoder_lora_eval/train_decoder_lora_v2.py
+# v2 script: quarantine/python/families/eval/decoder_lora_eval/train_decoder_lora_v2.py
 # 
 # 檢測方式（雙重判定）：
 #   1. PID 2150799 不再存在
@@ -23,7 +23,7 @@ V1_FINAL_MODEL="${V1_RUN_DIR}/final_model.pt"
 V1_BEST_MODEL="${V1_RUN_DIR}/best_model.pt"
 
 # v2 啟動參數
-V2_SCRIPT="families/eval/decoder_lora_eval/train_decoder_lora_v2.py"
+V2_SCRIPT="quarantine/python/families/eval/decoder_lora_eval/train_decoder_lora_v2.py"
 V2_DEVICE="cuda:1"
 V2_EPOCHS=150
 V2_BATCH_SIZE=8

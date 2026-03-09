@@ -80,7 +80,7 @@ clean_audio = sample['clean_audio']  # Teacher 輸入
 
 ## 相關腳本
 
-- **filter_data3.py**: 從 data3 過濾並分割數據
+- **quarantine/python/data/filter_data3.py**: 從 data3 過濾並分割數據（已移出 active surface）
 - **DATA_PREPROCESSING_SUMMARY.md**: 完整前處理說明
 
 ## 更新日期
