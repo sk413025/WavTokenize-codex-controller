@@ -39,6 +39,15 @@ Use these gates for any real launch, including isolated hypothesis worktrees, un
   - do `analysis.json`, `monitor_report.json`, metrics, and family notes provide enough evidence to justify the conclusion
 - if these questions cannot be answered from concrete evidence, classify the result as incomplete evidence rather than a win
 - use this gate for promotion and follow-up review, not as an automatic runtime rule
+
+`research evidence minimum`
+- if a result is described as research progress, record the current evidence state for all three dimensions:
+  - preservation
+  - denoise quality
+  - generalization
+- if any dimension lacks usable evidence, the result may still be operationally useful, but it must not be described as a research breakthrough
+- when only execution readiness or stage completion is proven, classify the outcome as operational progress, `candidate`, or incomplete evidence rather than as a promoted research win
+- keep this requirement in Markdown review and analysis surfaces; do not encode it as a new runtime promotion engine
 `run-ready minimum gate`
 - confirm the command line and required flags are settled enough to launch without further design decisions
 - verify required assets, cache bindings, checkpoint paths, and output paths resolve in the current worktree
@@ -72,3 +81,5 @@ Use these gates for any real launch, including isolated hypothesis worktrees, un
 - promotion is a Codex review decision
 - manifests and runtime may record facts, but they do not auto-promote baselines
 - best-run updates should follow explicit evidence review, not automatic controller heuristics
+
+Use [generalization_evidence_checklist.md](generalization_evidence_checklist.md) when the main uncertainty is whether the line is improving beyond training data fit.

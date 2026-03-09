@@ -35,6 +35,12 @@ This smoke run answers these concrete questions:
 
 This experiment does **not** try to prove final research quality. It only proves that the first official family can run safely enough to justify a later `short` run.
 
+If this smoke run succeeds, the next Codex-side decision is not automatically another operational fix.
+The default post-smoke review should:
+- check whether the new evidence is only about startup and artifact generation or whether any preservation, denoise, or generalization evidence was added
+- use `result-comparison` plus `followup-generation` before deciding whether the line deserves a `short` run, a bounded fix, or a new hypothesis worktree
+- escalate to a new hypothesis if the main remaining problem is still `train-good/test-bad` rather than run readiness
+
 ## Why Not The Other Official Families
 `anchor-then-material`
 - `controller_runs/exp0305c_chain_preflight_live/preflight_report.json` is blocked by GPU headroom

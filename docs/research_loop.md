@@ -30,6 +30,20 @@ This is the project-specific loop that Codex should follow using native multi-ag
 - Bounded shell sequencing is acceptable for a single task when the next steps are already decided and no reusable control surface is created.
 - If active monitoring, sequencing, or diagnosis starts to feel reusable across tasks, capture it in docs or skills rather than in runtime code.
 
+## Generalization Stall Trigger
+- Treat repeated `train-good/test-bad` or weak OOD behavior as a research decision boundary, not as a reason to keep extending the same bounded fix by default.
+- If two consecutive iterations improve training or in-distribution evidence without a clear improvement in held-out generalization, the next step must be classified as `new hypothesis`.
+- If the likely follow-up changes loss design, data strategy, curriculum, conditioning, or evaluation protocol in order to address the generalization gap, move that work into a hypothesis worktree.
+- Do not keep a persistent generalization failure inside the stable line just because the next bounded fix feels operationally convenient.
+
+## Persistent Failure Review Pack
+- For repeated generalization failures, use a fixed native-role review pack before declaring the line healthy or blocked.
+- `explorer` inspects docs, manifests, tooling, run artifacts, and the most recent evaluation evidence.
+- `analyst` should be used at least twice: once to defend the current line and once to argue that the current line has become too rigid or locally optimized.
+- Add one explicit red-team view that challenges the most comfortable conclusion and looks for the failure mode the current loop is likely to miss.
+- Use `monitor` to judge whether the review is complete, whether both sides were represented fairly, and whether unresolved contradictions remain.
+- Keep the final judgment with `Codex(default)` after the review pack returns.
+
 ## Promoting A Sequence To The Official Surface
 - If a sequence needs bounded auto-continue, resumability, and durable stage events across more than one session, prefer promoting it to an official manifest operated through `codex_controller`.
 - Promotion is appropriate only when the sequence is repeatable, has stable stage boundaries, and already belongs to an official or promoted family.
@@ -71,6 +85,10 @@ Avoid proposing:
 - generic controller infrastructure
 - a new queue or approval model
 - broad refactors unrelated to the research target
+
+When a `smoke` or `short` run succeeds operationally but the research evidence is still weak:
+- do `result-comparison` and `followup-generation` before assuming another bounded operational fix is the right next step
+- prefer a new hypothesis when the missing evidence is specifically about preservation, denoise quality, or generalization rather than run startup
 
 ## Stop Rule
 Stop a line of work when:

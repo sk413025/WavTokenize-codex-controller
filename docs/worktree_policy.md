@@ -24,6 +24,12 @@ Treat these as hypothesis work:
 - trying a new loss, ablation, conditioning strategy, or fallback strategy
 - testing a new family-specific curriculum or initialization idea
 - changing a family in a way that could fail and should stay isolated from the official baseline
+- changing data strategy or augmentation policy to address a persistent generalization gap
+- changing evaluation protocol or held-out coverage to decide whether `train-good/test-bad` is real or only an artifact of the current evidence surface
+
+Treat these as immediate hypothesis triggers:
+- two consecutive iterations where training or in-distribution evidence improves but held-out generalization does not improve clearly
+- any proposed fix that targets OOD weakness by changing loss design, curriculum, conditioning, augmentation, or evaluation design
 
 ## When A New Worktree Is Not Required
 Stay in the current worktree only when the work is clearly part of the same line:
@@ -32,6 +38,7 @@ Stay in the current worktree only when the work is clearly part of the same line
 - reviewing logs, artifacts, and metrics
 - Markdown-only analysis or planning
 - a bounded fix that clearly belongs to the current official line and does not create a new hypothesis
+- a documentation or manifest clarification that records an already-decided next step without changing the research direction
 
 If there is doubt, isolate the work in a new worktree.
 
