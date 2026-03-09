@@ -169,7 +169,7 @@ Official work starts from these layers:
 
 Secondary machine-readable records:
 - `knowledge/*`
-- `controller_runs/<run_id>/`
+- run-local ledgers such as `<run_dir>/` when a concrete execution chooses to persist them
 
 ## Change Acceptance Gate
 Any controller or agent-native architecture change must record these five fields in the proposal, plan, or review:

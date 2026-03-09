@@ -30,7 +30,7 @@ This layer persists project-specific research state.
 - `experiments/manifests/*.json`
 - `experiments/adapters/*.json`
 - `experiments/registry.json`
-- `controller_runs/<run_id>/`
+- run-local ledger directories when an official execution persists them
 - `knowledge/*`
 
 Use this layer only for durable experiment state, manifests, adapters, and project-specific lifecycle records.

@@ -67,7 +67,7 @@ If calibrated alignment fails:
 ## Prior State (for reference)
 
 The smoke rung (`exp0304_material_generalization_smoke`) completed on 2026-03-09:
-- `controller_runs/exp0304_smoke_20260309_114847/` — status: completed, 5 epochs
+- run ledger was later removed during aggressive repo slimming; recorded result was 5 epochs
 - val_wav_mse: 0.0267, 42.5% better than noisy baseline (but measured on training samples)
 - inter_feat: ~1517 (val), contributing 93.2% of loss at lambda=0.5
 

@@ -103,4 +103,4 @@ This loop should produce Markdown-first conclusions:
 - what to try next
 - what not to build
 
-If machine-readable run facts are useful, they belong in `controller_runs/<run_id>/` as thin execution records, not as a second controller layer.
+If machine-readable run facts are useful, they belong in a run-local ledger directory chosen by that execution, not as a second controller layer.

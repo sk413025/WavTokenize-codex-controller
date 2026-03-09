@@ -13,20 +13,19 @@ The repo is close to `Codex-native`. The earlier start-path leak between a core 
 
 ## Remaining Text-Level Issues
 ### Still Worth Demoting Later
-- `codex_controller` and `controller_runs/` still carry older naming for compatibility
+- `codex_controller` still carries older naming for compatibility
 - `experiments/registry.json` still reads slightly heavier than the role it should play; keep it as an index, not a control surface
 - compatibility skill names such as `controller-decomposition` and `dispatch-handoff` remain on disk even though the preferred names are now `experiment-decomposition` and `native-handoff`
 - command examples still exist in `docs/reference/codex_controller.md` and `docs/reference/official_run_playbook.md`, which is acceptable, but they should stay in reference sections rather than drive the repo narrative
 
 ### Acceptable Implementation-Note Usage
 - `docs/reference/codex_controller.md` as an appendix
-- `controller_runs/<run_id>/` as the persisted run ledger path
+- a run-local ledger directory as the persisted run state path when a concrete execution emits one
 - `controller_defaults.json` as a minimal runtime default file
 - manifest fields such as `run_root` and `baseline_refs` as execution facts
 
 ### Naming Debt Intentionally Deferred
 - `codex_controller` package name stays for compatibility
-- `controller_runs/` directory name stays for compatibility
 - `run_status_detail` is now the active neutral runtime field; legacy `controller_status` is read only for backward compatibility
 - compatibility skills stay on disk so older notes still resolve
 

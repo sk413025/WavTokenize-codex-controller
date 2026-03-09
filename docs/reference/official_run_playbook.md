@@ -24,14 +24,14 @@ python -m codex_controller run experiments/manifests/exp0304_material_generaliza
 
 Then inspect:
 ```bash
-python -m codex_controller status controller_runs/exp0304_preflight_live
-python -m codex_controller monitor-run controller_runs/exp0304_preflight_live --print-report
+python -m codex_controller status <preflight-run-dir>
+python -m codex_controller monitor-run <preflight-run-dir> --print-report
 ```
 
 Read these artifacts:
-- `controller_runs/exp0304_preflight_live/preflight_report.json`
-- `controller_runs/exp0304_preflight_live/analysis.json`
-- `controller_runs/exp0304_preflight_live/monitor_report.json`
+- `<preflight-run-dir>/preflight_report.json`
+- `<preflight-run-dir>/analysis.json`
+- `<preflight-run-dir>/monitor_report.json`
 
 ## Step 2: Decide The Immediate Ladder Tier
 Use the preflight evidence only.
@@ -49,15 +49,15 @@ python -m codex_controller run experiments/manifests/exp0304_material_generaliza
 
 While it runs, use:
 ```bash
-python -m codex_controller monitor-run controller_runs/exp0304_smoke_live --print-report
-python -m codex_controller status controller_runs/exp0304_smoke_live
+python -m codex_controller monitor-run <smoke-run-dir> --print-report
+python -m codex_controller status <smoke-run-dir>
 ```
 
 ## Step 4: Decide Whether Short Is Justified
 Only after the smoke run succeeds, review:
-- `controller_runs/exp0304_smoke_live/state.json`
-- `controller_runs/exp0304_smoke_live/analysis.json`
-- `controller_runs/exp0304_smoke_live/monitor_report.json`
+- `<smoke-run-dir>/state.json`
+- `<smoke-run-dir>/analysis.json`
+- `<smoke-run-dir>/monitor_report.json`
 - stage logs
 
 If smoke shows only startup viability, stop there and record the result.
@@ -71,8 +71,8 @@ python -m codex_controller run experiments/manifests/exp0304_material_generaliza
 
 While it runs, use:
 ```bash
-python -m codex_controller monitor-run controller_runs/exp0304_short_live --print-report
-python -m codex_controller status controller_runs/exp0304_short_live
+python -m codex_controller monitor-run <short-run-dir> --print-report
+python -m codex_controller status <short-run-dir>
 ```
 
 ## Step 6: Review The Result In The Same Codex Session

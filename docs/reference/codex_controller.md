@@ -54,7 +54,7 @@ python -m codex_controller validate <manifest>
 python -m codex_controller describe <manifest>
 python -m codex_controller run <manifest>
 python -m codex_controller run <manifest> --dry-run
-python -m codex_controller resume controller_runs/<run_id>
-python -m codex_controller monitor-run controller_runs/<run_id> --print-report
-python -m codex_controller status controller_runs/<run_id>
+python -m codex_controller resume <run-dir>
+python -m codex_controller monitor-run <run-dir> --print-report
+python -m codex_controller status <run-dir>
 ```
