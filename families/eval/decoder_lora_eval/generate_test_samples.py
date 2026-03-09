@@ -31,7 +31,10 @@ from pathlib import Path
 from scipy import signal
 import scipy.io.wavfile as wavfile
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+FILE_DIR = Path(__file__).resolve().parent
+REPO_ROOT = FILE_DIR.parents[2]
+
+sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, '/home/sbplab/ruizi/WavTokenizer-main')
 sys.path.insert(0, '/home/sbplab/ruizi/WavTokenize-self-supervised')
 
@@ -45,10 +48,10 @@ from pystoi import stoi as calc_stoi
 DEVICE = torch.device('cuda:0')
 SR = 24000
 SR_PESQ = 8000
-TEST_DIR = Path(__file__).parent / 'test'
+TEST_DIR = FILE_DIR / 'test'
 
 # 固定使用 FAIR_BASELINE 的前 3 個 indices（確保與之前評估一致）
-BASELINE_JSON = Path(__file__).parent.parent / 'families/deps/t453_weighted_baseline/FAIR_BASELINE_PESQ_STOI_n30.json'
+BASELINE_JSON = REPO_ROOT / 'families/deps/t453_weighted_baseline/FAIR_BASELINE_PESQ_STOI_n30.json'
 with open(BASELINE_JSON) as f:
     baseline_data = json.load(f)
 SAMPLE_INDICES = baseline_data['indices'][:3]
@@ -178,7 +181,7 @@ def run_encoder_vq_experiment(exp, loader, out_dir):
     from families.compat_legacy.residual_vq_stack.phase3.residual_vq.models_rvq import TeacherStudentRVQ
 
     rvq_layers = exp.get('rvq_layers', 1)
-    ckpt_path = Path(exp['ckpt'])
+    ckpt_path = REPO_ROOT / exp['ckpt']
 
     print(f"  Loading {exp['name']} (rvq_layers={rvq_layers})...")
     if rvq_layers > 1:
@@ -248,7 +251,7 @@ def run_no_vq_experiment(exp, loader, out_dir):
         device=DEVICE,
     ).to(DEVICE)
 
-    ckpt = torch.load(str(exp['ckpt']), map_location='cpu', weights_only=False)
+    ckpt = torch.load(str(REPO_ROOT / exp['ckpt']), map_location='cpu', weights_only=False)
     if 'model_state_dict' in ckpt:
         model.load_state_dict(ckpt['model_state_dict'], strict=False)
     elif 'encoder_lora_state' in ckpt:
@@ -345,7 +348,7 @@ def run_no_vq_decoder_lora_experiment(exp, loader, out_dir):
         decoder_lora_alpha=exp['decoder_lora_alpha'],
     ).to(DEVICE)
 
-    ckpt = torch.load(str(exp['ckpt']), map_location='cpu', weights_only=False)
+    ckpt = torch.load(str(REPO_ROOT / exp['ckpt']), map_location='cpu', weights_only=False)
     model.load_state_dict(ckpt['model_state_dict'], strict=False)
     model.eval()
 
@@ -438,7 +441,7 @@ def run_decoder_lora_experiment(exp, loader, out_dir):
         decoder_lora_alpha=exp['decoder_lora_alpha'],
     ).to(DEVICE)
 
-    ckpt = torch.load(str(exp['ckpt']), map_location='cpu', weights_only=False)
+    ckpt = torch.load(str(REPO_ROOT / exp['ckpt']), map_location='cpu', weights_only=False)
     model.load_state_dict(ckpt['model_state_dict'], strict=False)
     model.eval()
 
