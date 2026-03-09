@@ -3,9 +3,8 @@
 Start in `AGENTS.md`.
 
 ## Research Goal
-This repo exists to push three official experiment families built on top of `WavTokenizer`:
+This repo exists to push the active official experiment families built on top of `WavTokenizer`:
 - `material-generalization`
-- `anchor-then-material`
 - `hubert-then-distalign`
 
 The long-term research target is:
@@ -26,9 +25,6 @@ Use this rule in review:
 ## Official Families
 `material-generalization`
 - the simplest official path and the default first ladder for real launches
-
-`anchor-then-material`
-- a sequential experiment family where an anchor stage feeds a material generalization stage
 
 `hubert-then-distalign`
 - a sequential experiment family that replaces legacy watcher-heavy orchestration with explicit stage dependencies

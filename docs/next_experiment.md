@@ -73,11 +73,6 @@ The smoke rung (`exp0304_material_generalization_smoke`) completed on 2026-03-09
 
 ## Why Not The Other Official Families
 
-`anchor-then-material`
-- Anchor direction confirmed dead by multi-agent review (Agent 1A)
-- All variants degrade after epoch ~18, gradient conflict is fundamental
-- Do not pursue further
-
 `hubert-then-distalign`
 - Blocked by GPU headroom
 - No current evidence justifies moving beyond preflight

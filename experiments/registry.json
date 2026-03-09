@@ -43,48 +43,6 @@
       ]
     },
     {
-      "experiment_id": "exp0305c_to_exp0304_preflight",
-      "manifest": "experiments/manifests/exp0305c_to_exp0304_preflight.json",
-      "status": "official",
-      "family": "anchor-then-material",
-      "adapter_ids": [
-        "exp0305c_preflight_anchor_then_material"
-      ]
-    },
-    {
-      "experiment_id": "exp0305c_to_exp0304_smoke",
-      "manifest": "experiments/manifests/exp0305c_to_exp0304_smoke.json",
-      "status": "official",
-      "family": "anchor-then-material",
-      "adapter_ids": [
-        "exp0305c_preflight_anchor_then_material",
-        "exp0305c_train_expc",
-        "exp0304_train_material_gen"
-      ]
-    },
-    {
-      "experiment_id": "exp0305c_to_exp0304_short",
-      "manifest": "experiments/manifests/exp0305c_to_exp0304_short.json",
-      "status": "official",
-      "family": "anchor-then-material",
-      "adapter_ids": [
-        "exp0305c_preflight_anchor_then_material",
-        "exp0305c_train_expc",
-        "exp0304_train_material_gen"
-      ]
-    },
-    {
-      "experiment_id": "exp0305c_to_exp0304_controller",
-      "manifest": "experiments/manifests/exp0305c_to_exp0304_controller.json",
-      "status": "official",
-      "family": "anchor-then-material",
-      "adapter_ids": [
-        "exp0305c_preflight_anchor_then_material",
-        "exp0305c_train_expc",
-        "exp0304_train_material_gen"
-      ]
-    },
-    {
       "experiment_id": "exp0228_hubert_then_distalign_preflight",
       "manifest": "experiments/manifests/exp0228_hubert_then_distalign_preflight.json",
       "status": "official",
@@ -133,8 +91,7 @@
     "families/deps/no_vq_scratch",
     "families/deps/feat_align",
     "families/deps/enc_mrd_fm",
-    "families/deps/selective_lora",
-    "families/deps/anchor_regularization"
+    "families/deps/selective_lora"
   ],
   "eval_families": [
     "families/eval/decoder_lora_eval",

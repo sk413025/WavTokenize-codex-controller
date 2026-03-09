@@ -31,7 +31,6 @@ The official operating order still comes from `AGENTS.md`, repo docs, and repo s
 
 ## Official Families
 - `material-generalization`
-- `anchor-then-material`
 - `hubert-then-distalign`
 
 ## Current Preferred Launch

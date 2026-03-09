@@ -2,18 +2,6 @@
   "schema_version": 1,
   "adapters": [
     {
-      "adapter_id": "exp0305c_preflight_anchor_then_material",
-      "path": "experiments/adapters/exp0305c_preflight_anchor_then_material.json",
-      "status": "official",
-      "family": "anchor-then-material"
-    },
-    {
-      "adapter_id": "exp0305c_train_expc",
-      "path": "experiments/adapters/exp0305c_train_expc.json",
-      "status": "official",
-      "family": "anchor-then-material"
-    },
-    {
       "adapter_id": "exp0304_preflight_material_gen",
       "path": "experiments/adapters/exp0304_preflight_material_gen.json",
       "status": "official",
