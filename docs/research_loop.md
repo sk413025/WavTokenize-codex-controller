@@ -20,6 +20,7 @@ This is the project-specific loop that Codex should follow using native multi-ag
 ## Long-Running Hypothesis Work
 - For a new hypothesis, keep experiment edits in the hypothesis worktree and keep control ownership with the same `Codex(default)` session.
 - When launching a long-running hypothesis run, create a paired `monitor` handoff at launch time instead of relying on a later manual check.
+- Treat the launch contract as session policy, not family runtime state: declare at most one allowed next step and keep broader autonomy out of experiment code.
 - Use native roles to split observation from decision-making:
   - `monitor` or `stage-monitoring` for active run facts
   - `run-diagnosis` for stalled, failed, or weak runs
@@ -35,15 +36,11 @@ This is the project-specific loop that Codex should follow using native multi-ag
 - When in doubt, keep the hypothesis event-driven first and promote the sequence only after the handoff rules have stabilized.
 
 ## Autonomy Window
-- At the start of a task, `Codex(default)` may declare a bounded autonomy window for auto-progression:
-  - `single-step`
-  - `through-evaluation`
-  - `through-next-smoke`
-  - `through-bounded-sequence`
-- If no autonomy window is declared, default to `single-step`.
-- For paired long-running launches, prefer a launch contract that declares at most one bounded next step.
-- Work must not auto-progress beyond the declared window.
-- The autonomy window belongs to the current task only. Do not turn it into a reusable queue, scheduler, or runtime protocol.
+- At the start of a task, `Codex(default)` may declare a bounded launch contract for auto-progression.
+- If no broader contract is declared, default to `single-step`.
+- For routine paired long-running launches, the daily operating default is `one-next-step`: one declared next step, or none.
+- Broader windows are exceptional, should stay in Markdown guidance, and should not become family runtime fields or reusable queue protocols.
+- Work must not auto-progress beyond the declared launch contract.
 
 ## Post-Run Transition
 - `clean success`

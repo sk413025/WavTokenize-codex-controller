@@ -11,7 +11,7 @@ Workflow:
 3. Read `docs/next_experiment.md`.
 4. Read `docs/official_run_playbook.md`.
 5. Use `experiment-decomposition` to confirm the next bounded step.
-6. At launch time, pair the official run with a fresh `monitor` handoff that names the run id and the one allowed next step, if any.
+6. Follow the paired-monitor and one-next-step launch contract from `docs/research_loop.md` when starting the official run.
 7. If the run needs durable stage handoff or bounded auto-continue, prefer the existing official manifest and `codex_controller` run surface over ad hoc shell sequencing.
 8. For `material-generalization`, run preflight first and then the smoke ladder if the preflight evidence still supports it.
 9. Inspect `preflight_report.json`, `analysis.json`, and `monitor_report.json` before deciding whether the smoke result justifies a short run.

@@ -31,6 +31,8 @@ Use it when a sequence is both:
 - official or promoted enough to deserve a manifest
 - repeatable enough that stage handoff should survive beyond a single terminal session
 
+Treat this as the official surface only. One-off hypothesis runs may write thin run-local facts for auditability, but they should stay session-owned and agent-native unless the sequence has been explicitly promoted.
+
 Do not use it just because a one-off hypothesis would be more convenient with a watcher. Keep one-off hypothesis sequencing in the Codex session unless the flow is ready to become an official manifest.
 
 ## Runtime Contract
