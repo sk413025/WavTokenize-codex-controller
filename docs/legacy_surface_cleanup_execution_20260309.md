@@ -14,11 +14,8 @@ Phase 1 cleanup is approved only for cold generated residue with direct evidence
 - `families/eval/bwe_latent_hf/nohup_autolaunch.log`
 - `families/official/hubert_then_distalign/nohup_train_distalign_gpu0.log`
 
-The following candidate remains blocked:
-
-- `families/official/anchor_then_material/nohup_expc_20260306_090111.log`
-  - blocked because `families/official/anchor_then_material/wait_and_launch_exp0304.sh`
-    still references this path directly
+The anchor log was initially blocked in Phase 1 because the dead
+`anchor-then-material` shell path still referenced it.
 
 ## Evidence
 
@@ -44,6 +41,8 @@ History preservation:
 
 - deleted items are generated residue rather than source-of-truth artifacts
 - cleanup rationale is preserved in this execution note and in git history
+- removed historical compat content is recoverable via git tag
+  `pre-compat-legacy-cleanup`
 
 ## Phase 1 Actions
 
@@ -64,14 +63,14 @@ Completed on 2026-03-09 with these verified outcomes:
   permanent invariant
 - `families/eval/bwe_latent_hf/nohup_autolaunch.log`: removed
 - `families/official/hubert_then_distalign/nohup_train_distalign_gpu0.log`: removed
-- `families/official/anchor_then_material/nohup_expc_20260306_090111.log`: still present and still blocked
+- `families/official/anchor_then_material/nohup_expc_20260306_090111.log`: later removed together with the dead anchor family surface
 
 ## Not Done In Phase 1
 
 - no deletion under `families/compat_legacy/*`
 - no deletion under `families/deps/*/runs`
 - no deletion of eval fixtures or baseline summaries
-- no deletion of `families/official/anchor_then_material/nohup_expc_20260306_090111.log`
+- no phase-1 deletion of the anchor log; it was removed later with the dead anchor family surface
 
 ## Next Candidate For Phase 2
 
@@ -128,3 +127,38 @@ Post-change grep result:
   RVQ compat path for `TeacherStudentRVQ`
 - that RVQ path was already flagged as broken before this extraction, so Phase 2
   option 3 does not resolve it
+
+## Later Cleanup Waves
+
+Later waves remove:
+
+- dead `anchor-then-material` official control surface
+- dead `anchor_regularization` dependency surface
+- in-repo historical archive directories no longer kept as a live surface
+
+Concrete later-wave deletions completed on 2026-03-09:
+
+- remove `experiments/adapters/exp0305c_preflight_anchor_then_material.json`
+- remove `experiments/adapters/exp0305c_train_expc.json`
+- remove `experiments/manifests/exp0305c_to_exp0304_{preflight,smoke,short,controller}.json`
+- remove `families/official/anchor_then_material/`
+- remove `families/deps/anchor_regularization/`
+- remove `families/deps/t453_weighted_baseline/analysis_commit_5e859b0/`
+- remove `families/deps/t453_weighted_baseline/COMMIT_5e859b0_VAL_AUDIO_ANALYSIS_{SPEC,PLAN}.md`
+- remove `families/official/material_generalization/wavtokenizer_featuremap_14wav_extended/`
+- remove `families/eval/decoder_lora_eval/test/`
+- remove `archive/controller_runs/`
+- remove `archive/legacy_artifacts/`
+- remove `archive/legacy_families/`
+- remove `archive/root-notes/`
+- remove `archive/root-scripts/`
+
+Later-wave validation notes:
+
+- `experiments/registry.json` and `experiments/adapters/index.json` were updated
+  to stop advertising the dead anchor line
+- in-tree compat archive recovery text was replaced with git-history /
+  git-tag recovery text
+- `families/eval/decoder_lora_eval/generate_test_samples.py` still has a
+  pre-existing baseline-path import failure unrelated to these deletions, so it
+  remains a known residual risk rather than a cleanup regression

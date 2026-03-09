@@ -14,7 +14,7 @@ root-level `exp_xxxx` sprawl with a smaller set of explicit roles.
   - evaluation and comparison families that remain active because official or promoted lines still use their scripts or artifacts
 - `compat_legacy/`
   - contains only 5 core module files still imported by active pipelines (models, losses, data utilities)
-  - historical training scripts and analysis tools have been archived to `archive/legacy_families/compat_legacy_archive/`
+  - historical training scripts and analysis tools were removed from the active tree and remain recoverable via git history at tag `pre-compat-legacy-cleanup`
   - not a research home — these are dependency residue pending extraction to `deps/` (Phase 3)
 
 ## Operating Rules
@@ -29,4 +29,4 @@ root-level `exp_xxxx` sprawl with a smaller set of explicit roles.
 - For active imports and checkpoint dependencies, inspect `families/deps/*`.
 - For baseline comparisons and report-generation scripts, inspect `families/eval/*`.
 - Treat `families/compat_legacy/*` as dependency residue (5 core files only), not as a place to start new work.
-- Archived compat_legacy scripts are in `archive/legacy_families/compat_legacy_archive/` and in git history at tag `pre-compat-legacy-cleanup`.
+- Removed compat_legacy scripts remain recoverable in git history at tag `pre-compat-legacy-cleanup`.

@@ -1,3 +1,0 @@
-condition,total_tokens,valid_tokens,acc_normal,acc_variant,acc_normal_pct,acc_variant_pct,c2c,c2w,w2c,w2w,c2c_pct,c2w_pct,w2c_pct,w2w_pct,net_acc_delta_pct
-zero,38805,32613,10338,9749,31.6990,29.8930,9244,1094,505,21770,28.3445,3.3545,1.5485,66.7525,-1.8060
-random,38805,32613,10338,9840,31.6990,30.1720,9309,1029,531,21744,28.5438,3.1552,1.6282,66.6728,-1.5270

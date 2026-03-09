@@ -39,9 +39,8 @@ Confirmed live dependencies still exist:
 - `families/deps/no_vq_core/models_no_vq.py`
 - `families/eval/decoder_lora_eval/generate_test_samples.py`
 
-Confirmed archive direction already exists:
-
-- `archive/legacy_families/compat_legacy_archive/ARCHIVE_SUMMARY.md`
+Historical compat removals remain recoverable through git history at tag
+`pre-compat-legacy-cleanup`.
 
 ## Native Role Split
 

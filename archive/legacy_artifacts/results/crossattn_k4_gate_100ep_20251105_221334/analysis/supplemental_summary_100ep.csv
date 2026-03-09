@@ -1,8 +1,0 @@
-epoch,ent_mean,ent_p90,peaked_frac,low_gate_frac_lowbin,high_gate_frac_mid,gate_mean_mid,gate_p50_mid
-10,0.891735,0.981106,0.953666,,,,
-20,0.875391,0.975047,0.953695,,,,
-30,,,,,,,
-40,,,,,,,
-50,,,,,,,
-80,,,,,,,
-100,,,,,,,
