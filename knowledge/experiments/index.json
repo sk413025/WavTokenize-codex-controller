@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "families": {
+    "anchor-then-material": {
+      "summary": "Sequential anchor training followed by material generalization.",
+      "latest_run_id": "exp0305c_chain_preflight_live",
+      "latest_result_classification": "failed",
+      "baseline_run_id": null,
+      "notes": [
+        "Run failed during execution: Stage preflight_anchor_then_material failed with return code 2. See /home/sbplab/ruizi/WavTokenize-codex-controller/controller_runs/exp0305c_chain_preflight_live/preflight_anchor_then_material.log"
+      ]
+    },
+    "material-generalization": {
+      "summary": "Material generalization training for LDV-to-speech reconstruction.",
+      "latest_run_id": "exp0304_smoke_20260309_114847",
+      "latest_result_classification": "candidate",
+      "baseline_run_id": null,
+      "notes": [
+        "Synthetic failure-path analysis.",
+        "Run satisfied controller acceptance criteria.",
+        "Run failed during execution: Stage train_material_gen_smoke failed with return code 2. See /home/sbplab/ruizi/WavTokenize-codex-controller/controller_runs/exp0304_smoke_20260309_114643/train_material_gen_smoke.log",
+        "Run failed during execution: Stage train_material_gen_smoke failed with return code 1. See /home/sbplab/ruizi/WavTokenize-codex-controller/controller_runs/exp0304_smoke_20260309_114740/train_material_gen_smoke.log",
+        "Run satisfied the manifest execution contract. Review logs, metrics, and artifacts in the Codex session."
+      ],
+      "last_next_action": "review_results_in_codex_session",
+      "objective_status": "candidate",
+      "paused": false
+    },
+    "hubert-then-distalign": {
+      "summary": "Watcher-heavy exp_0228 migration: base HuBERT feature-loss training followed by distalign as a controller-managed sequential pipeline.",
+      "latest_run_id": "exp0228_preflight_live",
+      "latest_result_classification": "failed",
+      "baseline_run_id": null,
+      "notes": [
+        "Supersedes families/official/hubert_then_distalign/wait_then_start_distalign.sh as the official orchestration path.",
+        "Baseline comparison should consider exp_0227 MRD FM and future exp_0228 family runs.",
+        "Synthetic success-path analysis.",
+        "Synthetic golden-session run satisfied acceptance criteria.",
+        "Run failed during execution: Stage preflight_hubert_distalign failed with return code 2. See /home/sbplab/ruizi/WavTokenize-codex-controller/controller_runs/exp0228_preflight_live/preflight_hubert_distalign.log"
+      ]
+    },
+    "compat-legacy-cleanup": {
+      "summary": "Archived historical compat_legacy training scripts and logs. 5 core module files retained in families/compat_legacy/ for active pipeline imports.",
+      "latest_run_id": null,
+      "latest_result_classification": "completed",
+      "baseline_run_id": null,
+      "notes": [
+        "Phase 1: Removed 630 MB of log files (58 files).",
+        "Phase 2: Archived ~70 training scripts, analysis tools, and docs to archive/legacy_families/compat_legacy_archive/.",
+        "5 core files retained: data_curriculum.py, models.py, train_v6.py, models_single_vq_ema.py, models_rvq.py.",
+        "Safety tag: pre-compat-legacy-cleanup.",
+        "Phase 3 (import path extraction to deps/) deferred pending material-generalization completion."
+      ]
+    }
+  }
+}

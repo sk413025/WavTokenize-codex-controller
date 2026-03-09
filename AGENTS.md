@@ -261,7 +261,7 @@ Codex should not mutate unrelated legacy experiment families unless a manifest o
 
 ## Worktree Policy
 - `codex-first-controller` is the stable official control-surface worktree.
-- The stable worktree uses `families/official/*`, `families/deps/*`, `families/eval/*`, and `families/compat_legacy/*` instead of root-level `exp_xxxx` directories.
+- The stable worktree uses `families/official/*`, `families/deps/*`, `families/eval/*`, and `families/compat_legacy/*` (5 core modules only; historical scripts archived to `archive/legacy_families/compat_legacy_archive/`) instead of root-level `exp_xxxx` directories.
 - A new hypothesis should default to a new branch and a new worktree.
 - Do not add new root-level `exp_xxxx` directories to the stable worktree.
 - If the task changes experiment behavior rather than just executing the current official ladder, open a hypothesis worktree first.
