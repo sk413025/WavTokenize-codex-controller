@@ -19,6 +19,7 @@ This is the project-specific loop that Codex should follow using native multi-ag
 
 ## Long-Running Hypothesis Work
 - For a new hypothesis, keep experiment edits in the hypothesis worktree and keep control ownership with the same `Codex(default)` session.
+- Do not add new root-level `exp_xxxx` directories to the stable worktree for hypothesis code. Use a new worktree first, then promote the result back into `families/*` only after review.
 - When launching a long-running hypothesis run, create a paired `monitor` handoff at launch time instead of relying on a later manual check.
 - Treat the launch contract as session policy, not family runtime state: declare at most one allowed next step and keep broader autonomy out of experiment code.
 - Use native roles to split observation from decision-making:
@@ -32,6 +33,7 @@ This is the project-specific loop that Codex should follow using native multi-ag
 ## Promoting A Sequence To The Official Surface
 - If a sequence needs bounded auto-continue, resumability, and durable stage events across more than one session, prefer promoting it to an official manifest operated through `codex_controller`.
 - Promotion is appropriate only when the sequence is repeatable, has stable stage boundaries, and already belongs to an official or promoted family.
+- Promotion should merge back into `families/official/*`, `families/deps/*`, or `families/eval/*` where practical rather than reintroducing root-level `exp_xxxx` directories in the stable worktree.
 - Do not promote a sequence just to save manual work on a one-off hypothesis. Keep those flows agent-native and session-owned.
 - When in doubt, keep the hypothesis event-driven first and promote the sequence only after the handoff rules have stabilized.
 

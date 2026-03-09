@@ -3,7 +3,7 @@
   "adapter_id": "exp0305c_train_expc",
   "status": "official",
   "adapter": "python_script",
-  "entrypoint": "exp_0305c/train_expc.py",
+  "entrypoint": "families/official/anchor_then_material/train_expc.py",
   "cwd": ".",
   "completion": {
     "stdout_contains": ["Training complete"],

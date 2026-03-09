@@ -3,7 +3,7 @@
   "adapter_id": "exp0228_wait_distalign_legacy",
   "status": "legacy",
   "adapter": "shell",
-  "command": "bash exp_0228/wait_then_start_distalign.sh",
+  "command": "bash families/official/hubert_then_distalign/wait_then_start_distalign.sh",
   "cwd": ".",
   "completion": {
     "stdout_contains": ["started distalign pid="],

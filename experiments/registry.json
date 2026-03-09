@@ -127,20 +127,24 @@
       ]
     }
   ],
-  "legacy_families": [
-    "exp_0106",
-    "exp_0112",
-    "exp_0113",
-    "exp_0121_token_guided",
-    "exp_0217",
-    "exp_0223",
-    "exp_0224",
-    "exp_0225",
-    "exp_0226",
-    "exp_0227",
-    "exp_0229b",
-    "exp_0229c",
-    "exp_0305",
-    "exp_0305b"
+  "dependency_families": [
+    "families/deps/t453_weighted_baseline",
+    "families/deps/no_vq_core",
+    "families/deps/no_vq_scratch",
+    "families/deps/feat_align",
+    "families/deps/enc_mrd_fm",
+    "families/deps/selective_lora",
+    "families/deps/anchor_regularization"
+  ],
+  "eval_families": [
+    "families/eval/decoder_lora_eval",
+    "families/eval/bwe_latent",
+    "families/eval/bwe_latent_hf"
+  ],
+  "compat_legacy_families": [
+    "families/compat_legacy/plan_ori_vq",
+    "families/compat_legacy/residual_vq_stack",
+    "families/compat_legacy/intermediate_stack",
+    "families/compat_legacy/curriculum_data"
   ]
 }

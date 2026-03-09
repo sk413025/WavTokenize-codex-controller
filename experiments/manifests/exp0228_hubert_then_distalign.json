@@ -6,7 +6,7 @@
   "hypothesis": "A manifest-driven preflight-plus-base-then-distalign pipeline can safely supersede the legacy watcher script and provide a reproducible stage handoff for future exp_0228 runs.",
   "baseline_refs": [
     "exp_0227 encoder-only MRD FM baseline",
-    "exp_0228/wait_then_start_distalign.sh"
+    "families/official/hubert_then_distalign/wait_then_start_distalign.sh"
   ],
   "run_root": "controller_runs",
   "default_env": {
@@ -26,14 +26,14 @@
     "required_files": [],
     "result_classification_on_pass": "candidate"
   },
-  "supersedes": "exp_0228/wait_then_start_distalign.sh",
+  "supersedes": "families/official/hubert_then_distalign/wait_then_start_distalign.sh",
   "stages": [
     {
       "name": "preflight_hubert_distalign",
       "adapter": "python_script",
       "adapter_id": "exp0228_preflight_hubert_distalign",
       "description": "Check HuBERT-stage assets, optional encoder checkpoint fallback, and GPU readiness before any exp_0228 launch.",
-      "entrypoint": "exp_0228/preflight_hubert_distalign.py",
+      "entrypoint": "families/official/hubert_then_distalign/preflight_hubert_distalign.py",
       "args": [
         "--gpu",
         "cuda:0",
@@ -42,7 +42,7 @@
         "--val_cache",
         "/home/sbplab/ruizi/WavTokenize-feature-analysis/data/val_cache_filtered.pt",
         "--encoder_ckpt",
-        "exp_0225/runs/no_vq_scratch_epoch_20260224_032104/best_model_val_total.pt",
+        "families/deps/no_vq_scratch/runs/no_vq_scratch_epoch_20260224_032104/best_model_val_total.pt",
         "--report_path",
         "{run_dir}/preflight_report.json"
       ],
@@ -58,7 +58,7 @@
       "after": [
         "preflight_hubert_distalign"
       ],
-      "entrypoint": "exp_0228/train_enc_hubert_fm.py",
+      "entrypoint": "families/official/hubert_then_distalign/train_enc_hubert_fm.py",
       "args": [
         "--mode",
         "epoch",
@@ -77,7 +77,7 @@
         "--val_cache",
         "/home/sbplab/ruizi/WavTokenize-feature-analysis/data/val_cache_filtered.pt",
         "--encoder_ckpt",
-        "exp_0225/runs/no_vq_scratch_epoch_20260224_032104/best_model_val_total.pt",
+        "families/deps/no_vq_scratch/runs/no_vq_scratch_epoch_20260224_032104/best_model_val_total.pt",
         "--output_dir",
         "{run_dir}/exp_0228_base_epoch"
       ],
@@ -93,7 +93,7 @@
       "after": [
         "train_enc_hubert_fm"
       ],
-      "entrypoint": "exp_0228/train_enc_hubert_fm_distalign.py",
+      "entrypoint": "families/official/hubert_then_distalign/train_enc_hubert_fm_distalign.py",
       "args": [
         "--mode",
         "epoch",

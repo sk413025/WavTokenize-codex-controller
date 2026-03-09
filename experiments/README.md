@@ -11,6 +11,12 @@ It is not the primary operating guide.
 - `manifests/*.json`: execution contracts for official experiment ladders
 - `adapters/*.json`: adapter contracts for official and legacy pipelines
 
+## Registry Semantics
+- `dependency_families` in `registry.json` lists active non-official families that official manifests, training code, imports, or checkpoint bindings still depend on.
+- `eval_families` lists active evaluation-oriented families that remain part of the comparison surface.
+- `compat_legacy_families` lists still-imported technical legacy families that are not part of the official start path.
+- These are classification fields, not archive directives. Layout should follow actual dependency usage inside `families/*`.
+
 ## What Manifests Should Do
 A manifest should describe:
 - which family is being run
@@ -34,4 +40,4 @@ Use the `material-generalization` ladder first:
 - `exp0304_material_generalization_short`
 - `exp0304_material_generalization`
 
-For the canonical real-run flow, use `official-run-ladder` and `docs/official_run_playbook.md` before opening `codex_controller` docs.
+For the canonical real-run flow, use `official-run-ladder` and `docs/reference/official_run_playbook.md` before opening `codex_controller` docs.

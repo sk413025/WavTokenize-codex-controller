@@ -1,0 +1,68 @@
+[
+  {
+    "epoch": 221,
+    "train_metrics": {
+      "total_loss": 0.04092524807474771,
+      "loss_quant": 0.02233917321032488,
+      "loss_inter": 0.5824679027391989,
+      "loss_commit": 0.0011120381124424,
+      "loss_codebook": 0.0,
+      "intermediate_weight": 0.03,
+      "intermediate_L3_loss": 0.4556211881155585,
+      "intermediate_L4_loss": 0.4310262362346237,
+      "intermediate_L6_loss": 0.46053684659210253,
+      "nan_batches": 0
+    },
+    "val_metrics": {
+      "entropy": 8.6965913772583,
+      "top10_mass": 0.2119903713464737,
+      "used_codes": 1147,
+      "usage_pct": 28.0029296875,
+      "feature_mse": 0.03904236728946368,
+      "teacher_entropy": 10.010977745056152,
+      "teacher_used_codes": 1703,
+      "p1_pass": true,
+      "p2_pass": true,
+      "p3_pass": false,
+      "val_total_loss": 0.07095708375175794,
+      "val_loss_quant": 0.03898711105187734,
+      "val_loss_inter": 1.0473017076651254,
+      "val_loss_commit": 0.0005509226932190359
+    },
+    "checkpoint": "families/deps/t453_weighted_baseline/analysis_commit_5e859b0/replay_from220_to222/checkpoints/checkpoint_epoch221_replay.pt",
+    "elapsed_sec": 249.03443217277527
+  },
+  {
+    "epoch": 222,
+    "train_metrics": {
+      "total_loss": 0.040307142770343266,
+      "loss_quant": 0.02187267847195337,
+      "loss_inter": 0.5773674744514772,
+      "loss_commit": 0.0011134403893838342,
+      "loss_codebook": 0.0,
+      "intermediate_weight": 0.03,
+      "intermediate_L3_loss": 0.45109304946697787,
+      "intermediate_L4_loss": 0.427603390113807,
+      "intermediate_L6_loss": 0.4564757196255672,
+      "nan_batches": 0
+    },
+    "val_metrics": {
+      "entropy": 9.172931671142578,
+      "top10_mass": 0.11777462810277939,
+      "used_codes": 1237,
+      "usage_pct": 30.2001953125,
+      "feature_mse": 0.03991983026110878,
+      "teacher_entropy": 10.010977745056152,
+      "teacher_used_codes": 1703,
+      "p1_pass": true,
+      "p2_pass": true,
+      "p3_pass": false,
+      "val_total_loss": 0.07184421494603158,
+      "val_loss_quant": 0.039863302186131475,
+      "val_loss_inter": 1.048045684893926,
+      "val_loss_commit": 0.000539543308938543
+    },
+    "checkpoint": "families/deps/t453_weighted_baseline/analysis_commit_5e859b0/replay_from220_to222/checkpoints/checkpoint_epoch222_replay.pt",
+    "elapsed_sec": 240.54301929473877
+  }
+]

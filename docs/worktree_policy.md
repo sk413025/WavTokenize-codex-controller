@@ -8,6 +8,8 @@ This repo uses worktrees to isolate new hypotheses from the stable official cont
 `codex-first-controller`
 - this is the stable official control-surface worktree
 - keep official docs, official manifests, official adapters, and official run guidance here
+- keep stable family code under `families/official/*`, `families/deps/*`, `families/eval/*`, and `families/compat_legacy/*`
+- do not add new root-level `exp_xxxx` directories here
 - use it for planning, review, official ladder execution, and bounded fixes in the current line
 
 ## When A New Worktree Is Required
@@ -72,5 +74,7 @@ If it is a new hypothesis:
 3. keep experiment edits isolated there
 4. run `preflight -> smoke -> short -> full` there as needed
 5. review the evidence before proposing anything for merge-back
+
+If a hypothesis earns promotion, merge it back into the stable `families/*` layout instead of recreating a new root-level `exp_xxxx` directory.
 
 This policy is Markdown-first on purpose. Do not add runtime code to enforce it.

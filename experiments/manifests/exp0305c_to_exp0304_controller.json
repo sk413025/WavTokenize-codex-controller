@@ -2,7 +2,7 @@
   "schema_version": 1,
   "experiment_id": "exp0305c_to_exp0304_controller",
   "family": "anchor-then-material",
-  "objective": "Replace the legacy exp_0305c wait-and-launch chain with a manifest-driven sequential pipeline that runs exp_0305c and then exp_0304.",
+  "objective": "Replace the legacy exp_0305c wait-and-launch chain with a manifest-driven sequential pipeline that runs exp_0305c and then families.official.material_generalization.",
   "hypothesis": "A manifest-driven preflight-plus-sequential pipeline can safely supersede the legacy shell watcher and provide a reproducible stage handoff for anchor-then-material experiments.",
   "baseline_refs": [
     "exp0304_material_generalization"
@@ -26,14 +26,14 @@
     "required_files": [],
     "result_classification_on_pass": "candidate"
   },
-  "supersedes": "exp_0305c/wait_and_launch_exp0304.sh",
+  "supersedes": "families/official/anchor_then_material/wait_and_launch_exp0304.sh",
   "stages": [
     {
       "name": "preflight_anchor_then_material",
       "adapter": "python_script",
       "adapter_id": "exp0305c_preflight_anchor_then_material",
       "description": "Check shared assets, optional material-stage checkpoint fallback, and both sequential GPUs before any chain launch.",
-      "entrypoint": "exp_0305c/preflight_anchor_then_material.py",
+      "entrypoint": "families/official/anchor_then_material/preflight_anchor_then_material.py",
       "args": [
         "--primary_gpu",
         "cuda:0",
@@ -44,7 +44,7 @@
         "--val_cache",
         "/home/sbplab/ruizi/WavTokenize-feature-analysis/data/val_cache_filtered.pt",
         "--material_encoder_ckpt",
-        "exp_0227/runs/enc_mrd_fm_epoch_20260227_024953/best_model_val_total.pt",
+        "families/deps/enc_mrd_fm/runs/enc_mrd_fm_epoch_20260227_024953/best_model_val_total.pt",
         "--report_path",
         "{run_dir}/preflight_report.json"
       ],
@@ -61,7 +61,7 @@
       "after": [
         "preflight_anchor_then_material"
       ],
-      "entrypoint": "exp_0305c/train_expc.py",
+      "entrypoint": "families/official/anchor_then_material/train_expc.py",
       "args": [
         "--mode",
         "epoch",
@@ -96,7 +96,7 @@
       "after": [
         "train_expc"
       ],
-      "entrypoint": "exp_0304/train_material_gen.py",
+      "entrypoint": "families/official/material_generalization/train_material_gen.py",
       "args": [
         "--mode",
         "epoch",
@@ -115,7 +115,7 @@
         "--val_cache",
         "/home/sbplab/ruizi/WavTokenize-feature-analysis/data/val_cache_filtered.pt",
         "--encoder_ckpt",
-        "exp_0227/runs/enc_mrd_fm_epoch_20260227_024953/best_model_val_total.pt",
+        "families/deps/enc_mrd_fm/runs/enc_mrd_fm_epoch_20260227_024953/best_model_val_total.pt",
         "--output_dir",
         "{run_dir}/exp_0304_epoch"
       ],

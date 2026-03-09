@@ -9,8 +9,9 @@ Start here first:
 - read `docs/research_loop.md`
 - read `docs/worktree_policy.md`
 - read `docs/next_experiment.md` for the currently preferred official run
+- read `families/README.md` for the stable code-side family layout
 - for a real official run, use `official-run-ladder`
-- treat `docs/codex_controller.md` as implementation notes only
+- treat `docs/reference/codex_controller.md` as implementation notes only
 
 Higher-priority system, developer, and user instructions still apply.
 
@@ -144,6 +145,7 @@ Official work starts from these layers:
 - `docs/experiment_policy.md`
 - `docs/research_loop.md`
 - `docs/worktree_policy.md`
+- `families/official/*`
 - `.agents/skills/`
 - `experiments/manifests/*.json`
 - `experiments/adapters/*.json`
@@ -216,7 +218,9 @@ Codex should not mutate unrelated legacy experiment families unless a manifest o
 
 ## Worktree Policy
 - `codex-first-controller` is the stable official control-surface worktree.
+- The stable worktree uses `families/official/*`, `families/deps/*`, `families/eval/*`, and `families/compat_legacy/*` instead of root-level `exp_xxxx` directories.
 - A new hypothesis should default to a new branch and a new worktree.
+- Do not add new root-level `exp_xxxx` directories to the stable worktree.
 - If the task changes experiment behavior rather than just executing the current official ladder, open a hypothesis worktree first.
 - If unsure whether the work is a new hypothesis or only an execution of the current line, treat it as a new hypothesis and isolate it.
 - Follow `docs/worktree_policy.md` for the exact contract, naming rules, and merge-back criteria.

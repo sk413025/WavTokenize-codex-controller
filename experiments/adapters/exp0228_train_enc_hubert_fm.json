@@ -3,14 +3,14 @@
   "adapter_id": "exp0228_train_enc_hubert_fm",
   "status": "official",
   "adapter": "python_script",
-  "entrypoint": "exp_0228/train_enc_hubert_fm.py",
+  "entrypoint": "families/official/hubert_then_distalign/train_enc_hubert_fm.py",
   "cwd": ".",
   "completion": {
     "stdout_contains": ["Training complete"],
     "file_exists": []
   },
   "artifacts": {
-    "run_dir_pattern": "exp_0228/runs/enc_hubert_fm_<mode>_<timestamp>",
+    "run_dir_pattern": "families/official/hubert_then_distalign/runs/enc_hubert_fm_<mode>_<timestamp>",
     "expected_files": [
       "config.json",
       "history.json",
@@ -20,7 +20,7 @@
     ],
     "notes": [
       "Base exp_0228 HuBERT+MRD feature-loss training stage.",
-      "The script creates its own run directory under exp_0228/runs unless --output_dir is provided."
+      "The script creates its own run directory under families/official/hubert_then_distalign/runs unless --output_dir is provided."
     ]
   },
   "known_failures": [

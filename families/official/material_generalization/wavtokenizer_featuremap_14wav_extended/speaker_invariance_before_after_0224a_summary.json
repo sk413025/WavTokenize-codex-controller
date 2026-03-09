@@ -1,0 +1,57 @@
+{
+  "same_pairs": 8,
+  "cross_pairs": 12,
+  "lora_ckpt": "/home/sbplab/ruizi/WavTokenize-feature-analysis/families/deps/no_vq_core/runs/no_vq_epoch_20260223_055458/best_model.pt",
+  "top_improved_same_cos": [
+    {
+      "layer_idx": 6,
+      "delta_same": 0.11845901688844507
+    },
+    {
+      "layer_idx": 8,
+      "delta_same": 0.099128595835131
+    },
+    {
+      "layer_idx": 4,
+      "delta_same": 0.04929024775673818
+    },
+    {
+      "layer_idx": 11,
+      "delta_same": 0.01590257539525486
+    },
+    {
+      "layer_idx": 17,
+      "delta_same": 0.012629422127235612
+    },
+    {
+      "layer_idx": 0,
+      "delta_same": -5.4093980945690845e-05
+    }
+  ],
+  "top_degraded_same_cos": [
+    {
+      "layer_idx": 16,
+      "delta_same": -0.5096502335300972
+    },
+    {
+      "layer_idx": 9,
+      "delta_same": -0.2356939703011378
+    },
+    {
+      "layer_idx": 2,
+      "delta_same": -0.13914576420535274
+    },
+    {
+      "layer_idx": 12,
+      "delta_same": -0.10123249120435329
+    },
+    {
+      "layer_idx": 13,
+      "delta_same": -0.0561584227939117
+    },
+    {
+      "layer_idx": 14,
+      "delta_same": -0.04782758235131712
+    }
+  ]
+}

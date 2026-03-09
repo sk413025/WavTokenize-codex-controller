@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from exp_0304 import preflight_material_gen as preflight
+from families.official.material_generalization import preflight_material_gen as preflight
 
 
 def _touch(path: Path, *, text: str = "x") -> Path:

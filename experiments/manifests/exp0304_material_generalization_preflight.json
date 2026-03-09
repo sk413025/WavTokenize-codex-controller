@@ -28,7 +28,7 @@
       "adapter": "python_script",
       "adapter_id": "exp0304_preflight_material_gen",
       "description": "Check external assets, optional encoder checkpoint fallback, and GPU readiness before any material generalization training launch.",
-      "entrypoint": "exp_0304/preflight_material_gen.py",
+      "entrypoint": "families/official/material_generalization/preflight_material_gen.py",
       "args": [
         "--gpu",
         "cuda:1",
@@ -37,7 +37,7 @@
         "--val_cache",
         "/home/sbplab/ruizi/WavTokenize-feature-analysis/data/val_cache_filtered.pt",
         "--encoder_ckpt",
-        "exp_0227/runs/enc_mrd_fm_epoch_20260227_024953/best_model_val_total.pt",
+        "families/deps/enc_mrd_fm/runs/enc_mrd_fm_epoch_20260227_024953/best_model_val_total.pt",
         "--report_path",
         "{run_dir}/preflight_report.json"
       ],

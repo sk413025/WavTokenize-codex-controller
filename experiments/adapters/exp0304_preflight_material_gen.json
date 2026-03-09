@@ -3,7 +3,7 @@
   "adapter_id": "exp0304_preflight_material_gen",
   "status": "official",
   "adapter": "python_script",
-  "entrypoint": "exp_0304/preflight_material_gen.py",
+  "entrypoint": "families/official/material_generalization/preflight_material_gen.py",
   "cwd": ".",
   "completion": {
     "stdout_contains": [

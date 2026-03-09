@@ -20,7 +20,7 @@ def test_resolve_stage_and_render_run_dir(
     command = _build_command(resolved, repo_root, run_dir)
 
     assert command[0].endswith("python") or command[0].endswith("python3")
-    assert command[1].endswith("exp_0304/preflight_material_gen.py")
+    assert command[1].endswith("families/official/material_generalization/preflight_material_gen.py")
     assert "--report_path" in command
     report_arg = command[command.index("--report_path") + 1]
     assert report_arg == str(run_dir / "preflight_report.json")
