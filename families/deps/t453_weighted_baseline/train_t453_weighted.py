@@ -56,7 +56,7 @@ sys.path.insert(0, '/home/sbplab/ruizi/WavTokenizer-main')
 sys.path.insert(0, '/home/sbplab/ruizi/WavTokenize-self-supervised')
 
 from families.deps.wavtokenizer_core.config import WAVTOK_CONFIG, WAVTOK_CKPT, TRAIN_CACHE, VAL_CACHE
-from families.compat_legacy.plan_ori_vq.plan_ori.models_single_vq_ema import TeacherStudentSingleVQ
+from families.deps.encoder_vq_core.models_single_vq import TeacherStudentSingleVQ
 from families.compat_legacy.intermediate_stack.train_v6 import (
     IntermediateSupervisionLossV6,
     verify_model_state,

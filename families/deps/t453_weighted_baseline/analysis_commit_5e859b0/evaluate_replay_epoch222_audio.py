@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, "/home/sbplab/ruizi/WavTokenizer-main")
 
 from families.deps.wavtokenizer_core.config import WAVTOK_CKPT, WAVTOK_CONFIG  # noqa: E402
-from families.compat_legacy.plan_ori_vq.plan_ori.models_single_vq_ema import TeacherStudentSingleVQ  # noqa: E402
+from families.deps.encoder_vq_core.models_single_vq import TeacherStudentSingleVQ  # noqa: E402
 
 
 ANALYSIS_DIR = ROOT / "exp_0217" / "analysis_commit_5e859b0"
@@ -228,4 +228,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

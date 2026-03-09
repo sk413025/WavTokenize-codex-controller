@@ -174,7 +174,7 @@ def load_data():
 
 def run_encoder_vq_experiment(exp, loader, out_dir):
     """Encoder LoRA + VQ 類型實驗（V2, Plan Ori, exp_0216, exp_0217）"""
-    from families.compat_legacy.plan_ori_vq.plan_ori.models_single_vq_ema import TeacherStudentSingleVQ
+    from families.deps.encoder_vq_core.models_single_vq import TeacherStudentSingleVQ
     from families.compat_legacy.residual_vq_stack.phase3.residual_vq.models_rvq import TeacherStudentRVQ
 
     rvq_layers = exp.get('rvq_layers', 1)

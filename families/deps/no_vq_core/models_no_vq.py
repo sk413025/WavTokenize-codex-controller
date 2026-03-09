@@ -38,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, '/home/sbplab/ruizi/WavTokenizer-main')
 sys.path.insert(0, '/home/sbplab/ruizi/WavTokenize-self-supervised')
 
-from families.compat_legacy.plan_ori_vq.plan_ori.models_single_vq_ema import TeacherStudentSingleVQ
+from families.deps.encoder_vq_core.models_single_vq import TeacherStudentSingleVQ
 
 
 class TeacherStudentNoVQ(TeacherStudentSingleVQ):

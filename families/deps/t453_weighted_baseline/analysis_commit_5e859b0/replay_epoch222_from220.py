@@ -26,7 +26,7 @@ sys.path.insert(0, "/home/sbplab/ruizi/WavTokenizer-main")
 sys.path.insert(0, "/home/sbplab/ruizi/WavTokenize-self-supervised")
 
 from families.compat_legacy.intermediate_stack.train_v6 import IntermediateSupervisionLossV6
-from families.compat_legacy.plan_ori_vq.plan_ori.models_single_vq_ema import TeacherStudentSingleVQ
+from families.deps.encoder_vq_core.models_single_vq import TeacherStudentSingleVQ
 from families.deps.encoder_aug.data_augmented import create_augmented_curriculum_dataloaders
 from families.deps.encoder_aug.train_augmented import (
     evaluate_single_vq,
@@ -234,4 +234,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
