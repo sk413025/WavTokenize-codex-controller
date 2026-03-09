@@ -10,6 +10,8 @@ Workflow:
 2. Classify the outcome:
    - execution failure
    - stalled or missing artifact
+   - interrupted but usable
+   - sequencing loss with no run failure
    - completed but weak result
    - healthy candidate
 3. Separate symptom, probable cause, and next action.
@@ -25,3 +27,4 @@ Workflow:
 Checks:
 - Diagnosis should be evidence-based.
 - The proposed fix should stay project-specific.
+- If the issue is sequencing loss rather than model failure, return control ownership to `Codex(default)` instead of proposing runtime automation.

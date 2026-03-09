@@ -47,6 +47,8 @@ import argparse
 import sys
 import gc
 import math
+import os
+import signal
 import time
 import atexit
 import random
@@ -54,7 +56,7 @@ import numpy as np
 import scipy.io.wavfile as wavfile
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 from tqdm import tqdm
 from torch.cuda.amp import autocast, GradScaler
 from torch.utils.data import DataLoader
@@ -381,6 +383,158 @@ def setup_logging(output_dir: Path) -> Path:
     sys.stdout = _TeeIO(sys.stdout, log_f)
     sys.stderr = _TeeIO(sys.stderr, log_f)
     return log_path
+
+
+def write_json(path: Path, payload: Dict[str, Any]) -> None:
+    """以 UTF-8 寫入 JSON。"""
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+        f.write('\n')
+
+
+def latest_match(pattern: str, out_dir: Path) -> Path | None:
+    """回傳符合 pattern 的最新檔案。"""
+    matches = sorted(out_dir.glob(pattern))
+    return matches[-1] if matches else None
+
+
+def hypothesis_transition(overall_state: str) -> Tuple[str, str]:
+    """Hypothesis run 的 transition class 與 next owner。"""
+    if overall_state == 'completed':
+        return 'run_completed', 'default'
+    if overall_state == 'interrupted_but_usable':
+        return 'run_interrupted_but_usable', 'default'
+    if overall_state == 'failed':
+        return 'run_needs_decision', 'default'
+    return 'run_in_progress', 'default'
+
+
+def has_usable_artifacts(out_dir: Path) -> bool:
+    """判斷 run-local 目錄是否已經有可用的中途產物。"""
+    history_path = out_dir / 'history.json'
+    history_has_val = False
+    if history_path.exists():
+        try:
+            with open(history_path, 'r', encoding='utf-8') as f:
+                history = json.load(f)
+            history_has_val = bool(history.get('val_wav_mse'))
+        except Exception:
+            history_has_val = False
+    return (
+        history_has_val
+        or (out_dir / 'best_model.pt').exists()
+        or latest_match('checkpoint_epoch*.pt', out_dir) is not None
+    )
+
+
+def write_hypothesis_monitor_report(
+    out_dir: Path,
+    config: Dict[str, Any],
+    *,
+    overall_state: str,
+    summary: str,
+    completed_epochs: int,
+    target_epochs: int,
+    last_completed_epoch: int,
+    best_val_mse: float,
+    last_train_metrics: Dict[str, float] | None,
+    last_val_metrics: Dict[str, float] | None,
+    run_started_at: str,
+    termination_reason: str | None = None,
+) -> None:
+    """寫入 hypothesis run-local monitor report。"""
+    transition_class, next_owner = hypothesis_transition(overall_state)
+    latest_ckpt = latest_match('checkpoint_epoch*.pt', out_dir)
+    latest_plot = latest_match('curves_epoch*.png', out_dir)
+    best_model_path = out_dir / 'best_model.pt'
+    payload = {
+        'status': 'generated',
+        'generated_at': datetime.now().isoformat(),
+        'run_dir': str(out_dir.resolve()),
+        'run_started_at': run_started_at,
+        'experiment': config['experiment'],
+        'plan': config['plan'],
+        'mode': config['mode'],
+        'device': config.get('device'),
+        'autonomy_window': config.get('autonomy_window', 'single-step'),
+        'declared_next_action': config.get('launch_next_action'),
+        'overall_state': overall_state,
+        'transition_class': transition_class,
+        'next_owner': next_owner,
+        'summary': summary,
+        'termination_reason': termination_reason,
+        'completed_epochs': completed_epochs,
+        'target_epochs': target_epochs,
+        'last_completed_epoch': last_completed_epoch,
+        'history_path': str((out_dir / 'history.json').resolve()),
+        'log_path': str((out_dir / 'train.log').resolve()),
+        'artifacts': {
+            'config_json': str((out_dir / 'config.json').resolve()),
+            'history_json_exists': (out_dir / 'history.json').exists(),
+            'best_model_path': str(best_model_path.resolve()) if best_model_path.exists() else None,
+            'latest_checkpoint_path': str(latest_ckpt.resolve()) if latest_ckpt else None,
+            'latest_plot_path': str(latest_plot.resolve()) if latest_plot else None,
+        },
+        'latest_metrics': {
+            'train': last_train_metrics,
+            'val': last_val_metrics,
+            'best_val_wav_mse': None if math.isinf(best_val_mse) else best_val_mse,
+        },
+    }
+    write_json(out_dir / 'monitor_report.json', payload)
+
+
+def write_hypothesis_analysis(
+    out_dir: Path,
+    config: Dict[str, Any],
+    *,
+    result_classification: str,
+    summary: str,
+    completed_epochs: int,
+    target_epochs: int,
+    best_val_mse: float,
+    last_val_metrics: Dict[str, float] | None,
+    termination_reason: str | None,
+) -> None:
+    """寫入 hypothesis run-local analysis。"""
+    next_action = 'use_run_diagnosis'
+    if result_classification == 'clean_success':
+        next_action = config.get('launch_next_action') or 'review_results_in_codex_session'
+    elif result_classification == 'interrupted_but_usable':
+        next_action = 'review_partial_results_in_codex_session'
+
+    baseline_val = config['baseline_val_wav_mse_best']
+    best_value = None if math.isinf(best_val_mse) else best_val_mse
+    baseline_delta = None if best_value is None else best_value - baseline_val
+    noisy_val = last_val_metrics.get('val_noisy_mse') if last_val_metrics else None
+    latest_val = last_val_metrics.get('val_wav_mse') if last_val_metrics else None
+    payload = {
+        'status': 'generated',
+        'generated_at': datetime.now().isoformat(),
+        'run_dir': str(out_dir.resolve()),
+        'experiment_id': config['experiment'],
+        'plan': config['plan'],
+        'result_classification': result_classification,
+        'summary': summary,
+        'completed_epochs': completed_epochs,
+        'target_epochs': target_epochs,
+        'best_val_wav_mse': best_value,
+        'latest_val_wav_mse': latest_val,
+        'termination_reason': termination_reason,
+        'baseline_comparison': {
+            'baseline_exp': config['baseline_exp'],
+            'baseline_val_wav_mse_best': baseline_val,
+            'delta_vs_baseline': baseline_delta,
+            'beats_baseline': bool(best_value is not None and best_value < baseline_val),
+        },
+        'improves_over_noisy': (
+            None if latest_val is None or noisy_val is None else latest_val < noisy_val
+        ),
+        'autonomy_window': config.get('autonomy_window', 'single-step'),
+        'declared_next_action': config.get('launch_next_action'),
+        'next_action': next_action,
+    }
+    write_json(out_dir / 'analysis.json', payload)
 
 
 def set_seed(seed: int = 42):
@@ -891,6 +1045,7 @@ def main():
         'plan': args.plan,
         'mode': args.mode,
         'epochs': epochs,
+        'device': str(device),
         'batch_size': args.batch_size if not is_smoke else 4,
         'grad_accum': args.grad_accum,
         'learning_rate': args.lr,
@@ -928,10 +1083,37 @@ def main():
         'baseline_exp': 'exp_0224a',
         'baseline_val_wav_mse_best': 0.0233,
         'evidence_source': 'exp_0304/wavtokenizer_featuremap_14wav_extended',
+        'autonomy_window': os.environ.get('WAVTOKENIZE_AUTONOMY_WINDOW', 'single-step'),
+        'launch_next_action': os.environ.get('WAVTOKENIZE_NEXT_ACTION'),
     }
 
-    with open(out_dir / 'config.json', 'w') as f:
-        json.dump(config, f, indent=2, ensure_ascii=False)
+    write_json(out_dir / 'config.json', config)
+
+    run_started_at = datetime.now().isoformat()
+    completed_epochs = 0
+    last_completed_epoch = 0
+    last_train_metrics: Dict[str, float] | None = None
+    last_val_metrics: Dict[str, float] | None = None
+    termination = {'kind': 'running', 'reason': None}
+    caught_exception: BaseException | None = None
+
+    def _handle_sigterm(_signum, _frame):
+        raise KeyboardInterrupt('SIGTERM received')
+
+    signal.signal(signal.SIGTERM, _handle_sigterm)
+    write_hypothesis_monitor_report(
+        out_dir,
+        config,
+        overall_state='running',
+        summary='Run initialized; waiting for the first durable epoch.',
+        completed_epochs=completed_epochs,
+        target_epochs=epochs,
+        last_completed_epoch=last_completed_epoch,
+        best_val_mse=float('inf'),
+        last_train_metrics=last_train_metrics,
+        last_val_metrics=last_val_metrics,
+        run_started_at=run_started_at,
+    )
 
     # ── 模型 ─────────────────────────────────────────────────────
     model = TeacherStudentSelectiveLoRA(
@@ -1033,117 +1215,203 @@ def main():
         print(f"[Anchor] plan={args.plan} 無 anchor 約束（純 LoRA 對照組）")
 
     # ── 訓練迴圈 ─────────────────────────────────────────────────
-    for epoch in range(start_epoch + 1, epochs + 1):
-        # plan_d: 3-phase LR 由 LambdaLR 統一管理，不需手動 warmup
-        # 其他 plan: 手動 warmup
-        if not use_3phase and epoch <= config['warmup_epochs']:
-            warmup_factor = epoch / config['warmup_epochs']
-            for pg in optimizer.param_groups:
-                pg['lr'] = config['learning_rate'] * warmup_factor
+    try:
+        for epoch in range(start_epoch + 1, epochs + 1):
+            # plan_d: 3-phase LR 由 LambdaLR 統一管理，不需手動 warmup
+            # 其他 plan: 手動 warmup
+            if not use_3phase and epoch <= config['warmup_epochs']:
+                warmup_factor = epoch / config['warmup_epochs']
+                for pg in optimizer.param_groups:
+                    pg['lr'] = config['learning_rate'] * warmup_factor
 
-        # plan_d: dynamic lambda_anchor
-        if PLANS[args.plan].get('use_dynamic_lambda', False):
-            config['lambda_anchor'] = get_dynamic_lambda_anchor(epoch)
+            # plan_d: dynamic lambda_anchor
+            if PLANS[args.plan].get('use_dynamic_lambda', False):
+                config['lambda_anchor'] = get_dynamic_lambda_anchor(epoch)
 
-        t_metrics = train_epoch(
-            model, train_loader, optimizer, device, epoch, config,
-            mr_stft, mel_loss, scaler,
-            anchor_encoder=anchor_encoder,
-            student_hooks=student_hooks,
-            anchor_hooks=anchor_hooks,
+            t_metrics = train_epoch(
+                model, train_loader, optimizer, device, epoch, config,
+                mr_stft, mel_loss, scaler,
+                anchor_encoder=anchor_encoder,
+                student_hooks=student_hooks,
+                anchor_hooks=anchor_hooks,
+            )
+
+            if use_3phase or epoch > config['warmup_epochs']:
+                scheduler.step()
+
+            cur_lr = optimizer.param_groups[0]['lr']
+
+            # Eval
+            v_metrics = evaluate(
+                model, val_loader, device, mr_stft, mel_loss,
+                anchor_encoder=anchor_encoder,
+                student_hooks=student_hooks,
+                anchor_hooks=anchor_hooks,
+                anchor_layer_ids=anchor_layer_ids,
+                lambda_anchor=config['lambda_anchor'],
+            )
+
+            # History
+            history['train_total_loss'].append(t_metrics['total_loss'])
+            history['train_wav_mse'].append(t_metrics['wav_mse'])
+            history['train_stft_sc'].append(t_metrics['stft_sc'])
+            history['train_stft_mag'].append(t_metrics['stft_mag'])
+            history['train_mel_loss'].append(t_metrics['mel_loss'])
+            history['train_anchor_loss'].append(t_metrics.get('anchor_loss', 0.0))
+            history['val_wav_mse'].append(v_metrics['val_wav_mse'])
+            history['val_noisy_mse'].append(v_metrics['val_noisy_mse'])
+            history['val_stft_sc'].append(v_metrics['val_stft_sc'])
+            history['val_mel_loss'].append(v_metrics['val_mel_loss'])
+            history['val_noisy_stft_sc'].append(v_metrics['val_noisy_stft_sc'])
+            history['val_anchor'].append(v_metrics.get('val_anchor', float('nan')))
+            history['lr'].append(cur_lr)
+
+            write_json(out_dir / 'history.json', history)
+
+            last_train_metrics = {k: float(v) for k, v in t_metrics.items()}
+            last_val_metrics = {k: float(v) for k, v in v_metrics.items()}
+            completed_epochs += 1
+            last_completed_epoch = epoch
+
+            lam_str = f"  λ={config['lambda_anchor']:.1f}" if config.get('lambda_anchor', 0.0) > 0 else ""
+            print(
+                f"[Epoch {epoch:3d}]  "
+                f"train_total={t_metrics['total_loss']:.4f}  "
+                f"val_mse={v_metrics['val_wav_mse']:.5f}  "
+                f"(noisy={v_metrics['val_noisy_mse']:.5f})  "
+                f"anchor={t_metrics.get('anchor_loss',0.0):.5f}{lam_str}  "
+                f"stft_sc={v_metrics['val_stft_sc']:.4f}  "
+                f"lr={cur_lr:.2e}"
+            )
+
+            # Best val_wav_mse
+            if v_metrics['val_wav_mse'] < best_val_mse:
+                best_val_mse = v_metrics['val_wav_mse']
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'best_val_mse': best_val_mse,
+                    'history': history,
+                    'config': config,
+                }, out_dir / 'best_model.pt')
+                print(f"  ✓ best_model.pt 更新 (val_mse={best_val_mse:.5f})")
+
+            # Checkpoint
+            if epoch % 25 == 0 or is_smoke:
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'best_val_mse': best_val_mse,
+                    'history': history,
+                    'config': config,
+                }, out_dir / f'checkpoint_epoch{epoch:03d}.pt')
+
+            # Plot
+            if epoch % 25 == 0 or (is_smoke and epoch == epochs):
+                plot_curves(history, out_dir, epoch, args.plan)
+
+            # Audio 樣本：每 25 epoch 或 smoke 模式結束時
+            if epoch % 25 == 0 or (is_smoke and epoch == epochs):
+                save_audio_samples(model, val_loader, device, out_dir, epoch)
+
+            write_hypothesis_monitor_report(
+                out_dir,
+                config,
+                overall_state='running',
+                summary=f'Durable epoch {epoch}/{epochs} completed; waiting for terminal event.',
+                completed_epochs=completed_epochs,
+                target_epochs=epochs,
+                last_completed_epoch=last_completed_epoch,
+                best_val_mse=best_val_mse,
+                last_train_metrics=last_train_metrics,
+                last_val_metrics=last_val_metrics,
+                run_started_at=run_started_at,
+            )
+
+        termination = {'kind': 'clean_success', 'reason': 'completed_all_epochs'}
+    except KeyboardInterrupt as exc:
+        caught_exception = exc
+        if completed_epochs > 0 and has_usable_artifacts(out_dir):
+            termination = {'kind': 'interrupted_but_usable', 'reason': str(exc) or 'keyboard_interrupt'}
+            print("\n[Run] Interrupted after durable artifacts were written; marking run as interrupted-but-usable.")
+        else:
+            termination = {'kind': 'failed', 'reason': str(exc) or 'keyboard_interrupt_before_first_durable_epoch'}
+            print("\n[Run] Interrupted before any durable epoch completed; marking run as failed.")
+    except Exception as exc:  # noqa: BLE001
+        caught_exception = exc
+        termination = {'kind': 'failed', 'reason': f'{type(exc).__name__}: {exc}'}
+        print(f"\n[Run] Training failed: {termination['reason']}")
+    finally:
+        # 關閉 anchor hooks
+        if student_hooks:
+            student_hooks.close()
+        if anchor_hooks:
+            anchor_hooks.close()
+
+        if history['val_wav_mse']:
+            final_epoch_for_plot = last_completed_epoch if last_completed_epoch > 0 else (epochs if is_smoke else args.epochs)
+            plot_curves(history, out_dir, final_epoch_for_plot, args.plan)
+
+        if termination['kind'] == 'clean_success':
+            overall_state = 'completed'
+            result_classification = 'clean_success'
+            analysis_summary = (
+                f"Run completed all {epochs} epochs and produced a full set of run-local artifacts."
+            )
+        elif termination['kind'] == 'interrupted_but_usable':
+            overall_state = 'interrupted_but_usable'
+            result_classification = 'interrupted_but_usable'
+            analysis_summary = (
+                f"Run stopped after {completed_epochs} durable epoch(s); partial artifacts are usable but the run is not a clean completion."
+            )
+        else:
+            overall_state = 'failed'
+            result_classification = 'failed'
+            analysis_summary = (
+                f"Run did not reach a clean terminal state. Reason: {termination['reason']}"
+            )
+
+        write_hypothesis_monitor_report(
+            out_dir,
+            config,
+            overall_state=overall_state,
+            summary=analysis_summary,
+            completed_epochs=completed_epochs,
+            target_epochs=epochs,
+            last_completed_epoch=last_completed_epoch,
+            best_val_mse=best_val_mse,
+            last_train_metrics=last_train_metrics,
+            last_val_metrics=last_val_metrics,
+            run_started_at=run_started_at,
+            termination_reason=termination['reason'],
+        )
+        write_hypothesis_analysis(
+            out_dir,
+            config,
+            result_classification=result_classification,
+            summary=analysis_summary,
+            completed_epochs=completed_epochs,
+            target_epochs=epochs,
+            best_val_mse=best_val_mse,
+            last_val_metrics=last_val_metrics,
+            termination_reason=termination['reason'],
         )
 
-        if use_3phase or epoch > config['warmup_epochs']:
-            scheduler.step()
+        if termination['kind'] == 'clean_success':
+            print(f"\n{'='*65}")
+            print(f"  exp_0305 / {args.plan} 訓練完成")
+            print(f"  Best val_wav_mse: {best_val_mse:.5f}")
+            print(f"  Baseline (exp_0224a): 0.02330")
+            delta = best_val_mse - 0.02330
+            print(f"  vs Baseline: {'+' if delta >= 0 else ''}{delta:.5f} "
+                  f"({'worse' if delta >= 0 else '★ better'})")
+            print(f"  Output: {out_dir}")
+            print(f"{'='*65}\n")
 
-        cur_lr = optimizer.param_groups[0]['lr']
-
-        # Eval
-        v_metrics = evaluate(
-            model, val_loader, device, mr_stft, mel_loss,
-            anchor_encoder=anchor_encoder,
-            student_hooks=student_hooks,
-            anchor_hooks=anchor_hooks,
-            anchor_layer_ids=anchor_layer_ids,
-            lambda_anchor=config['lambda_anchor'],
-        )
-
-        # History
-        history['train_total_loss'].append(t_metrics['total_loss'])
-        history['train_wav_mse'].append(t_metrics['wav_mse'])
-        history['train_stft_sc'].append(t_metrics['stft_sc'])
-        history['train_stft_mag'].append(t_metrics['stft_mag'])
-        history['train_mel_loss'].append(t_metrics['mel_loss'])
-        history['train_anchor_loss'].append(t_metrics.get('anchor_loss', 0.0))
-        history['val_wav_mse'].append(v_metrics['val_wav_mse'])
-        history['val_noisy_mse'].append(v_metrics['val_noisy_mse'])
-        history['val_stft_sc'].append(v_metrics['val_stft_sc'])
-        history['val_mel_loss'].append(v_metrics['val_mel_loss'])
-        history['val_noisy_stft_sc'].append(v_metrics['val_noisy_stft_sc'])
-        history['val_anchor'].append(v_metrics.get('val_anchor', float('nan')))
-        history['lr'].append(cur_lr)
-
-        with open(out_dir / 'history.json', 'w') as f:
-            json.dump(history, f, indent=2)
-
-        lam_str = f"  λ={config['lambda_anchor']:.1f}" if config.get('lambda_anchor', 0.0) > 0 else ""
-        print(
-            f"[Epoch {epoch:3d}]  "
-            f"train_total={t_metrics['total_loss']:.4f}  "
-            f"val_mse={v_metrics['val_wav_mse']:.5f}  "
-            f"(noisy={v_metrics['val_noisy_mse']:.5f})  "
-            f"anchor={t_metrics.get('anchor_loss',0.0):.5f}{lam_str}  "
-            f"stft_sc={v_metrics['val_stft_sc']:.4f}  "
-            f"lr={cur_lr:.2e}"
-        )
-
-        # Best val_wav_mse
-        if v_metrics['val_wav_mse'] < best_val_mse:
-            best_val_mse = v_metrics['val_wav_mse']
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'best_val_mse': best_val_mse,
-                'history': history,
-                'config': config,
-            }, out_dir / 'best_model.pt')
-            print(f"  ✓ best_model.pt 更新 (val_mse={best_val_mse:.5f})")
-
-        # Checkpoint
-        if epoch % 25 == 0 or is_smoke:
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'best_val_mse': best_val_mse,
-                'history': history,
-                'config': config,
-            }, out_dir / f'checkpoint_epoch{epoch:03d}.pt')
-
-        # Plot
-        if epoch % 25 == 0 or (is_smoke and epoch == epochs):
-            plot_curves(history, out_dir, epoch, args.plan)
-
-        # Audio 樣本：每 25 epoch 或 smoke 模式結束時
-        if epoch % 25 == 0 or (is_smoke and epoch == epochs):
-            save_audio_samples(model, val_loader, device, out_dir, epoch)
-
-    # ── 訓練結束 ─────────────────────────────────────────────────
-    # 關閉 anchor hooks
-    if student_hooks: student_hooks.close()
-    if anchor_hooks: anchor_hooks.close()
-    # 訓練結束後存最終 loss 圖
-    plot_curves(history, out_dir, args.epochs if not is_smoke else epoch, args.plan)
-    print(f"\n{'='*65}")
-    print(f"  exp_0305 / {args.plan} 訓練完成")
-    print(f"  Best val_wav_mse: {best_val_mse:.5f}")
-    print(f"  Baseline (exp_0224a): 0.02330")
-    delta = best_val_mse - 0.02330
-    print(f"  vs Baseline: {'+' if delta >= 0 else ''}{delta:.5f} "
-          f"({'worse' if delta >= 0 else '★ better'})")
-    print(f"  Output: {out_dir}")
-    print(f"{'='*65}\n")
+    if caught_exception is not None:
+        raise caught_exception
 
 
 if __name__ == '__main__':

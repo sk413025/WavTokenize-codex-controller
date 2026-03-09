@@ -75,6 +75,16 @@ For active work, treat facts in this precedence order:
 
 Completed sub-agent reports are advisory once a run continues after the report was produced. If evidence conflicts, refresh the live facts first and keep the final interpretation with `Codex(default)`.
 
+## Decision Boundary Events
+When a run or sequence reaches a decision boundary, surface a user-visible event before crossing it silently. At minimum, treat these as decision-boundary events:
+- run started
+- clean completion
+- interrupted but usable termination
+- stalled or intervention-required state
+- handoff to the next rung, run, or hypothesis
+
+If a run result is not a clean success, do not auto-advance past the boundary without a fresh `Codex(default)` decision.
+
 ## Do Not Rebuild Native Capabilities
 Do not implement repo-local replacements for capabilities that Codex already provides natively:
 - top-level planning

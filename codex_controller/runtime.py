@@ -60,10 +60,23 @@ def run_manifest(
         state["status"] = "planned"
         state["run_status_detail"] = "prepared"
         state["result_classification"] = "dry_run"
+        state["transition_class"] = "run_needs_decision"
+        state["next_owner"] = "default"
         state["next_action"] = "review_manifest_in_codex_session"
         _write_json(run_dir / "analysis.json", _dry_run_analysis(state))
         _persist_state(run_dir, state)
         _append_index(run_dir.parent, _index_record(state))
+        _append_event(
+            run_dir,
+            {
+                "event": "run_needs_decision",
+                "run_id": state["run_id"],
+                "result_classification": state["result_classification"],
+                "next_owner": state["next_owner"],
+                "next_action": state["next_action"],
+                "dry_run": True,
+            },
+        )
         return run_dir
 
     execution_error: Exception | None = None
@@ -138,6 +151,7 @@ def resume_run(run_dir_arg: str | Path, *, dry_run: bool = False, through_stage:
         state["status"] = "failed"
         state["failure_reason"] = str(exc)
         state["run_status_detail"] = "failed"
+        _append_event(run_dir, {"event": "run_failed", "error": str(exc), "resumed": True})
         _persist_state(run_dir, state)
 
     _finalize_run_artifacts(
@@ -160,6 +174,8 @@ def summarize_run(run_dir_arg: str | Path) -> Dict[str, Any]:
         "experiment_id": state["experiment_id"],
         "status": state["status"],
         "run_status_detail": _run_status_detail(state),
+        "transition_class": state.get("transition_class"),
+        "next_owner": state.get("next_owner"),
         "result_classification": state.get("result_classification"),
         "next_action": state.get("next_action"),
         "failure_reason": state.get("failure_reason"),
@@ -248,6 +264,8 @@ def _initial_state(
         "hypothesis": manifest["hypothesis"],
         "baseline_refs": manifest.get("baseline_refs", []),
         "result_classification": "planned",
+        "transition_class": None,
+        "next_owner": None,
         "next_action": None,
         "supersedes": manifest.get("supersedes"),
         "stages": stages,
@@ -286,6 +304,8 @@ def _finalize_run_artifacts(
     )
     _write_json(run_dir / "analysis.json", analysis)
     state["result_classification"] = analysis["result_classification"]
+    state["transition_class"] = analysis["transition_class"]
+    state["next_owner"] = analysis["next_owner"]
     state["next_action"] = analysis["next_action"]
 
     diagnosis = _default_placeholder("diagnosis")
@@ -303,6 +323,16 @@ def _finalize_run_artifacts(
     update_knowledge(repo_root, state, analysis, manifest)
     _persist_state(run_dir, state)
     _append_index(run_dir.parent, _index_record(state))
+    _append_event(
+        run_dir,
+        {
+            "event": analysis["transition_class"],
+            "run_id": state["run_id"],
+            "result_classification": analysis["result_classification"],
+            "next_owner": analysis["next_owner"],
+            "next_action": analysis["next_action"],
+        },
+    )
 
 
 def _build_metrics_snapshot(
@@ -340,6 +370,8 @@ def _dry_run_analysis(state: Dict[str, Any]) -> Dict[str, Any]:
         "run_id": state["run_id"],
         "experiment_id": state["experiment_id"],
         "result_classification": "dry_run",
+        "transition_class": "run_needs_decision",
+        "next_owner": "default",
         "summary": "Dry-run completed. Review the manifest, commands, and stage dependencies in the Codex session before launching.",
         "unmet_reasons": [],
         "suggested_changes": [],
@@ -374,14 +406,20 @@ def _build_analysis(
 
     if execution_error is not None or monitor_state in {"failed", "stalled"}:
         classification = "failed"
+        transition_class = "run_needs_decision"
+        next_owner = "default"
         summary = f"Run failed during execution: {state.get('failure_reason') or execution_error}"
         next_action = "use_run_diagnosis"
     elif unmet_reasons:
         classification = "needs_iteration"
+        transition_class = "run_needs_decision"
+        next_owner = "default"
         summary = "Run completed execution but did not satisfy all acceptance markers. Review logs and artifacts before the next change."
         next_action = "review_with_run_diagnosis_and_result_comparison"
     else:
         classification = acceptance.get("result_classification_on_pass", "candidate")
+        transition_class = "run_completed"
+        next_owner = "analyst"
         summary = "Run satisfied the manifest execution contract. Review logs, metrics, and artifacts in the Codex session."
         next_action = "review_results_in_codex_session"
 
@@ -391,6 +429,8 @@ def _build_analysis(
         "run_id": state["run_id"],
         "experiment_id": state["experiment_id"],
         "result_classification": classification,
+        "transition_class": transition_class,
+        "next_owner": next_owner,
         "summary": summary,
         "metrics_ref": str((run_dir / "metrics.json").resolve()),
         "monitor_report_ref": str((run_dir / "monitor_report.json").resolve()),
@@ -595,6 +635,8 @@ def _index_record(state: Dict[str, Any]) -> Dict[str, Any]:
         "run_dir": state["run_dir"],
         "status": state["status"],
         "run_status_detail": _run_status_detail(state),
+        "transition_class": state.get("transition_class"),
+        "next_owner": state.get("next_owner"),
         "result_classification": state.get("result_classification"),
         "manifest_path": state["manifest_path"],
     }

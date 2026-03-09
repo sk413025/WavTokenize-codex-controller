@@ -49,6 +49,11 @@ Use these gates for any real launch, including isolated hypothesis worktrees, un
 - send the resulting evidence to `run-diagnosis` before deciding whether to stop, rerun, or patch
 - keep the final intervention decision with `Codex(default)`
 
+`post-run transition gate`
+- only a clean success may auto-progress to the next ladder step inside an already-declared bounded autonomy window
+- interrupted-but-usable runs may proceed only after a user-visible event and a fresh `Codex(default)` decision
+- ambiguous or failed runs must not auto-progress; they go through `stage-monitoring` and `run-diagnosis` first
+
 ## Failure Handling
 - execution failures go to `run-diagnosis`
 - missing artifacts or stalled logs go to `stage-monitoring` plus `run-diagnosis`

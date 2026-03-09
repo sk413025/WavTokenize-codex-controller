@@ -68,12 +68,16 @@ def inspect_run(run_dir_arg: str | Path, *, stall_seconds: int = 1800) -> Dict[s
         recommendation = "wait_for_stage_start"
         summary = "No selected stage has started yet."
 
+    transition_class, next_owner = classify_transition(overall_state)
+
     return {
         "status": "generated",
         "generated_at": utc_now(),
         "run_id": state["run_id"],
         "experiment_id": state["experiment_id"],
         "overall_state": overall_state,
+        "transition_class": transition_class,
+        "next_owner": next_owner,
         "summary": summary,
         "recommended_next_action": recommendation,
         "issues": issues,
@@ -204,6 +208,14 @@ def classify_run_state(stage_reports: List[Dict[str, Any]]) -> str:
     if any(report["execution_state"] == "running" for report in stage_reports):
         return "running"
     return "planned"
+
+
+def classify_transition(overall_state: str) -> tuple[str, str]:
+    if overall_state == "completed":
+        return "run_completed", "analyst"
+    if overall_state in {"failed", "stalled"}:
+        return "run_needs_decision", "default"
+    return "run_in_progress", "default"
 
 
 def write_monitor_result(
