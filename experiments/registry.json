@@ -88,15 +88,11 @@
   "dependency_families": [
     "families/deps/t453_weighted_baseline",
     "families/deps/no_vq_core",
-    "families/deps/no_vq_scratch",
     "families/deps/feat_align",
-    "families/deps/enc_mrd_fm",
     "families/deps/selective_lora"
   ],
   "eval_families": [
-    "families/eval/decoder_lora_eval",
-    "families/eval/bwe_latent",
-    "families/eval/bwe_latent_hf"
+    "families/eval/decoder_lora_eval"
   ],
   "compat_legacy_families": [
     "families/compat_legacy/plan_ori_vq",

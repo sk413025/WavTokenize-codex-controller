@@ -29,6 +29,15 @@ A manifest should describe:
 A manifest should not become a second policy engine for planning, promotion, or autonomous behavior.
 The official operating order still comes from `AGENTS.md`, repo docs, and repo skills.
 
+## Python Target Rule
+Manifests and adapters may point only to:
+- managed entrypoints that remain in the active tree
+- or library modules imported by those managed entrypoints
+
+They must not point to `quarantine/python/*`.
+If a script has been quarantined, it is no longer part of the official execution surface until
+it is re-onboarded through an adapter, manifest, or skill-owned tool boundary.
+
 ## Official Families
 - `material-generalization`
 - `hubert-then-distalign`

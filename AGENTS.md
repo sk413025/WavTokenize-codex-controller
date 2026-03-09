@@ -171,6 +171,24 @@ Secondary machine-readable records:
 - `knowledge/*`
 - run-local ledgers such as `<run_dir>/` when a concrete execution chooses to persist them
 
+## Python Surface Contract
+In the stable worktree, every active Python file must fit exactly one of these roles:
+- `managed entrypoint`
+  - a directly runnable script that is explicitly owned by an official manifest, adapter
+    contract, or repo skill
+- `library-only module`
+  - import-oriented code that is not part of the repo's direct operating surface
+
+Anything else is unmanaged script surface and must not remain in the active tree.
+Unmanaged standalone scripts belong under `quarantine/python/` until they are:
+- promoted into a manifest or adapter-backed entrypoint
+- owned by a documented repo skill
+- or refactored into library-only modules
+
+The stable worktree must not treat ad hoc `train_*`, `eval_*`, `analyze_*`, `plot_*`,
+`generate_*`, `compare_*`, `prepare_*`, or `run_*` scripts as active tools unless they
+meet the `managed entrypoint` rule above.
+
 ## Change Acceptance Gate
 Any controller or agent-native architecture change must record these five fields in the proposal, plan, or review:
 - `native_capability_used`
@@ -262,6 +280,7 @@ Codex should not mutate unrelated legacy experiment families unless a manifest o
 ## Worktree Policy
 - `codex-first-controller` is the stable official control-surface worktree.
 - The stable worktree uses `families/official/*`, `families/deps/*`, `families/eval/*`, and `families/compat_legacy/*` (5 core modules only; historical scripts removed from the active tree and recoverable via git history at tag `pre-compat-legacy-cleanup`) instead of root-level `exp_xxxx` directories.
+- The stable worktree may also keep `quarantine/python/*` as a non-official holding area for unmanaged standalone scripts. That tree is not part of the active start path.
 - A new hypothesis should default to a new branch and a new worktree.
 - Do not add new root-level `exp_xxxx` directories to the stable worktree.
 - If the task changes experiment behavior rather than just executing the current official ladder, open a hypothesis worktree first.
