@@ -12,10 +12,10 @@ The main remaining issues are compatibility names and a few internal runtime ter
 ### Still Worth Demoting Later
 - `codex_controller` and `controller_runs/` still carry older naming for compatibility
 - compatibility skill names such as `controller-decomposition` and `dispatch-handoff` remain on disk even though the preferred names are now `experiment-decomposition` and `native-handoff`
-- command examples still exist in `docs/codex_controller.md` and `docs/official_run_playbook.md`, which is acceptable, but they should stay in reference sections rather than drive the repo narrative
+- command examples still exist in `docs/reference/codex_controller.md` and `docs/reference/official_run_playbook.md`, which is acceptable, but they should stay in reference sections rather than drive the repo narrative
 
 ### Acceptable Implementation-Note Usage
-- `docs/codex_controller.md` as an appendix
+- `docs/reference/codex_controller.md` as an appendix
 - `controller_runs/<run_id>/` as the persisted run ledger path
 - `controller_defaults.json` as a minimal runtime default file
 - manifest fields such as `run_root` and `baseline_refs` as execution facts

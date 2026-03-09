@@ -9,7 +9,7 @@ Workflow:
 1. Start in `AGENTS.md`.
 2. Read `docs/project_goal.md`, `docs/experiment_policy.md`, and `docs/research_loop.md`.
 3. Read `docs/next_experiment.md`.
-4. Read `docs/official_run_playbook.md`.
+4. Read `docs/reference/official_run_playbook.md`.
 5. Use `experiment-decomposition` to confirm the next bounded step.
 6. Follow the paired-monitor and one-next-step launch contract from `docs/research_loop.md` when starting the official run.
 7. If the run needs durable stage handoff or bounded auto-continue, prefer the existing official manifest and `codex_controller` run surface over ad hoc shell sequencing.

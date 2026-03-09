@@ -4,10 +4,7 @@ This fork is operated as a Codex-native, Markdown-first research repo.
 
 Start here for repo operations:
 - `AGENTS.md`
-- `docs/project_goal.md`
-- `docs/experiment_policy.md`
-- `docs/research_loop.md`
-- `docs/official_run_playbook.md`
+- `docs/README.md`
 
 The upstream WavTokenizer README below is preserved as model and background context.
 It is not the primary operating guide for this fork.
@@ -182,4 +179,3 @@ If this code contributes to your research, please cite our work, Language-Codec 
   year={2024}
 }
 ```
-
