@@ -29,6 +29,7 @@ This layer persists project-specific research state.
 - `codex_controller/*`
 - `experiments/manifests/*.json`
 - `experiments/adapters/*.json`
+- `experiments/registry.json`
 - `controller_runs/<run_id>/`
 - `knowledge/*`
 
@@ -42,6 +43,7 @@ Allowed additions:
 - Markdown instructions that help Codex operate the repo without new runtime code
 - thin run ledger and analysis artifacts
 - experiment-family migration logic
+- small project-specific utility modules that support experiment families without taking over control flow
 
 ## What The Repo Must Not Add
 Forbidden additions:
@@ -78,6 +80,49 @@ Only add Python when Markdown, `AGENTS.md`, and skills are not enough for Codex 
 If Python is still required, it should either:
 - support a project-specific experiment path, or
 - support a repo-local skill and be documented by that skill
+
+## Acceptable Tooling Code
+Some repo code exists primarily as a thin tool surface. This is acceptable when it stays project-specific and does not replace native Codex control.
+
+Reasonable examples in this repo include:
+- `codex_controller/*` for official manifest execution facts, status, and persisted run records
+- `experiments/registry.json` as a thin index of official, dependency, eval, and compatibility families
+- `utils/hypothesis_reporting.py` for thin run-local summaries on one-off hypothesis lines
+- `utils/train_runtime.py` and `utils/audio_losses.py` for shared experiment-family helpers that reduce duplicated training code without introducing workflow logic
+
+These helpers should not become:
+- a second orchestration layer
+- a policy engine for sequencing, promotion, or approvals
+- a generic training framework that hides family-specific research behavior
+
+## Tooling Boundary Gate
+Treat code-as-tool as acceptable only when all of these stay true:
+- the tool persists project-specific facts or removes repeated family boilerplate
+- the next step is still chosen by `AGENTS.md`, docs, skills, manifests, or `Codex(default)`
+- the tool does not own role lifecycle, routing, queueing, approval, or generic sequencing
+- the tool can be justified more narrowly than "this would be convenient to automate"
+
+Treat the tooling boundary as failed when a helper starts to:
+- infer or choose follow-up actions on its own
+- encode session policy that belongs in Markdown or a skill
+- generalize into a repo-wide framework with weak ties to a specific experiment path
+- compete with native multi-agent orchestration or native monitoring
+
+## Governance Completion Rule
+For a governance refinement pass, do not stop at "the wording feels cleaner."
+
+Treat the pass as complete only when all of these are true:
+- the start path is still singular and `AGENTS.md`-first
+- research-success review is still more important than execution success alone
+- core skills remain bounded Markdown playbooks with clear ownership limits
+- code-as-tool surfaces are still thin and project-specific
+
+Treat the pass as incomplete when:
+- one of these areas is still only `partial`
+- the strongest counterargument has not been answered
+- the monitor cannot show that docs, skills, and tooling were all audited together
+
+When incomplete, prefer another bounded docs or skills refinement before considering new runtime code.
 
 ## Preferred Escalation Path
 When Codex needs more structure, escalate in this order:

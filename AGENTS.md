@@ -56,6 +56,17 @@ Prefer:
 Prefer explaining the workflow to Codex over encoding the workflow in new Python.
 If Codex can reliably operate the project through policy, docs, a skill, and a Markdown checklist, do not add runtime code.
 
+## Research Decision Gate
+Control-surface discipline only matters if it still serves the research goal.
+
+When reviewing a run, a proposal, or a follow-up:
+- execution success alone is not enough
+- the preserved reconstruction baseline must not regress without a compelling reason
+- a narrow metric gain that clearly harms stability, preservation, or generalization is not a win
+- promotion and follow-up decisions should cite concrete logs, metrics, and evaluation artifacts
+
+Unless `docs/next_experiment.md` explicitly says otherwise, the default first official ladder is `material-generalization`.
+
 ## Top-Level Control
 Use native Codex roles first:
 - `default`: top-level controller and final decision-maker
@@ -83,6 +94,8 @@ When a run or sequence reaches a decision boundary, surface a user-visible event
 - interrupted but usable termination
 - stalled or intervention-required state
 - handoff to the next rung, run, or hypothesis
+
+At minimum, a user-visible event means a concise Codex message. For official runs, include a matching run-local note or durable event record when that surface already exists.
 
 If a run result is not a clean success, do not auto-advance past the boundary without a fresh `Codex(default)` decision.
 
@@ -145,6 +158,8 @@ Official work starts from these layers:
 - `docs/experiment_policy.md`
 - `docs/research_loop.md`
 - `docs/worktree_policy.md`
+- `docs/next_experiment.md`
+- `families/README.md`
 - `families/official/*`
 - `.agents/skills/`
 - `experiments/manifests/*.json`
@@ -168,6 +183,8 @@ After any code-changing turn, `Codex(default)` must also record:
 - `core_goal_alignment`
 - `decision`
 
+For ordinary work, record these fields in the final Markdown summary. For official runs, also persist them in run-local notes or durable artifacts when that surface already exists.
+
 The post-change flow is:
 1. run `codex-native-review`
 2. run Codex native review in the Review pane or with `/review`
@@ -179,6 +196,30 @@ Review outcomes that must fail in native review:
 - the change rebuilds native Codex capabilities
 - the change adds generic infrastructure that does not serve the research goal
 - the change encodes workflow logic in Python when `AGENTS.md`, a skill, or Markdown guidance would have been sufficient
+
+## Governance Refinement Gate
+For a large governance, skill-surface, or code-as-tool refinement, do not treat the work as complete until these four gates all pass:
+- `Start Path`
+  - the official start path still runs through `AGENTS.md`, main docs, core skills, manifests or adapters, then `codex_controller` only when needed
+- `Research Decision Gate`
+  - execution success is clearly separated from research success, and the review path still checks preservation, target improvement, and obvious regressions
+- `Skill Boundaries`
+  - core skills stay Markdown-first, have clear trigger and ownership boundaries, and do not drift into controller protocol behavior
+- `Tooling Boundary`
+  - thin tooling such as `codex_controller`, manifests, adapters, registry files, and shared helpers remain project-specific support surfaces rather than a second control layer
+
+For this kind of refinement, gather evidence with native roles first:
+- `planner` defines the pass or fail checklist
+- `explorer` inspects docs, skills, and tooling surfaces
+- `analyst` tests the positive case and the strongest counterarguments
+- `monitor` checks that the evaluation is complete and that unresolved failures are not being ignored
+
+If any gate is `fail`, or the completeness monitor reports `incomplete`, continue evaluation and modification instead of closing the work as done.
+
+For governance refinements, also record:
+- which gate or gates initially failed
+- what evidence now justifies a pass
+- whether `monitor` marked the review `complete` or required another round
 
 ## Run Lifecycle
 Use this as a Codex-side checklist, not a repo-side state machine:
@@ -213,6 +254,8 @@ Codex may directly modify:
 - `codex_controller/*`
 - `experiments/*`
 - explicitly onboarded experiment families referenced by official manifests or adapter contracts
+
+These allowed paths are still subject to task classification and worktree isolation in `docs/worktree_policy.md`.
 
 Codex should not mutate unrelated legacy experiment families unless a manifest or diagnosis path explicitly points to them.
 

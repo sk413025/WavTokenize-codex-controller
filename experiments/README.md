@@ -12,6 +12,7 @@ It is not the primary operating guide.
 - `adapters/*.json`: adapter contracts for official and legacy pipelines
 
 ## Registry Semantics
+- `registry.json` is a thin lookup surface. It is not a planner, router, or promotion policy layer.
 - `dependency_families` in `registry.json` lists active non-official families that official manifests, training code, imports, or checkpoint bindings still depend on.
 - `eval_families` lists active evaluation-oriented families that remain part of the comparison surface.
 - `compat_legacy_families` lists still-imported technical legacy families that are not part of the official start path.
@@ -33,11 +34,11 @@ The official operating order still comes from `AGENTS.md`, repo docs, and repo s
 - `anchor-then-material`
 - `hubert-then-distalign`
 
-## Recommended First Launch
-Use the `material-generalization` ladder first:
-- `exp0304_material_generalization_preflight`
-- `exp0304_material_generalization_smoke`
-- `exp0304_material_generalization_short`
-- `exp0304_material_generalization`
+## Current Preferred Launch
+Do not treat this file as the place to decide the current first ladder.
 
-For the canonical real-run flow, use `official-run-ladder` and `docs/reference/official_run_playbook.md` before opening `codex_controller` docs.
+For the current preferred official first launch:
+- read `docs/next_experiment.md`
+- use `official-run-ladder`
+
+Consult `docs/reference/official_run_playbook.md` only when you need concrete command examples for the current official family before opening `codex_controller` docs.

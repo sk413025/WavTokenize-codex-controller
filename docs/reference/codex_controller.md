@@ -9,7 +9,7 @@ Read it only when you need to validate a manifest, execute a run, monitor a run,
 - a small execution helper for official manifests and adapters
 - a run ledger for logs, stage state, monitor output, and basic analysis
 - a persistence layer after the Codex session has already decided what to do
-- the preferred place for bounded stage-to-stage autonomy in official, repeatable run sequences
+- a thin durable event surface for official, repeatable run sequences that already belong on the official path
 
 ## What `codex_controller` Is Not
 - not the primary control surface
@@ -46,7 +46,7 @@ Each run should keep a minimal durable record:
 - `analysis.json`
 - `diagnosis.json`
 
-These persisted facts are the durable event surface for official runs. If a workflow needs reliable stage-to-stage continuity, resumability, and inspectable completion state, prefer this surface over ad hoc shell sequencing.
+These persisted facts are the durable event surface for official runs. If a workflow needs reliable stage-to-stage continuity, resumability, and inspectable completion state, this surface is acceptable for official runs after the workflow has already been justified by `AGENTS.md`, docs, and skills.
 
 ## Command Reference
 ```bash

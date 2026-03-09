@@ -31,6 +31,14 @@ Official execution ladders use four tiers:
 ## Common Execution Gates
 Use these gates for any real launch, including isolated hypothesis worktrees, unless a family-specific document adds stricter checks.
 
+`research decision gate`
+- before treating a run as a real research success, answer these questions explicitly:
+  - did the run preserve the current reconstruction baseline closely enough to stay on the same line
+  - did it improve at least one target dimension the repo actually cares about, such as noisy-to-clean quality, high-frequency recovery, or generalization
+  - did it avoid obvious stability, artifact, or preservation regressions
+  - do `analysis.json`, `monitor_report.json`, metrics, and family notes provide enough evidence to justify the conclusion
+- if these questions cannot be answered from concrete evidence, classify the result as incomplete evidence rather than a win
+- use this gate for promotion and follow-up review, not as an automatic runtime rule
 `run-ready minimum gate`
 - confirm the command line and required flags are settled enough to launch without further design decisions
 - verify required assets, cache bindings, checkpoint paths, and output paths resolve in the current worktree

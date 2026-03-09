@@ -45,3 +45,14 @@ Checks:
 - The change still serves the research goal instead of adding generic infrastructure.
 - If code was added, it is either project-specific experiment code or clearly in support of a repo-local skill with matching Markdown documentation.
 - If Markdown plus a skill would have been enough, reject the code change as overengineering.
+
+For a governance, skill-surface, or code-as-tool refinement, also check these gates explicitly:
+- `Start Path`
+- `Research Decision Gate`
+- `Skill Boundaries`
+- `Tooling Boundary`
+
+Treat that review as incomplete unless it also states:
+- which gates initially failed or were only partial
+- what evidence now justifies a pass
+- whether the completeness monitor would mark the round `complete` or `needs-more-work`

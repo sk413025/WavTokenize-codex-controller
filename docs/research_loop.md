@@ -20,7 +20,7 @@ This is the project-specific loop that Codex should follow using native multi-ag
 ## Long-Running Hypothesis Work
 - For a new hypothesis, keep experiment edits in the hypothesis worktree and keep control ownership with the same `Codex(default)` session.
 - Do not add new root-level `exp_xxxx` directories to the stable worktree for hypothesis code. Use a new worktree first, then promote the result back into `families/*` only after review.
-- When launching a long-running hypothesis run, create a paired `monitor` handoff at launch time instead of relying on a later manual check.
+- When launching a long-running hypothesis run, create a `monitor` handoff at launch time instead of relying on a later manual check.
 - Treat the launch contract as session policy, not family runtime state: declare at most one allowed next step and keep broader autonomy out of experiment code.
 - Use native roles to split observation from decision-making:
   - `monitor` or `stage-monitoring` for active run facts
@@ -40,7 +40,7 @@ This is the project-specific loop that Codex should follow using native multi-ag
 ## Autonomy Window
 - At the start of a task, `Codex(default)` may declare a bounded launch contract for auto-progression.
 - If no broader contract is declared, default to `single-step`.
-- For routine paired long-running launches, the daily operating default is `one-next-step`: one declared next step, or none.
+- For routine long-running launches, the daily operating default is `one-next-step`: one declared next step, or none.
 - Broader windows are exceptional, should stay in Markdown guidance, and should not become family runtime fields or reusable queue protocols.
 - Work must not auto-progress beyond the declared launch contract.
 
