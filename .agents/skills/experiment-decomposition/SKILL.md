@@ -19,10 +19,15 @@ Workflow:
    - `monitor` for active runs
    - `analyst` for result comparison or diagnosis
 5. Prefer parallel exploration before implementation.
-6. Keep ownership explicit by file, family, or run.
-7. End with an integration note that says what each delegated role returned.
+6. For multiple hypotheses or scarce GPUs, split by explicit ownership:
+   - which run owns which device or waits for a free device
+   - which role only monitors or compares results
+   - which work can proceed on CPU while GPU-bound work is running
+7. Keep ownership explicit by file, family, or run.
+8. End with an integration note that says what each delegated role returned.
 
 Checks:
 - The split should reduce coordination, not add protocol overhead.
+- Do not delegate top-level control ownership away from `default`.
 - If Markdown or a skill is enough, do not add runtime code.
 - If the task is a new hypothesis, prefer a new worktree over mixing it into `codex-first-controller`.
