@@ -13,11 +13,13 @@ exp_0304: 材質泛化 Encoder LoRA 訓練 — 方法 1+2（隨機頻率響應 +
     7. Random Low-pass — 模擬不同材質高頻衰減
     8. Resonance Injection — 模擬材質機械共振
 
-Loss（同 exp_0226a）：
+Loss（擴展自 exp_0226a）：
     λ_wav  * MSE(recon_wav, clean_wav)
     + λ_stft * MR-STFT(recon_wav, clean_wav)
     + λ_mel  * Mel(recon_wav, clean_wav)
-    + λ_feat * MSE(student_feat, teacher_feat)
+    + λ_feat * MSE(student_feat, teacher_feat)           # 最終層 feature alignment
+    + λ_inter * mean(MSE(student_L_i, teacher_L_i))      # 中間層 feature alignment (L3,L4,L6)
+    + λ_pre_istft * MSE(student_stft, teacher_stft)      # pre-ISTFT STFT 域 loss（可選）
 
 設計動機：
     先前實驗（exp_0224a）僅在 box/papercup/plastic 三種材質訓練，
@@ -116,6 +118,8 @@ def train_epoch(model, dataloader, optimizer, device, epoch, config,
         'stft_mag_loss': 0.0,
         'mel_loss': 0.0,
         'feat_align_loss': 0.0,
+        'inter_feat_loss': 0.0,
+        'pre_istft_loss': 0.0,
         'nan_batches': 0,
     }
     n_batches = 0
@@ -126,6 +130,8 @@ def train_epoch(model, dataloader, optimizer, device, epoch, config,
     lambda_stft = config['lambda_stft']
     lambda_mel = config['lambda_mel']
     lambda_feat = config['lambda_feat']
+    lambda_inter_feat = config.get('lambda_inter_feat', 0.0)
+    lambda_pre_istft = config.get('lambda_pre_istft', 0.0)
 
     pbar = tqdm(dataloader, desc=f"Epoch {epoch} [material-gen]")
 
@@ -142,7 +148,11 @@ def train_epoch(model, dataloader, optimizer, device, epoch, config,
             optimizer.zero_grad()
 
         with autocast(enabled=config['use_amp']):
-            out = model.forward_wav(clean_audio, noisy_audio)
+            out = model.forward_wav(
+                clean_audio, noisy_audio,
+                return_intermediates=(lambda_inter_feat > 0),
+                return_pre_istft=(lambda_pre_istft > 0),
+            )
             recon_wav = out['recon_wav']
             student_feat = out['student_encoder_out']
             teacher_feat = out['teacher_encoder_out']
@@ -162,11 +172,39 @@ def train_epoch(model, dataloader, optimizer, device, epoch, config,
                 teacher_feat[..., :Tf].detach(),
             )
 
+            # Intermediate feature alignment loss (layers 3, 4, 6)
+            inter_feat = torch.tensor(0.0, device=device)
+            if lambda_inter_feat > 0 and 'student_intermediates' in out:
+                s_inters = out['student_intermediates']
+                t_inters = out['teacher_intermediates']
+                n_layers = 0
+                for idx in s_inters:
+                    if idx in t_inters:
+                        s_i = s_inters[idx]
+                        t_i = t_inters[idx]
+                        Ti = min(s_i.shape[-1], t_i.shape[-1])
+                        inter_feat = inter_feat + F.mse_loss(
+                            s_i[..., :Ti], t_i[..., :Ti].detach())
+                        n_layers += 1
+                if n_layers > 0:
+                    inter_feat = inter_feat / n_layers
+
+            # Pre-ISTFT STFT domain loss
+            pre_istft = torch.tensor(0.0, device=device)
+            if lambda_pre_istft > 0 and 'student_pre_istft' in out:
+                s_stft = out['student_pre_istft']
+                t_stft = out['teacher_pre_istft']
+                Ts = min(s_stft.shape[-1], t_stft.shape[-1])
+                pre_istft = F.mse_loss(
+                    s_stft[..., :Ts], t_stft[..., :Ts].detach())
+
             loss = (
                 lambda_wav * wav_mse
                 + lambda_stft * stft_loss
                 + lambda_mel * mel_loss
                 + lambda_feat * feat_align
+                + lambda_inter_feat * inter_feat
+                + lambda_pre_istft * pre_istft
             )
             loss = loss / config['grad_accum']
 
@@ -206,6 +244,8 @@ def train_epoch(model, dataloader, optimizer, device, epoch, config,
         metrics['stft_mag_loss'] += mag_loss.item()
         metrics['mel_loss'] += mel_loss.item()
         metrics['feat_align_loss'] += feat_align.item()
+        metrics['inter_feat_loss'] += inter_feat.item()
+        metrics['pre_istft_loss'] += pre_istft.item()
         n_batches += 1
 
         pbar.set_postfix({
@@ -217,7 +257,8 @@ def train_epoch(model, dataloader, optimizer, device, epoch, config,
 
     if n_batches > 0:
         for k in ['total_loss', 'wav_mse', 'stft_sc_loss', 'stft_mag_loss',
-                   'mel_loss', 'feat_align_loss']:
+                   'mel_loss', 'feat_align_loss', 'inter_feat_loss',
+                   'pre_istft_loss']:
             metrics[k] /= n_batches
 
     return metrics
@@ -242,10 +283,15 @@ def evaluate(model, dataloader, device, config,
     """
     model.eval()
 
+    lambda_inter_feat = config.get('lambda_inter_feat', 0.0)
+    lambda_pre_istft = config.get('lambda_pre_istft', 0.0)
+
     wav_mse_list, noisy_mse_list = [], []
     stft_sc_list, stft_mag_list, mel_list = [], [], []
     noisy_stft_sc_list, noisy_mel_list = [], []
     feat_align_list = []
+    inter_feat_list = []
+    pre_istft_list = []
 
     for i, batch in enumerate(dataloader):
         if max_batches and i >= max_batches:
@@ -259,7 +305,11 @@ def evaluate(model, dataloader, device, config,
         if noisy_audio.dim() == 2:
             noisy_audio = noisy_audio.unsqueeze(1)
 
-        out = model.forward_wav(clean_audio, noisy_audio)
+        out = model.forward_wav(
+            clean_audio, noisy_audio,
+            return_intermediates=(lambda_inter_feat > 0),
+            return_pre_istft=(lambda_pre_istft > 0),
+        )
         recon_wav = out['recon_wav']
         student_feat = out['student_encoder_out']
         teacher_feat = out['teacher_encoder_out']
@@ -285,6 +335,29 @@ def evaluate(model, dataloader, device, config,
             F.mse_loss(student_feat[..., :Tf], teacher_feat[..., :Tf]).item()
         )
 
+        # Intermediate feature alignment
+        if lambda_inter_feat > 0 and 'student_intermediates' in out:
+            s_inters = out['student_intermediates']
+            t_inters = out['teacher_intermediates']
+            layer_losses = []
+            for idx in s_inters:
+                if idx in t_inters:
+                    s_i = s_inters[idx]
+                    t_i = t_inters[idx]
+                    Ti = min(s_i.shape[-1], t_i.shape[-1])
+                    layer_losses.append(
+                        F.mse_loss(s_i[..., :Ti], t_i[..., :Ti]).item())
+            if layer_losses:
+                inter_feat_list.append(float(np.mean(layer_losses)))
+
+        # Pre-ISTFT loss
+        if lambda_pre_istft > 0 and 'student_pre_istft' in out:
+            s_stft = out['student_pre_istft']
+            t_stft = out['teacher_pre_istft']
+            Ts = min(s_stft.shape[-1], t_stft.shape[-1])
+            pre_istft_list.append(
+                F.mse_loss(s_stft[..., :Ts], t_stft[..., :Ts]).item())
+
     model.train()
 
     return {
@@ -296,6 +369,8 @@ def evaluate(model, dataloader, device, config,
         'val_noisy_stft_sc': float(np.mean(noisy_stft_sc_list)) if noisy_stft_sc_list else float('nan'),
         'val_noisy_mel':     float(np.mean(noisy_mel_list))     if noisy_mel_list else float('nan'),
         'val_feat_align':    float(np.mean(feat_align_list))    if feat_align_list else float('nan'),
+        'val_inter_feat':    float(np.mean(inter_feat_list))    if inter_feat_list else float('nan'),
+        'val_pre_istft':     float(np.mean(pre_istft_list))     if pre_istft_list else float('nan'),
     }
 
 
@@ -494,6 +569,10 @@ def main():
     parser.add_argument('--lambda_stft', type=float, default=1.0)
     parser.add_argument('--lambda_mel', type=float, default=45.0)
     parser.add_argument('--lambda_feat', type=float, default=1.0)
+    parser.add_argument('--lambda_inter_feat', type=float, default=0.5,
+                        help='Intermediate feature alignment loss weight (layers 3,4,6)')
+    parser.add_argument('--lambda_pre_istft', type=float, default=0.0,
+                        help='Pre-ISTFT STFT domain loss weight (0 to disable)')
 
     parser.add_argument('--stft_fft_sizes', type=str, default='2048,1024,512')
     parser.add_argument('--stft_hop_sizes', type=str, default='512,256,128')
@@ -531,6 +610,8 @@ def main():
     parser.add_argument('--resonance_n_peaks_min', type=int, default=1)
     parser.add_argument('--resonance_n_peaks_max', type=int, default=3)
 
+    parser.add_argument('--num_workers', type=int, default=0,
+                        help='DataLoader num_workers (0 for single-process loading)')
     parser.add_argument('--save_checkpoint_every', type=int, default=10)
     parser.add_argument('--save_audio_interval', type=int, default=25)
     parser.add_argument('--eval_max_batches', type=int, default=30)
@@ -580,7 +661,8 @@ def main():
     print(f"VQ: SKIPPED  |  Decoder: FROZEN")
     print(f"Encoder init: {args.encoder_ckpt}")
     print(f"Loss: λ_wav={args.lambda_wav} + λ_stft={args.lambda_stft} "
-          f"+ λ_mel={args.lambda_mel} + λ_feat={args.lambda_feat}")
+          f"+ λ_mel={args.lambda_mel} + λ_feat={args.lambda_feat} "
+          f"+ λ_inter={args.lambda_inter_feat} + λ_pre_istft={args.lambda_pre_istft}")
     print(f"Material Aug: freq_resp_p={args.freq_response_prob}, "
           f"spec_norm_p={args.spectral_norm_prob}, "
           f"lp_p={args.random_lowpass_prob}, "
@@ -618,7 +700,7 @@ def main():
         smoke_ds = Subset(full_ds, smoke_indices)
         train_loader = DataLoader(
             smoke_ds, batch_size=args.batch_size, shuffle=True,
-            num_workers=0, collate_fn=collate_fn_curriculum,
+            num_workers=args.num_workers, collate_fn=collate_fn_curriculum,
         )
         val_ds = MaterialAugDataset(
             val_cache, augment=False,
@@ -627,7 +709,7 @@ def main():
         val_smoke = Subset(val_ds, smoke_indices)
         val_loader = DataLoader(
             val_smoke, batch_size=args.batch_size, shuffle=False,
-            num_workers=0, collate_fn=collate_fn_curriculum,
+            num_workers=args.num_workers, collate_fn=collate_fn_curriculum,
         )
         print(f"Smoke test: {len(smoke_ds)} samples")
     else:
@@ -730,11 +812,11 @@ def main():
     history = {
         'train_total_loss': [], 'train_wav_mse': [],
         'train_stft_sc': [], 'train_stft_mag': [], 'train_mel': [],
-        'train_feat_align': [],
+        'train_feat_align': [], 'train_inter_feat': [], 'train_pre_istft': [],
         'val_wav_mse': [], 'val_noisy_mse': [],
         'val_stft_sc': [], 'val_stft_mag': [], 'val_mel_loss': [],
         'val_noisy_stft_sc': [], 'val_noisy_mel': [],
-        'val_feat_align': [],
+        'val_feat_align': [], 'val_inter_feat': [], 'val_pre_istft': [],
         'lr': [],
     }
 
@@ -762,6 +844,8 @@ def main():
         history['train_stft_mag'].append(train_metrics['stft_mag_loss'])
         history['train_mel'].append(train_metrics['mel_loss'])
         history['train_feat_align'].append(train_metrics['feat_align_loss'])
+        history['train_inter_feat'].append(train_metrics['inter_feat_loss'])
+        history['train_pre_istft'].append(train_metrics['pre_istft_loss'])
         history['val_wav_mse'].append(val_metrics['val_wav_mse'])
         history['val_noisy_mse'].append(val_metrics['val_noisy_mse'])
         history['val_stft_sc'].append(val_metrics['val_stft_sc'])
@@ -770,6 +854,8 @@ def main():
         history['val_noisy_stft_sc'].append(val_metrics['val_noisy_stft_sc'])
         history['val_noisy_mel'].append(val_metrics['val_noisy_mel'])
         history['val_feat_align'].append(val_metrics['val_feat_align'])
+        history['val_inter_feat'].append(val_metrics['val_inter_feat'])
+        history['val_pre_istft'].append(val_metrics['val_pre_istft'])
         history['lr'].append(current_lr)
 
         val_mse = val_metrics['val_wav_mse']
@@ -784,10 +870,12 @@ def main():
         print(f"  Train: total={train_metrics['total_loss']:.4f}  "
               f"wav={train_metrics['wav_mse']:.5f}  "
               f"feat={train_metrics['feat_align_loss']:.5f}  "
+              f"inter={train_metrics['inter_feat_loss']:.5f}  "
               f"mel={train_metrics['mel_loss']:.3f}")
         print(f"  Val:   recon_mse={val_mse:.5f}  noisy_mse={noisy_mse:.5f}  "
               f"val_total={val_total:.4f}  mse_improve=+{improve_pct:.1f}%")
         print(f"         feat_align={val_metrics['val_feat_align']:.5f}  "
+              f"inter_feat={val_metrics['val_inter_feat']:.5f}  "
               f"stft_sc={val_metrics['val_stft_sc']:.4f}  "
               f"mel={val_metrics['val_mel_loss']:.4f}")
         print(f"  LR={current_lr:.3e}")

@@ -1,7 +1,32 @@
 {
   "schema_version": 1,
   "families": {
-    "material-generalization": null,
+    "material-generalization": {
+      "run_id": "exp0304_smoke_20260309_114847",
+      "rung": "smoke",
+      "date": "2026-03-09",
+      "status": "completed",
+      "epochs": 5,
+      "samples": 20,
+      "decision": "upgrade_to_short",
+      "key_metrics": {
+        "val_wav_mse_final": 0.02666,
+        "val_noisy_mse": 0.04638,
+        "mse_improvement_pct": 42.5,
+        "val_mel_loss_final": 1.1725,
+        "val_feat_align_final": 0.07444,
+        "val_inter_feat_final": 1517.01,
+        "train_inter_feat_range": [626.28, 904.05]
+      },
+      "notes": [
+        "New intermediate feature loss (lambda_inter_feat=0.5) is active and contributing",
+        "inter_feat magnitude ~11900x larger than feat_align — consider reducing lambda for short run",
+        "pre-ISTFT loss correctly disabled (lambda_pre_istft=0.0)",
+        "All validation metrics improved monotonically over 5 epochs",
+        "No NaN batches or errors"
+      ],
+      "artifacts": "controller_runs/exp0304_smoke_20260309_114847/"
+    },
     "anchor-then-material": null,
     "hubert-then-distalign": null
   }

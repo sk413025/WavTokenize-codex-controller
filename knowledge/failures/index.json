@@ -21,6 +21,26 @@
         "suggested_changes": [
           "inspect checkpoint compatibility"
         ]
+      },
+      {
+        "run_id": "exp0304_smoke_20260309_114643",
+        "failure_reason": "Stage train_material_gen_smoke failed with return code 2. See /home/sbplab/ruizi/WavTokenize-codex-controller/controller_runs/exp0304_smoke_20260309_114643/train_material_gen_smoke.log",
+        "summary": "Run failed during execution: Stage train_material_gen_smoke failed with return code 2. See /home/sbplab/ruizi/WavTokenize-codex-controller/controller_runs/exp0304_smoke_20260309_114643/train_material_gen_smoke.log",
+        "suggested_changes": [
+          "inspect train_material_gen.log",
+          "check data augmentation dependencies",
+          "verify checkpoint compatibility"
+        ]
+      },
+      {
+        "run_id": "exp0304_smoke_20260309_114740",
+        "failure_reason": "Stage train_material_gen_smoke failed with return code 1. See /home/sbplab/ruizi/WavTokenize-codex-controller/controller_runs/exp0304_smoke_20260309_114740/train_material_gen_smoke.log",
+        "summary": "Run failed during execution: Stage train_material_gen_smoke failed with return code 1. See /home/sbplab/ruizi/WavTokenize-codex-controller/controller_runs/exp0304_smoke_20260309_114740/train_material_gen_smoke.log",
+        "suggested_changes": [
+          "inspect train_material_gen.log",
+          "check data augmentation dependencies",
+          "verify checkpoint compatibility"
+        ]
       }
     ],
     "hubert-then-distalign": [

@@ -100,24 +100,33 @@ class TeacherStudentNoVQ(TeacherStudentSingleVQ):
         print(f"  Trainable params: {trainable:,} / {total:,} ({100*trainable/total:.2f}%)")
         print(f"{'='*60}\n")
 
-    def decode_continuous(self, features: torch.Tensor) -> torch.Tensor:
+    def decode_continuous(self, features: torch.Tensor,
+                          return_pre_istft: bool = False):
         """直接用連續 feature 解碼，繞過 @inference_mode
 
         Args:
             features: Encoder 輸出的連續 feature [B, 512, T]
+            return_pre_istft: 是否額外回傳 pre-ISTFT STFT 域表示
 
         Returns:
-            重建音頻 [B, 1, T_wav]
+            return_pre_istft=False: 重建音頻 [B, 1, T_wav]
+            return_pre_istft=True: (重建音頻, pre_istft [B, n_fft+2, L])
         """
         bandwidth_id = torch.tensor([0], device=features.device)
         x = self.teacher.backbone(features, bandwidth_id=bandwidth_id)
         audio = self.teacher.head(x)
         if audio.dim() == 2:
             audio = audio.unsqueeze(1)
+        if return_pre_istft:
+            # head.out 是 nn.Linear(dim, n_fft+2)，輸出包含 [log_mag, phase]
+            stft_repr = self.teacher.head.out(x).transpose(1, 2)
+            return audio, stft_repr
         return audio
 
     def forward_wav(self, clean_audio: torch.Tensor,
-                    noisy_audio: torch.Tensor) -> dict:
+                    noisy_audio: torch.Tensor,
+                    return_intermediates: bool = False,
+                    return_pre_istft: bool = False) -> dict:
         """Forward pass，No-VQ 版本
 
         Encoder LoRA 在梯度模式下執行（可訓練），
@@ -126,29 +135,55 @@ class TeacherStudentNoVQ(TeacherStudentSingleVQ):
         Args:
             clean_audio: 乾淨音訊 [B, 1, T]（loss target）
             noisy_audio: 帶噪音訊 [B, 1, T]（encoder 輸入）
+            return_intermediates: 是否回傳各層中間特徵
+            return_pre_istft: 是否回傳 pre-ISTFT STFT 域表示
 
         Returns:
             dict:
                 - recon_wav: decoder 輸出 [B, 1, T_wav]
                 - student_encoder_out: encoder 連續輸出 [B, 512, T_frame]
                 - teacher_encoder_out: teacher encoder 輸出（用於 debug）
+                - student_intermediates: (optional) Dict[int, Tensor] 各層中間特徵
+                - teacher_intermediates: (optional) Dict[int, Tensor] 各層中間特徵
+                - student_pre_istft: (optional) pre-ISTFT 表示 [B, n_fft+2, L]
+                - teacher_pre_istft: (optional) pre-ISTFT 表示 [B, n_fft+2, L]
         """
         # Teacher encoder（完全 frozen，用於 debug/比較）
         with torch.no_grad():
-            teacher_encoder_out, _ = self.teacher_extractor(clean_audio)
+            teacher_encoder_out, teacher_intermediates = self.teacher_extractor(clean_audio)
 
         # Student encoder LoRA（可訓練，有梯度）
-        student_encoder_out, _ = self.student_extractor(noisy_audio)
+        student_encoder_out, student_intermediates = self.student_extractor(noisy_audio)
 
         # 直接用連續 feature 解碼（跳過 VQ）
         # decode_continuous 呼叫 backbone+head，需要 gradient 流過 encoder
-        recon_wav = self.decode_continuous(student_encoder_out)
+        if return_pre_istft:
+            recon_wav, student_pre_istft = self.decode_continuous(
+                student_encoder_out, return_pre_istft=True)
+            with torch.no_grad():
+                bandwidth_id = torch.tensor([0], device=clean_audio.device)
+                teacher_backbone = self.teacher.backbone(
+                    teacher_encoder_out, bandwidth_id=bandwidth_id)
+                teacher_pre_istft = self.teacher.head.out(
+                    teacher_backbone).transpose(1, 2)
+        else:
+            recon_wav = self.decode_continuous(student_encoder_out)
 
-        return {
+        result = {
             'recon_wav': recon_wav,
             'student_encoder_out': student_encoder_out,
             'teacher_encoder_out': teacher_encoder_out,
         }
+
+        if return_intermediates:
+            result['student_intermediates'] = student_intermediates
+            result['teacher_intermediates'] = teacher_intermediates
+
+        if return_pre_istft:
+            result['student_pre_istft'] = student_pre_istft
+            result['teacher_pre_istft'] = teacher_pre_istft
+
+        return result
 
     def load_encoder_checkpoint(self, ckpt_path: str, strict: bool = False):
         """從 exp_0217 checkpoint 載入 encoder LoRA 參數
